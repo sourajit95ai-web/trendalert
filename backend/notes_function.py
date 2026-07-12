@@ -1,0 +1,153 @@
+"""
+notes_function.py — HTTP Cloud Function persisting notes AND positions to GCS.
+
+Two stores in one function, selected by the `kind` param:
+  kind=notes     -> notes.json      { "AAPL": [ {text, date}, ... ] }
+  kind=positions -> positions.json  { "AAPL": {entry, date, booked, bookedDate}, ... }
+
+GET  ?kind=positions              -> the whole positions map (dashboard loads once)
+GET  ?kind=notes&symbol=AAPL      -> notes for one symbol
+POST {kind:"positions", data:{...whole map...}}         -> overwrite positions.json
+POST {kind:"notes", symbol:"AAPL", notes:[...]}          -> overwrite one symbol's notes
+
+Deploy (Gen2, Python):
+    gcloud functions deploy notes \
+      --gen2 --runtime python312 --region us-central1 \
+      --trigger-http --allow-unauthenticated \
+      --set-env-vars GCS_BUCKET=YOUR_BUCKET \
+      --entry-point notes
+
+requirements.txt:
+    functions-framework
+    google-cloud-storage
+
+Concurrency: last-write-wins (single-user tool; acceptable, same as data.json).
+"""
+
+import json
+import os
+from google.cloud import storage
+
+BUCKET = os.environ.get("GCS_BUCKET", "")
+OBJECTS = {"notes": "notes.json", "positions": "positions.json", "settings": "settings.json"}
+
+_client = storage.Client()
+
+
+def _blob(kind):
+    return _client.bucket(BUCKET).blob(OBJECTS[kind])
+
+
+def _read(kind):
+    b = _blob(kind)
+    if not b.exists():
+        return {}
+    try:
+        return json.loads(b.download_as_text() or "{}")
+    except json.JSONDecodeError:
+        return {}
+
+
+def _write(kind, data):
+    _blob(kind).upload_from_string(
+        json.dumps(data, ensure_ascii=False), content_type="application/json"
+    )
+
+
+# CORS: locked to the dashboard's serving origin.
+# Set ALLOWED_ORIGIN env var at deploy time; GCS-bucket serving uses
+# https://storage.googleapis.com (the origin excludes bucket/path).
+# Leave unset only for local file:// testing (falls back to *).
+_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
+_CORS = {
+    "Access-Control-Allow-Origin": _ORIGIN,
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Vary": "Origin",
+}
+_JSON = {**_CORS, "Content-Type": "application/json"}
+
+
+def notes(request):
+    if request.method == "OPTIONS":
+        return ("", 204, _CORS)
+
+    kind = (request.args.get("kind") or
+            (request.get_json(silent=True) or {}).get("kind") or "notes")
+    if kind not in OBJECTS:
+        return (json.dumps({"error": "kind must be notes|positions"}), 400, _JSON)
+
+    if request.method == "GET":
+        data = _read(kind)
+        if kind == "notes":
+            symbol = request.args.get("symbol", "")
+            return (json.dumps({"symbol": symbol, "notes": data.get(symbol, [])}), 200, _JSON)
+        if kind == "settings":
+            return (json.dumps({"settings": data}), 200, _JSON)
+        return (json.dumps({"positions": data}), 200, _JSON)
+
+    if request.method == "POST":
+        payload = request.get_json(silent=True) or {}
+
+        if kind == "settings":
+            cfg = payload.get("data")
+            if not isinstance(cfg, dict):
+                return (json.dumps({"error": "data{} required"}), 400, _JSON)
+            clean = {}
+            for k in ("gainPct", "highZonePct", "lowZonePct"):
+                if k in cfg:
+                    try:
+                        clean[k] = float(cfg[k])
+                    except (TypeError, ValueError):
+                        pass
+            if cfg.get("horizon") in ("long", "swing"):
+                clean["horizon"] = cfg["horizon"]
+            if cfg.get("reEntryMode") in ("base", "near_low"):
+                clean["reEntryMode"] = cfg["reEntryMode"]
+            w = cfg.get("weights")
+            if isinstance(w, dict):
+                try:
+                    wv = {k: float(w[k]) for k in
+                          ("trend", "momentum", "participation", "relStrength", "risk")}
+                    if abs(sum(wv.values()) - 100) < 0.01:
+                        clean["weights"] = wv
+                except (KeyError, TypeError, ValueError):
+                    pass
+            _write("settings", clean)
+            return (json.dumps({"ok": True, "saved": sorted(clean)}), 200, _JSON)
+
+        if kind == "positions":
+            posmap = payload.get("data")
+            if not isinstance(posmap, dict):
+                return (json.dumps({"error": "data{} required"}), 400, _JSON)
+            clean = {}
+            for sym, p in list(posmap.items())[:500]:
+                if not isinstance(p, dict):
+                    continue
+                try:
+                    entry = float(p.get("entry"))
+                except (TypeError, ValueError):
+                    continue
+                clean[str(sym)[:16]] = {
+                    "entry": round(entry, 4),
+                    "date": str(p.get("date", ""))[:10],
+                    "booked": bool(p.get("booked", False)),
+                    "bookedDate": str(p.get("bookedDate", ""))[:10],
+                }
+            _write("positions", clean)
+            return (json.dumps({"ok": True, "count": len(clean)}), 200, _JSON)
+
+        symbol = payload.get("symbol")
+        notes_list = payload.get("notes")
+        if not symbol or not isinstance(notes_list, list):
+            return (json.dumps({"error": "symbol and notes[] required"}), 400, _JSON)
+        clean = [
+            {"text": str(n.get("text", ""))[:2000], "date": str(n.get("date", ""))[:32]}
+            for n in notes_list[:200]
+        ]
+        all_notes = _read("notes")
+        all_notes[symbol] = clean
+        _write("notes", all_notes)
+        return (json.dumps({"ok": True, "count": len(clean)}), 200, _JSON)
+
+    return ("method not allowed", 405, _CORS)
