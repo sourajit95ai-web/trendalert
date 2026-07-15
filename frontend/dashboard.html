@@ -222,7 +222,7 @@
   .lgi label{font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap}
   .lgi input[type=number]{width:50px;background:var(--surface2);border:1px solid var(--hair2);border-radius:6px;color:var(--ink);font-size:12px;padding:4px 6px;outline:0;font-family:'IBM Plex Mono',monospace}
   .lgi input[type=color]{width:24px;height:22px;border:1px solid var(--hair2);border-radius:6px;background:none;cursor:pointer;padding:1px}
-  .chart-stack{padding:0 10px 12px}
+  .chart-stack{display:flex;flex-direction:column;padding:0 10px 12px}
   .pane{padding:12px 4px 4px;border-top:1px solid var(--hair)}
   .pane:first-child{border-top:0;padding-top:6px}
   .pane-h{display:flex;align-items:baseline;gap:10px;margin:0 6px 8px}
@@ -509,9 +509,6 @@
     <div class="meta-bar">
       <span class="status" id="status" data-mode="demo"><span class="dot"></span><span id="statusText">Demo data</span></span>
       <span class="stale" id="staleBadge">⚠ <span id="staleText">data stale</span></span>
-      <span class="url-field"><label for="dataUrl">JSON URL</label><input id="dataUrl" placeholder="https://storage.googleapis.com/your-bucket/data.json"></span>
-      <span class="url-field"><label for="syncUrl">Sync API</label><input id="syncUrl" placeholder="https://…cloudfunctions.net/notes"></span>
-      <button class="btn btn-primary" id="loadBtn">Load</button>
       <span style="align-self:center">As of <b id="mGen">—</b> · <b id="mTf">—</b> · auto 5 min</span>
       <span class="viewseg" id="viewSeg">
         <button data-view="cards"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Cards</button>
@@ -643,6 +640,13 @@
       <div class="mbody">
         <div class="set-grid">
           <div class="set-sec" style="grid-column:1 / -1">
+            <h4>Data connection</h4>
+            <div class="set-row"><label for="dataUrl">JSON URL</label><input type="url" id="dataUrl" style="flex:2.2;background:var(--surface2);border:1px solid var(--hair2);border-radius:8px;color:var(--ink);font-size:12px;padding:7px 9px;outline:0;font-family:'IBM Plex Mono',monospace" placeholder="https://storage.googleapis.com/your-bucket/data.json"></div>
+            <div class="set-row"><label for="syncUrl">Sync API</label><input type="url" id="syncUrl" style="flex:2.2;background:var(--surface2);border:1px solid var(--hair2);border-radius:8px;color:var(--ink);font-size:12px;padding:7px 9px;outline:0;font-family:'IBM Plex Mono',monospace" placeholder="https://…cloudfunctions.net/notes"></div>
+            <div class="set-row" style="justify-content:flex-end"><button class="btn btn-primary" id="loadBtn">Reconnect &amp; load</button></div>
+            <div class="set-note">Pre-filled with the TrendAlert production bucket and Sync API; saved in this browser. Edit only if the bucket or notes function moves.</div>
+          </div>
+          <div class="set-sec" style="grid-column:1 / -1">
             <h4>Strategy</h4>
             <div class="set-row"><label>Holding horizon</label>
               <span class="set-seg" id="segHorizon"><button data-v="long">Long-term</button><button data-v="swing">Swing</button></span></div>
@@ -722,15 +726,19 @@ function applyTheme(n){
 }
 
 
+const CORE_SYMBOLS=["META","MELI","MSFT","GOOGL","AMZN","MA","NFLX","NVDA","AMD","NOW",
+  "V","UNH","COIN","VEEV","HOOD","TSM","CRWD","PANW","AXON","LLY",
+  "TMO","NBIS","AVGO","ISRG","PLTR","RKLB","IONQ","NVO"];
+const INDEX_SYMBOLS=["QQQ","SOXX","SPY","IWM","BTC/USD","IAUM","IJR","SPGI","IHAK","IGV","VOO"];
 let lists=loadLists();
 let activeType="portfolio";
 let activeListId=null;
 
 function defaultLists(){
   return [
-    {id:uid(),name:"Core",type:"portfolio",symbols:["AAPL","MSFT","XOM","NVDA","TSLA"]},
+    {id:uid(),name:"Core",type:"portfolio",symbols:CORE_SYMBOLS.slice()},
     {id:uid(),name:"Watchlist",type:"watchlist",symbols:["NVDA","CAT","UNH","JPM","XOM"]},
-    {id:uid(),name:"Index",type:"index",symbols:["QQQ","SOXX","SPY","IWM","BTC/USD"]},
+    {id:uid(),name:"Index",type:"index",symbols:INDEX_SYMBOLS.slice()},
   ];
 }
 /* migration: existing saved lists predate the Index category — add it once */
@@ -739,6 +747,22 @@ function defaultLists(){
     lists.push({id:uid(),name:"Index",type:"index",symbols:["QQQ","SOXX","SPY","IWM","BTC/USD"]});
     saveLists();
   }
+})();
+/* migration (one-time): replace the Core portfolio with the 2026-07 universe */
+(function(){
+  const FLAG="trendalert_core_v2";
+  try{if(localStorage.getItem(FLAG))return;}catch(e){}
+  const core=lists.find(l=>l.type==="portfolio"&&l.name==="Core")||lists.find(l=>l.type==="portfolio");
+  if(core){core.symbols=CORE_SYMBOLS.slice();saveLists();}
+  try{localStorage.setItem(FLAG,"1");}catch(e){}
+})();
+/* migration (one-time): append the 2026-07 additions to the Index list */
+(function(){
+  const FLAG="trendalert_index_v2";
+  try{if(localStorage.getItem(FLAG))return;}catch(e){}
+  const idx=lists.find(l=>l.type==="index");
+  if(idx){INDEX_SYMBOLS.forEach(s=>{if(!idx.symbols.includes(s))idx.symbols.push(s);});saveLists();}
+  try{localStorage.setItem(FLAG,"1");}catch(e){}
 })();
 function uid(){return Math.random().toString(36).slice(2,9);}
 function loadLists(){
@@ -750,7 +774,10 @@ const TYPE_LABEL={portfolio:"Portfolio",watchlist:"Watchlist",index:"Index"};
 const listsOfType=t=>lists.filter(l=>l.type===t);
 const activeList=()=>lists.find(l=>l.id===activeListId)||null;
 
-let DATA_URL="";let payload=null,selected=null;
+const DATA_KEY="trendalert_data_url";
+const DEFAULT_DATA_URL="https://storage.googleapis.com/trendalert-data-rattle/data.json";
+let DATA_URL=(function(){try{return localStorage.getItem(DATA_KEY)||DEFAULT_DATA_URL;}catch(e){return DEFAULT_DATA_URL;}})();
+let payload=null,selected=null;
 let sortKey="score",sortDir=-1,q="",trendF="all",sector="all";
 const trendToggles={bull:true,bear:true};
 
@@ -808,7 +835,8 @@ const BOOK_GAIN_GET=()=>settings.gainPct;
 const POS_KEY="trendalert_positions_v1";
 const SYNC_KEY="trendalert_sync_url";
 const BOOK_GAIN_PCT=20, BOOK_FRACTION="⅓";
-let SYNC_URL=(function(){try{return localStorage.getItem(SYNC_KEY)||"";}catch(e){return "";}})();
+const DEFAULT_SYNC_URL="https://us-central1-trendalert-prod.cloudfunctions.net/notes";
+let SYNC_URL=(function(){try{return localStorage.getItem(SYNC_KEY)||DEFAULT_SYNC_URL;}catch(e){return DEFAULT_SYNC_URL;}})();
 let positions=loadPos();
 function loadPos(){try{return JSON.parse(localStorage.getItem(POS_KEY))||{};}catch(e){return {};}}
 function savePos(){
@@ -1060,6 +1088,9 @@ function miniCardHTML(d){
       <div class="why">${whyCard(d)}</div>
     </div></div>`;
 }
+/* card groups can collapse; HOLDING STEADY starts minimised */
+let groupOpen={g1:true,g3:true,g2:false};
+try{Object.assign(groupOpen,JSON.parse(localStorage.getItem("trendalert_groups_v1"))||{});}catch(e){}
 function renderCards(rows){
   const g=$("cardGrid");g.innerHTML="";
   $("cardsEmpty").style.display=rows.length?"none":"block";
@@ -1067,9 +1098,15 @@ function renderCards(rows){
   GROUPS.forEach(([grp,cls,label])=>{
     const rs=rows.filter(d=>groupOfCard(d)===grp).sort((a,b)=>scoreOf(b)-scoreOf(a));
     if(!rs.length)return;
+    const open=groupOpen[cls]!==false;
     const h=document.createElement("div");h.className="gh "+cls;
-    h.innerHTML=`<h3>${label}</h3><span class="cnt">${rs.length} ${rs.length===1?"name":"names"}</span><span class="bar"></span>`;
+    h.style.cursor="pointer";h.title=open?"Collapse":"Expand";
+    h.innerHTML=`<span class="chev" style="font-size:11px;color:var(--muted);width:14px">${open?"▾":"▸"}</span><h3>${label}</h3><span class="cnt">${rs.length} ${rs.length===1?"name":"names"}</span><span class="bar"></span>`;
+    h.onclick=()=>{groupOpen[cls]=!open;
+      try{localStorage.setItem("trendalert_groups_v1",JSON.stringify(groupOpen));}catch(e){}
+      renderCards(rows);};
     g.appendChild(h);
+    if(!open)return;
     const rail=document.createElement("div");rail.className="rail";
     rail.innerHTML=rs.map(miniCardHTML).join("");
     rail.querySelectorAll(".mini2").forEach(el=>el.onclick=()=>{selected=el.dataset.sym;focusMode=true;render();});
@@ -1285,9 +1322,11 @@ $("sectors").onclick=e=>{const b=e.target.closest(".sector");if(!b)return;sector
 document.querySelectorAll(".tg").forEach(t=>t.onclick=()=>{const k=t.dataset.trend;trendToggles[k]=!trendToggles[k];t.classList.toggle("on",trendToggles[k]);render();});
 $("addBtn").onclick=addToActive;$("addInput").addEventListener("keydown",e=>{if(e.key==="Enter")addToActive();});
 $("loadBtn").onclick=()=>{DATA_URL=$("dataUrl").value.trim();
+  try{localStorage.setItem(DATA_KEY,DATA_URL);}catch(e){}
   SYNC_URL=$("syncUrl").value.trim();try{localStorage.setItem(SYNC_KEY,SYNC_URL);}catch(e){}
   syncPositions().then(load);};
-$("dataUrl").addEventListener("keydown",e=>{if(e.key==="Enter"){DATA_URL=$("dataUrl").value.trim();load();}});
+$("dataUrl").addEventListener("keydown",e=>{if(e.key==="Enter"){DATA_URL=$("dataUrl").value.trim();
+  try{localStorage.setItem(DATA_KEY,DATA_URL);}catch(e){}load();}});
 $("search").addEventListener("input",e=>{q=e.target.value.trim().toLowerCase();render();});
 $("trendFilter").addEventListener("change",e=>{trendF=e.target.value;render();});
 /* ====================== CHART ENGINE ====================== */
@@ -1305,8 +1344,13 @@ const DEFAULT_CHCFG={
   rsi:{period:14, color:"#F2F4FF", ob:70, os:30},
   macd:{fast:12, slow:26, signal:9, macdColor:"#5CE1FF", signalColor:"#FFD166"},
 };
-const DEFAULT_VIS={ema20:true,ema50:true,ema150:true,ema200:true,rsi:true,macd:true,sr:true,w52:true,cross:true,chart:true};
+const DEFAULT_VIS={ema20:false,ema50:true,ema150:true,ema200:false,rsi:true,macd:true,sr:true,w52:true,cross:true,chart:true,pline:true};
 let chCfg=loadCh(CH_KEY,DEFAULT_CHCFG), visibilityState=loadCh(CH_KEY+"_vis",DEFAULT_VIS);
+/* at most 2 EMAs may be visible; saved states from older versions may have more */
+const EMA_KEYS=["ema20","ema50","ema150","ema200"];
+if(EMA_KEYS.filter(k=>visibilityState[k]).length>2)
+  EMA_KEYS.forEach(k=>visibilityState[k]=(k==="ema50"||k==="ema150"));
+let emaOnOrder=EMA_KEYS.filter(k=>visibilityState[k]);
 if(chCfg.span==="All")chCfg.span="Max";
 if(!["1M","3M","6M","1Y","Max"].includes(chCfg.span))chCfg.span="6M";
 function loadCh(k,d){try{const v=JSON.parse(localStorage.getItem(k));return v?Object.assign(JSON.parse(JSON.stringify(d)),v):d;}catch(e){return d;}}
@@ -1343,13 +1387,14 @@ function autoSR(bars,lookback=5,maxLevels=4){
 function genBars(seedStr,start){
   let s=0;for(const ch of seedStr)s=(s*31+ch.charCodeAt(0))%233280;
   const rnd=()=>{s=(s*9301+49297)%233280;return s/233280;};
-  const n=420,bars=[];let px=start||100;const drift=(rnd()-0.45)*0.0011;
-  let d=new Date();d.setDate(d.getDate()-Math.round(n*1.45));
-  for(let i=0;i<n;){d.setDate(d.getDate()+1);const dow=d.getDay();if(dow===0||dow===6)continue;
+  const n=420,dates=[],d=new Date();
+  while(dates.length<n){const dow=d.getDay();if(dow!==0&&dow!==6)dates.unshift(d.toISOString().slice(0,10));d.setDate(d.getDate()-1);}
+  const bars=[];let px=start||100;const drift=(rnd()-0.45)*0.0011;
+  for(const t of dates){
     const vol=0.012+rnd()*0.012,ch=drift+(rnd()-0.5)*vol*2,o=px;px=Math.max(1,px*(1+ch));
     const hi=Math.max(o,px)*(1+rnd()*0.008),lo=Math.min(o,px)*(1-rnd()*0.008);
-    bars.push({time:d.toISOString().slice(0,10),open:+o.toFixed(2),high:+hi.toFixed(2),
-      low:+lo.toFixed(2),close:+px.toFixed(2),volume:Math.round(6e5+rnd()*5e6)});i++;}
+    bars.push({time:t,open:+o.toFixed(2),high:+hi.toFixed(2),
+      low:+lo.toFixed(2),close:+px.toFixed(2),volume:Math.round(6e5+rnd()*5e6)});}
   return bars;}
 function barsFor(sym){
   if(chartStore&&chartStore[sym]&&chartStore[sym].length)return chartStore[sym];
@@ -1365,7 +1410,7 @@ const cOpts=(h,showTime)=>({height:h,layout:{background:{color:"transparent"},te
   crosshair:{vertLine:{color:CT().cross,labelBackgroundColor:CT().accent},horzLine:{color:CT().cross,labelBackgroundColor:CT().accent}}});
 function buildCharts(){
   if(!LWC){$("chartCard").querySelector(".chart-stack").innerHTML='<div class="chart-empty">Chart library failed to load (offline?). Indicators still show in the detail panel.</div>';return;}
-  priceChart=LWC.createChart($("cPrice"),cOpts(430,false));   /* dates only on the bottom pane */
+  priceChart=LWC.createChart($("cPrice"),cOpts(430,true));   /* dates on price + bottom pane */
   rsiChart=LWC.createChart($("cRsi"),cOpts(170,false));
   macdChart=LWC.createChart($("cMacd"),cOpts(190,true));
   candle=priceChart.addCandlestickSeries({upColor:CT().up,downColor:CT().down,wickUpColor:CT().up,wickDownColor:CT().down,borderVisible:false});
@@ -1392,7 +1437,16 @@ function buildSpanSeg(){
 const EYE_ON='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
 const EYE_OFF='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 function eyeBtn(key){const b=document.createElement("button");b.className="eye";b.innerHTML=visibilityState[key]?EYE_ON:EYE_OFF;
-  b.title="Toggle visibility";b.onclick=()=>{visibilityState[key]=!visibilityState[key];saveCh();renderChart($("chSym").textContent);};return b;}
+  b.title="Toggle visibility";
+  b.onclick=()=>{
+    if(EMA_KEYS.includes(key)){
+      /* at most 2 EMAs on: enabling a third switches off the oldest one */
+      if(visibilityState[key]){visibilityState[key]=false;emaOnOrder=emaOnOrder.filter(k=>k!==key);}
+      else{visibilityState[key]=true;emaOnOrder.push(key);
+        while(emaOnOrder.length>2){const drop=emaOnOrder.shift();visibilityState[drop]=false;}}
+    }else visibilityState[key]=!visibilityState[key];
+    saveCh();renderChart($("chSym").textContent);};
+  return b;}
 function lgItem(key,swColor,labelHTML,extra){const it=document.createElement("div");it.className="lgi"+(visibilityState[key]?"":" off");
   it.appendChild(eyeBtn(key));
   if(swColor){const sw=document.createElement("span");sw.className="sw";sw.style.background=swColor;it.appendChild(sw);}
@@ -1421,6 +1475,7 @@ function buildLegend(){
   ]));
   row.appendChild(lgItem("sr",CT().sr,"S/R <span style='color:var(--faint);font-weight:400'>(dotted)</span>"));
   row.appendChild(lgItem("w52",CT().gold,"52W H/L"));
+  row.appendChild(lgItem("pline",null,"Last price"));
   row.appendChild(lgItem("cross",CT().up,"Crosses ▲▼"));
 }
 
@@ -1449,6 +1504,8 @@ function renderChart(sym){
   buildSpanSeg();buildLegend();
   const bars=barsFor(sym),closes=bars.map(b=>b.close);
   candle.setData(bars);
+  const pl=visibilityState.pline!==false;
+  candle.applyOptions({priceLineVisible:pl,lastValueVisible:pl});
 
   emaSeries.forEach(s=>priceChart.removeSeries(s));emaSeries=[];
   chCfg.ema.forEach(e=>{if(!visibilityState[e.key])return;
@@ -1456,17 +1513,21 @@ function renderChart(sym){
     const s=priceChart.addLineSeries({color:e.color,lineWidth:2,priceLineVisible:false,lastValueVisible:false});
     s.setData(bars.map((b,i)=>ev[i]!=null?{time:b.time,value:+ev[i].toFixed(2)}:null).filter(Boolean));
     emaSeries.push(s);});
-  /* crossover markers: green arrowUp = bullish cross, red arrowDown = bearish */
+  /* crossover markers on the price pane — crosses of the two visible EMAs:
+     green arrowUp = fast crosses above slow (uptrend), red arrowDown = below (downtrend) */
   if(visibilityState.cross!==false){
-    const p50=(chCfg.ema.find(e=>e.key==="ema50")||{period:50}).period;
-    const p150=(chCfg.ema.find(e=>e.key==="ema150")||{period:150}).period;
-    const eA=emaArr(closes,p50),eB=emaArr(closes,p150),mk=[];
-    for(let i=1;i<bars.length;i++){
-      if(eA[i]==null||eB[i]==null||eA[i-1]==null||eB[i-1]==null)continue;
-      if(eA[i-1]<=eB[i-1]&&eA[i]>eB[i])mk.push({time:bars[i].time,position:"belowBar",
-        color:CT().up,shape:"arrowUp",text:p50+"↑"+p150});
-      else if(eA[i-1]>=eB[i-1]&&eA[i]<eB[i])mk.push({time:bars[i].time,position:"aboveBar",
-        color:CT().down,shape:"arrowDown",text:p50+"↓"+p150});
+    const vis=chCfg.ema.filter(e=>visibilityState[e.key]).sort((a,b)=>a.period-b.period);
+    const mk=[];
+    if(vis.length===2&&vis[0].period!==vis[1].period){
+      const pf=vis[0].period,ps=vis[1].period;
+      const eA=emaArr(closes,pf),eB=emaArr(closes,ps);
+      for(let i=1;i<bars.length;i++){
+        if(eA[i]==null||eB[i]==null||eA[i-1]==null||eB[i-1]==null)continue;
+        if(eA[i-1]<=eB[i-1]&&eA[i]>eB[i])mk.push({time:bars[i].time,position:"belowBar",
+          color:CT().up,shape:"arrowUp",text:pf+"↑"+ps});
+        else if(eA[i-1]>=eB[i-1]&&eA[i]<eB[i])mk.push({time:bars[i].time,position:"aboveBar",
+          color:CT().down,shape:"arrowDown",text:pf+"↓"+ps});
+      }
     }
     candle.setMarkers(mk);
   }else candle.setMarkers([]);
@@ -1516,17 +1577,6 @@ function renderChart(sym){
     macdLine.setData(bars.map((b,i)=>m.line[i]!=null?{time:b.time,value:+m.line[i].toFixed(4)}:null).filter(Boolean));
     macdSig=macdChart.addLineSeries({color:chCfg.macd.signalColor,lineWidth:2,lastValueVisible:false});
     macdSig.setData(bars.map((b,i)=>m.signal[i]!=null?{time:b.time,value:+m.signal[i].toFixed(4)}:null).filter(Boolean));
-    if(visibilityState.cross!==false){
-      const mm=[];
-      for(let i=1;i<bars.length;i++){
-        if(m.line[i]==null||m.signal[i]==null||m.line[i-1]==null||m.signal[i-1]==null)continue;
-        if(m.line[i-1]<=m.signal[i-1]&&m.line[i]>m.signal[i])mm.push({time:bars[i].time,
-          position:"belowBar",color:CT().up,shape:"arrowUp"});
-        else if(m.line[i-1]>=m.signal[i-1]&&m.line[i]<m.signal[i])mm.push({time:bars[i].time,
-          position:"aboveBar",color:CT().down,shape:"arrowDown"});
-      }
-      macdLine.setMarkers(mm);
-    }else macdLine.setMarkers([]);
   }
   applySpan();
 }
@@ -1562,6 +1612,7 @@ $("posClear").onclick=()=>{
 let pendHorizon="long",pendReentry="base";
 function segPaint(id,val){$(id).querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.v===val));}
 function openSettings(){
+  $("dataUrl").value=DATA_URL;$("syncUrl").value=SYNC_URL;
   pendHorizon=settings.horizon||"long";pendReentry=settings.reEntryMode||"base";
   segPaint("segHorizon",pendHorizon);segPaint("segReentry",pendReentry);
   $("setGain").value=settings.gainPct;$("setHighZone").value=settings.highZonePct;$("setLowZone").value=settings.lowZonePct;
@@ -1604,7 +1655,7 @@ $("setReset").onclick=()=>{
 $("setModal").addEventListener("click",e=>{if(e.target.id==="setModal")$("setModal").classList.remove("on");});
 document.querySelector(".settings").onclick=openSettings;
 
-if(SYNC_URL)document.addEventListener("DOMContentLoaded",()=>{const el=$("syncUrl");if(el)el.value=SYNC_URL;});
+$("dataUrl").value=DATA_URL;$("syncUrl").value=SYNC_URL;
 setInterval(()=>{if(DATA_URL)load();},300000);
 setInterval(checkStaleness,60000);
 initThemeUI();applyTheme(themeName);

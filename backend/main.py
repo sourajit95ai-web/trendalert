@@ -37,13 +37,28 @@ from chart_backend import (
 # ----------------------------------------------------------------------
 # config — EDIT SYMBOLS/SECTORS to your universe
 # ----------------------------------------------------------------------
-SYMBOLS = ["AAPL", "MSFT", "NVDA", "TSLA", "XOM", "JPM", "CAT", "UNH", "SPY", "QQQ", "SOXX", "IWM"]
+SYMBOLS = [
+    "META", "MELI", "MSFT", "GOOGL", "AMZN", "MA", "NFLX", "NVDA", "AMD", "NOW",
+    "V", "UNH", "COIN", "VEEV", "HOOD", "TSM", "CRWD", "PANW", "AXON", "LLY",
+    "TMO", "NBIS", "AVGO", "ISRG", "PLTR", "RKLB", "IONQ", "NVO",
+    "SPY", "QQQ", "SOXX", "IWM",   # SPY is the RS benchmark; ETFs feed the Index list
+    "IAUM", "IJR", "SPGI", "IHAK", "IGV", "VOO",
+]
 CRYPTO_SYMBOLS = ["BTC/USD"]
 SECTORS = {
-    "AAPL": "Technology", "MSFT": "Technology", "NVDA": "Technology",
-    "TSLA": "Consumer", "XOM": "Energy", "JPM": "Finance",
-    "CAT": "Industrial", "UNH": "Healthcare", "SPY": "Index",
-    "QQQ": "Index", "SOXX": "Index", "IWM": "Index",
+    "META": "Technology", "MELI": "Consumer", "MSFT": "Technology",
+    "GOOGL": "Technology", "AMZN": "Consumer", "MA": "Finance",
+    "NFLX": "Consumer", "NVDA": "Technology", "AMD": "Technology",
+    "NOW": "Technology", "V": "Finance", "UNH": "Healthcare",
+    "COIN": "Finance", "VEEV": "Healthcare", "HOOD": "Finance",
+    "TSM": "Technology", "CRWD": "Technology", "PANW": "Technology",
+    "AXON": "Industrial", "LLY": "Healthcare", "TMO": "Healthcare",
+    "NBIS": "Technology", "AVGO": "Technology", "ISRG": "Healthcare",
+    "PLTR": "Technology", "RKLB": "Industrial", "IONQ": "Technology",
+    "NVO": "Healthcare",
+    "SPY": "Index", "QQQ": "Index", "SOXX": "Index", "IWM": "Index",
+    "IAUM": "Index", "IJR": "Index", "SPGI": "Finance", "IHAK": "Index",
+    "IGV": "Index", "VOO": "Index",
     "BTC/USD": "Crypto",
 }
 

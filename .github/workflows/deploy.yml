@@ -1,0 +1,99 @@
+name: deploy
+
+# Two ways to deploy:
+#   1. Push to main            -> tests, then FULL prod deploy (both functions + dashboard)
+#   2. Actions tab -> "deploy" -> "Run workflow" on ANY branch:
+#        target=dev  (default) -> dashboard to gs://BUCKET/dev/dashboard.html (staging)
+#        target=prod           -> dashboard to gs://BUCKET/dashboard.html
+#        deploy_backend=true   -> also redeploy both Cloud Functions from that branch
+#
+# Required repo secrets (Settings -> Secrets and variables -> Actions):
+#   GCP_SA_KEY   - key.json of the gh-deploy service account (README §3)
+#   GCP_PROJECT  - GCP project id
+#   GCS_BUCKET   - bucket name (no gs:// prefix)
+# Optional (EOD alert emails, see OPS.md):
+#   SMTP_USER    - sender address    ALERT_TO - comma-separated recipients
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Where to publish the dashboard"
+        type: choice
+        options: [dev, prod]
+        default: dev
+      deploy_backend:
+        description: "Also deploy both Cloud Functions from this branch"
+        type: boolean
+        default: false
+
+env:
+  REGION: us-central1
+  PIPELINE_FN: trendalert-pipeline   # entry point: main (backend/main.py) — matches the function already deployed in trendalert-prod
+  NOTES_FN: notes           # entry point: notes  (backend/notes_function.py)
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements.txt pytest
+      - run: python -m pytest backend/tests -q
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT }}
+
+      # ---- backend: both Cloud Functions (main push, or dispatch with deploy_backend) ----
+      - name: Deploy pipeline function
+        if: github.event_name == 'push' || inputs.deploy_backend
+        run: |
+          SECRETS="ALPACA_KEY_ID=alpaca-key-id:latest,ALPACA_SECRET_KEY=alpaca-secret-key:latest"
+          # smtp-pass is optional (OPS.md); only mount it if the secret exists
+          if gcloud secrets describe smtp-pass >/dev/null 2>&1; then
+            SECRETS="$SECRETS,SMTP_PASS=smtp-pass:latest"
+          fi
+          gcloud functions deploy "$PIPELINE_FN" \
+            --gen2 --runtime python312 --region "$REGION" \
+            --source backend --entry-point main \
+            --trigger-http --allow-unauthenticated \
+            --memory 512Mi --timeout 300s \
+            --set-secrets "$SECRETS" \
+            --set-env-vars "GCS_BUCKET=${{ secrets.GCS_BUCKET }},SMTP_USER=${{ secrets.SMTP_USER }},ALERT_TO=${{ secrets.ALERT_TO }}"
+
+      - name: Deploy notes function
+        if: github.event_name == 'push' || inputs.deploy_backend
+        run: |
+          gcloud functions deploy "$NOTES_FN" \
+            --gen2 --runtime python312 --region "$REGION" \
+            --source backend --entry-point notes \
+            --trigger-http --allow-unauthenticated \
+            --set-env-vars "GCS_BUCKET=${{ secrets.GCS_BUCKET }},ALLOWED_ORIGIN=https://storage.googleapis.com"
+
+      # ---- frontend: single-file dashboard to GCS ----
+      # no-cache so a refresh always shows the newest deploy (GCS defaults to 1h caching)
+      - name: Publish dashboard
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.target }}" = "prod" ]; then
+            DEST="gs://${{ secrets.GCS_BUCKET }}/dashboard.html"
+          else
+            DEST="gs://${{ secrets.GCS_BUCKET }}/dev/dashboard.html"
+          fi
+          gsutil -h "Cache-Control:no-cache" -h "Content-Type:text/html" \
+            cp frontend/dashboard.html "$DEST"
+          echo "Published to $DEST"
