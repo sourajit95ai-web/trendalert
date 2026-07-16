@@ -198,6 +198,12 @@
   .modal .mrow:last-child{border-bottom:0}
   .modal .mrow .nm{flex:1;font-weight:600;font-size:14px}
   .modal .mrow .ty{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em}
+  .modal .addlrow{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--hair);cursor:pointer}
+  .modal .addlrow:last-child{border-bottom:0}
+  .modal .addlrow .nm{flex:1;font-weight:600;font-size:14px}
+  .modal .addlrow .ty{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em}
+  .modal .addlrow input[type=radio]{accent-color:var(--blue);width:15px;height:15px;cursor:pointer}
+  .modal .addlrow.already{opacity:.45;cursor:default}
   .modal .mrow .act{color:var(--faint);cursor:pointer;font-size:13px;padding:4px 8px;border-radius:6px}
   .modal .mrow .act:hover{color:var(--ink);background:var(--surface2)}
   .modal .mrow .act.del:hover{color:var(--down)}
@@ -680,6 +686,20 @@
     </div>
   </div>
 
+  <div class="modal-bg" id="addModal">
+    <div class="modal" style="width:420px">
+      <h3>Add <span id="addSymName">—</span></h3>
+      <div class="mbody">
+        <div class="set-note" style="margin:0 0 12px">Choose which list to add it to, then click OK.</div>
+        <div id="addListChoices"></div>
+      </div>
+      <div class="mfoot">
+        <button class="btn btn-ghost" id="addCancel">Cancel</button>
+        <button class="btn btn-primary" id="addOk">OK</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-bg" id="modal">
     <div class="modal">
       <h3 id="modalTitle">Manage lists</h3>
@@ -783,7 +803,7 @@ const trendToggles={bull:true,bear:true};
 
 const COLS=[
   {key:"symbol",lbl:"Symbol"},{key:"score",lbl:"Score"},{key:"close",lbl:"Close"},
-  {key:"change_pct",lbl:"Chg%"},{key:"pos52",lbl:"52W Range"},{key:"rsi14",lbl:"RSI(14)"},{key:"macd_hist",lbl:"MACD"},
+  {key:"change_pct",lbl:"Chg%"},{key:"pos52",lbl:"52W Range"},
   {key:"trend",lbl:"Trend"},{key:"lists",lbl:"Lists"},
 ];
 
@@ -1189,8 +1209,6 @@ function render(){
   if(L && (!selected||!L.symbols.includes(selected)) && rows[0]) selected=rows[0].symbol;
   rows.forEach(d=>{
     const dir=d.change_pct>=0?"up":"down",sc=scoreOf(d),scol=scoreColor(sc);
-    const rsiPos=Math.max(0,Math.min(100,d.rsi14)),rsiCol=d.rsi14>=70?"var(--down)":d.rsi14<=30?"var(--up)":"var(--ink)";
-    const hist=d.macd_hist||0,hw=Math.min(22,Math.abs(hist)*15),hcol=hist>=0?"var(--up)":"var(--down)",hleft=hist>=0?"50%":(50-(hw/48*100))+"%";
     const t3=trendOf(d),tl={bull:"Bullish",bear:"Bearish",mixed:"Mixed"}[t3];
     const p52=pos52(d),ph=pctFromHigh(d),zn=zoneOf(d);
     const zchip=zoneChipHTML(d);
@@ -1203,8 +1221,6 @@ function render(){
       <td class="num">${fmt(d.close)}</td>
       <td><span class="chip ${dir}">${d.change_pct>=0?"▲":"▼"} ${fmt(Math.abs(d.change_pct))}%</span></td>
       <td>${c52}</td>
-      <td><span class="rsi-mini"><span class="track"></span><span class="mk" style="left:${rsiPos}%"></span></span><span class="rsi-val" style="color:${rsiCol}">${fmt(d.rsi14,0)}</span></td>
-      <td><span class="macd-mini"><span class="mid"></span><span class="bar" style="left:${hleft};width:${hw}px;background:${hcol}"></span></span></td>
       <td><span class="trend ${t3}">${tl}</span></td>
       <td><span class="inlists">${inL.map(l=>`<span class="t">${l.name}</span>`).join("")||'<span class="t">—</span>'}</span></td>`;
     tr.onclick=e=>{ if(e.target.dataset.rm){removeFromActive(e.target.dataset.rm);return;} selected=d.symbol;render(); };
@@ -1276,16 +1292,39 @@ function renderDetail(){
   renderChart(d.symbol);
 }
 
+/* "+" opens a chooser; the symbol is only added after the user clicks OK */
 function addToActive(){
-  const L=activeList();const v=$("addInput").value.trim().toUpperCase();$("addInput").value="";
-  if(!L){$("addNote").textContent="Create a list first (Manage lists).";return;}
+  const v=$("addInput").value.trim().toUpperCase();
   if(!v)return;
-  if(!L.symbols.includes(v))L.symbols.push(v);
-  saveLists();selected=v;
-  if(!bySym(v)) $("addNote").textContent=`Added ${v} to "${L.name}". Note: ${v} isn't in the loaded data universe yet — add it to the function's SYMBOLS to get indicators.`;
-  else $("addNote").textContent="";
-  render();
+  if(!lists.length){$("addNote").textContent="Create a list first (Manage lists).";return;}
+  openAddModal(v);
 }
+function openAddModal(sym){
+  $("addSymName").textContent=sym;
+  const c=$("addListChoices");c.innerHTML="";
+  const act=activeList();
+  lists.forEach(l=>{
+    const inIt=l.symbols.includes(sym);
+    const row=document.createElement("label");row.className="addlrow"+(inIt?" already":"");
+    row.innerHTML=`<input type="radio" name="addTarget" value="${l.id}" ${inIt?"disabled":(act&&l.id===act.id?"checked":"")}>
+      <span class="nm">${l.name}</span><span class="ty">${TYPE_LABEL[l.type]||l.type}${inIt?" · already in":""}</span>`;
+    c.appendChild(row);
+  });
+  /* if the active list already holds it, pre-select the first list that doesn't */
+  if(!c.querySelector("input:checked")){const f=c.querySelector("input:not(:disabled)");if(f)f.checked=true;}
+  $("addModal").classList.add("on");
+}
+$("addOk").onclick=()=>{
+  const sel=document.querySelector('#addListChoices input[name="addTarget"]:checked');
+  if(!sel){$("addModal").classList.remove("on");return;}
+  const l=lists.find(x=>x.id===sel.value),sym=$("addSymName").textContent;
+  if(l&&!l.symbols.includes(sym))l.symbols.push(sym);
+  saveLists();$("addInput").value="";selected=sym;
+  $("addNote").textContent=bySym(sym)?"":`Added ${sym} to "${l.name}". Note: ${sym} isn't in the loaded data universe yet — add it to the function's SYMBOLS to get indicators.`;
+  $("addModal").classList.remove("on");render();
+};
+$("addCancel").onclick=()=>$("addModal").classList.remove("on");
+$("addModal").addEventListener("click",e=>{if(e.target.id==="addModal")$("addModal").classList.remove("on");});
 function removeFromActive(sym){
   const L=activeList();if(!L)return;
   L.symbols=L.symbols.filter(s=>s!==sym);saveLists();render();
