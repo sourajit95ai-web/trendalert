@@ -11,8 +11,9 @@ name: deploy
 #   GCP_SA_KEY   - key.json of the gh-deploy service account (README §3)
 #   GCP_PROJECT  - GCP project id
 #   GCS_BUCKET   - bucket name (no gs:// prefix)
-# Optional (EOD alert emails, see OPS.md):
-#   SMTP_USER    - sender address    ALERT_TO - comma-separated recipients
+# Optional (EOD alerts, see OPS.md):
+#   SMTP_USER        - sender address    ALERT_TO - comma-separated recipients
+#   TELEGRAM_CHAT_ID - Telegram chat to notify (token lives in Secret Manager)
 
 on:
   push:
@@ -64,9 +65,12 @@ jobs:
         if: github.event_name == 'push' || inputs.deploy_backend
         run: |
           SECRETS="ALPACA_KEY_ID=alpaca-key-id:latest,ALPACA_SECRET_KEY=alpaca-secret-key:latest"
-          # smtp-pass is optional (OPS.md); only mount it if the secret exists
+          # smtp-pass / telegram-bot-token are optional (OPS.md); only mount what exists
           if gcloud secrets describe smtp-pass >/dev/null 2>&1; then
             SECRETS="$SECRETS,SMTP_PASS=smtp-pass:latest"
+          fi
+          if gcloud secrets describe telegram-bot-token >/dev/null 2>&1; then
+            SECRETS="$SECRETS,TELEGRAM_BOT_TOKEN=telegram-bot-token:latest"
           fi
           gcloud functions deploy "$PIPELINE_FN" \
             --gen2 --runtime python312 --region "$REGION" \
@@ -74,7 +78,7 @@ jobs:
             --trigger-http --allow-unauthenticated \
             --memory 512Mi --timeout 300s \
             --set-secrets "$SECRETS" \
-            --set-env-vars "GCS_BUCKET=${{ secrets.GCS_BUCKET }},SMTP_USER=${{ secrets.SMTP_USER }},ALERT_TO=${{ secrets.ALERT_TO }}"
+            --set-env-vars "GCS_BUCKET=${{ secrets.GCS_BUCKET }},SMTP_USER=${{ secrets.SMTP_USER }},ALERT_TO=${{ secrets.ALERT_TO }},TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}"
 
       - name: Deploy notes function
         if: github.event_name == 'push' || inputs.deploy_backend

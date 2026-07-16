@@ -135,6 +135,19 @@ BASE CONFIRMED, plus golden/death crosses. Setup:
 Leave `SMTP_USER` unset to disable email entirely (`email:disabled` in the
 function response). Dedupe state lives in `alerts_state.json` in the bucket.
 
+**Telegram.** Same alerts, pushed to a Telegram chat (runs alongside email;
+either channel can be disabled independently). Setup:
+1. In Telegram, message **@BotFather** → `/newbot` → copy the HTTP API token.
+2. `printf '%s' "<token>" | gcloud secrets create telegram-bot-token --data-file=-`
+   and grant the runtime service account `roles/secretmanager.secretAccessor`
+   on it (same command pattern as the alpaca secrets, README §2).
+3. Send your bot any message (it can't message you first), then open
+   `https://api.telegram.org/bot<token>/getUpdates` and read
+   `result[0].message.chat.id`.
+4. GitHub repo secret `TELEGRAM_CHAT_ID` = that id. Redeploy the backend.
+Leave the secret or chat id unset to disable (`telegram:disabled`). If the
+token ever leaks, revoke it in BotFather with `/revoke`.
+
 ## New listings / short history (added)
 
 A "52-week" level requires a 52-week window. Symbols with fewer than

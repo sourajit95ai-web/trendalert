@@ -17,6 +17,10 @@ Config (env — leave SMTP_USER unset to disable email entirely):
   SMTP_USER  sender account             SMTP_PASS  app password (Secret Manager)
   ALERT_TO   comma-separated recipients (default: SMTP_USER)
 
+Telegram (leave either unset to disable; both channels can run side by side):
+  TELEGRAM_BOT_TOKEN  BotFather token (Secret Manager: telegram-bot-token)
+  TELEGRAM_CHAT_ID    chat to notify (from getUpdates after messaging the bot)
+
 Positions come from positions.json (written by the notes function when the
 dashboard syncs); thresholds come from published settings.json (defaults 20/2).
 """
@@ -137,6 +141,21 @@ def _send(lines, asof):
     return f"email:sent({len(lines)})"
 
 
+def _send_telegram(lines, asof):
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
+    if not token or not chat_id:
+        return "telegram:disabled"
+    import requests
+    body = (f"TrendAlert EOD — {asof}\n\n" + "\n\n".join(lines) +
+            "\n\nSignals are computed on confirmed daily closes. "
+            "Execution reference: next session's open.")
+    r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                      json={"chat_id": chat_id, "text": body}, timeout=20)
+    r.raise_for_status()
+    return f"telegram:sent({len(lines)})"
+
+
 def send_eod_alerts(records, cross_alerts, bucket, asof, trading_day=True):
     """Main hook called from the pipeline. Never raises."""
     try:
@@ -152,7 +171,14 @@ def send_eod_alerts(records, cross_alerts, bucket, asof, trading_day=True):
         lines, new_state = transition_filter(events, cross_alerts, state)
         _write_json(bucket, STATE_OBJECT, new_state)
         if not lines:
-            return "email:none"
-        return _send(lines, asof)
+            return "alerts:none"
+        # each channel is independent — one failing must not block the other
+        statuses = []
+        for sender, tag in ((_send_telegram, "telegram"), (_send, "email")):
+            try:
+                statuses.append(sender(lines, asof))
+            except Exception as e:
+                statuses.append(f"{tag}:error({type(e).__name__})")
+        return "+".join(statuses)
     except Exception as e:
-        return f"email:error({type(e).__name__})"
+        return f"alerts:error({type(e).__name__})"
