@@ -19,7 +19,10 @@ Config (env — leave SMTP_USER unset to disable email entirely):
 
 Telegram (leave either unset to disable; both channels can run side by side):
   TELEGRAM_BOT_TOKEN  BotFather token (Secret Manager: telegram-bot-token)
-  TELEGRAM_CHAT_ID    chat to notify (from getUpdates after messaging the bot)
+  TELEGRAM_CHAT_ID    comma-separated chat ids to notify (one bot, many
+                       people); each person must message the bot once so
+                       their id can be read from getUpdates — bots can't
+                       message first
 
 Positions come from positions.json (written by the notes function when the
 dashboard syncs); thresholds come from published settings.json (defaults 20/2).
@@ -143,17 +146,25 @@ def _send(lines, asof):
 
 def _send_telegram(lines, asof):
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
-    if not token or not chat_id:
+    # comma-separated: one bot, many chats — each person must have messaged
+    # the bot at least once (Telegram bots cannot message first)
+    chat_ids = [c.strip() for c in os.environ.get("TELEGRAM_CHAT_ID", "").split(",") if c.strip()]
+    if not token or not chat_ids:
         return "telegram:disabled"
     import requests
     body = (f"TrendAlert EOD — {asof}\n\n" + "\n\n".join(lines) +
             "\n\nSignals are computed on confirmed daily closes. "
             "Execution reference: next session's open.")
-    r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
-                      json={"chat_id": chat_id, "text": body}, timeout=20)
-    r.raise_for_status()
-    return f"telegram:sent({len(lines)})"
+    sent, failed = 0, 0
+    for chat_id in chat_ids:
+        try:
+            r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                              json={"chat_id": chat_id, "text": body}, timeout=20)
+            r.raise_for_status()
+            sent += 1
+        except Exception:
+            failed += 1   # one recipient's bad/blocked chat must not stop the rest
+    return f"telegram:sent({sent}/{len(chat_ids)})" if not failed else f"telegram:sent({sent}/{len(chat_ids)},failed={failed})"
 
 
 def send_eod_alerts(records, cross_alerts, bucket, asof, trading_day=True):

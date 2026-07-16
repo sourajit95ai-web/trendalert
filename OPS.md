@@ -148,6 +148,16 @@ either channel can be disabled independently). Setup:
 Leave the secret or chat id unset to disable (`telegram:disabled`). If the
 token ever leaks, revoke it in BotFather with `/revoke`.
 
+**Adding another recipient.** One bot can message many people:
+1. Share the bot with them (its `t.me/<botname>` link) and have *them* send
+   it any message first — a bot can never message someone who hasn't
+   messaged it.
+2. Re-open `https://api.telegram.org/bot<token>/getUpdates` — a new entry
+   appears with their `message.chat.id`.
+3. Update the `TELEGRAM_CHAT_ID` repo secret to a comma-separated list, e.g.
+   `720876958,987654321`, and redeploy. Each id gets its own message; one
+   bad/blocked id doesn't stop delivery to the others.
+
 ## New listings / short history (added)
 
 A "52-week" level requires a 52-week window. Symbols with fewer than
