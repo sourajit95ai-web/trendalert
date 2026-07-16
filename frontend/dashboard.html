@@ -157,6 +157,13 @@
   .alerts-head{display:flex;align-items:center;gap:11px;font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:700;margin:24px 2px 14px}
   .alerts-head svg{width:23px;height:23px;color:var(--amber)}
   .alert-list{display:flex;flex-direction:column;gap:13px}
+  /* alerts docked under the detail card fill the right column's blank space in table view;
+     sticky so the scorecard + alerts follow while scrolling a long table */
+  .rightcol{display:flex;flex-direction:column;gap:0;min-width:0;position:sticky;top:14px;align-self:start;max-height:calc(100vh - 28px);overflow-y:auto}
+  .rightcol .alerts-head{margin:18px 2px 12px;font-size:16px}
+  .rightcol .alerts-head svg{width:18px;height:18px}
+  .rightcol .acard{padding:13px 15px;gap:12px}
+  .rightcol .alert-list{gap:10px}
   .acard{display:flex;align-items:center;gap:16px;padding:18px 20px;border-radius:15px;border:1px solid;cursor:pointer;transition:.15s}
   .acard.bull{background:var(--up-bg);border-color:var(--up-bd)}.acard.bear{background:var(--down-bg);border-color:var(--down-bd)}
   .acard:hover{filter:brightness(1.12)}
@@ -228,6 +235,10 @@
   .lgi label{font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap}
   .lgi input[type=number]{width:50px;background:var(--surface2);border:1px solid var(--hair2);border-radius:6px;color:var(--ink);font-size:12px;padding:4px 6px;outline:0;font-family:'IBM Plex Mono',monospace}
   .lgi input[type=color]{width:24px;height:22px;border:1px solid var(--hair2);border-radius:6px;background:none;cursor:pointer;padding:1px}
+  .star-new{color:var(--amber);margin-left:5px;font-size:11px;vertical-align:1px}
+  tr.pend td{color:var(--muted)}
+  .pendnote{font-style:italic;font-size:11.5px}
+  .mini2.pending{opacity:.8;border-style:dashed}
   .chart-stack{display:flex;flex-direction:column;padding:0 10px 12px}
   .pane{padding:12px 4px 4px;border-top:1px solid var(--hair)}
   .pane:first-child{border-top:0;padding-top:6px}
@@ -318,7 +329,8 @@
   .backbtn:hover{border-color:#34425f}
   .focus-title{font-family:'Space Grotesk',sans-serif;font-size:19px;font-weight:700}
   footer{margin-top:24px;font-size:11.5px;color:var(--faint);text-align:center;line-height:1.7}
-  @media(max-width:920px){.grid{grid-template-columns:1fr}.url-field input{width:150px}.toolbar input{width:130px}}
+  @media(max-width:920px){.grid{grid-template-columns:1fr}.url-field input{width:150px}.toolbar input{width:130px}
+    .rightcol{position:static;max-height:none;overflow:visible}}
   /* ============ AURORA GLASS SKIN (cascade layer — overrides above rules) ============ */
   body{background:var(--bg);background-image:
     radial-gradient(900px 500px at 12% -8%,var(--aur1),transparent 60%),
@@ -545,6 +557,7 @@
         <table><thead><tr id="theadRow"></tr></thead><tbody id="tbody"></tbody></table>
       </div>
 
+      <div class="rightcol" id="rightCol">
       <div class="card" style="margin-bottom:0">
         <div class="d-head"><div class="d-sym" id="dSym">—</div><div class="d-price num" id="dPrice">—</div><div class="d-chg num" id="dChg">&nbsp;</div></div>
         <div class="d-body">
@@ -603,6 +616,7 @@
           </div>
         </div>
       </div>
+      </div>
     </div>
 
     <div class="card chart-card" id="chartCard">
@@ -631,7 +645,7 @@
       <div class="chart-read num" id="chartRead">Hover the chart for OHLC, RSI and MACD values.</div>
     </div>
 
-    <div class="alerts-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>Recent Alerts</div>
+    <div class="alerts-head" id="alertsHead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>Recent Alerts</div>
     <div class="alert-list" id="alertList"></div>
 
     <footer>
@@ -1026,7 +1040,11 @@ function activeRows(){
     else if(sortKey==="symbol"){return a.symbol.localeCompare(b.symbol)*sortDir;}
     else{av=a[sortKey];bv=b[sortKey];}
     return ((av??-1e9)-(bv??-1e9))*sortDir;});
-  return rows;
+  /* symbols in the list but not yet in data.json — kept visible with a ★
+     until the pipeline's next cycle publishes their data */
+  let pending=L.symbols.filter(s=>!bySym(s)).map(s=>({symbol:s,pending:true}));
+  if(q)pending=pending.filter(d=>d.symbol.toLowerCase().includes(q));
+  return rows.concat(pending);
 }
 
 function renderAlerts(){
@@ -1069,6 +1087,7 @@ function compBars(d){
   }).join("");
 }
 function groupOfCard(d){
+  if(d.pending)return 0;
   if(posOf(d.symbol))return 1;
   if(d.limited_history)return 2;   // no 52w range -> no zone -> nothing to act on
   const z=zoneOf(d);
@@ -1098,6 +1117,11 @@ function whyCard(d){
   return `Quietly compounding — nothing to do.`;
 }
 function miniCardHTML(d){
+  if(d.pending)return `<div class="mini2 pending ${d.symbol===selected?"sel":""}" data-sym="${d.symbol}">
+    <div style="min-width:0;flex:1">
+      <div class="nm">${d.symbol}<span class="star-new">★</span><span class="sec2">new</span></div>
+      <div class="why">★ Newly added — data will be refreshed in the next pipeline cycle.</div>
+    </div></div>`;
   const sc=scoreOf(d),scl=scoreColor(sc),dir=d.change_pct>=0;
   return `<div class="mini2 ${d.symbol===selected?"sel":""}" data-sym="${d.symbol}">
     <div class="mring" style="--v:${sc};--c:${scl}"><div class="in num">${fmt(sc,0)}</div></div>
@@ -1109,12 +1133,12 @@ function miniCardHTML(d){
     </div></div>`;
 }
 /* card groups can collapse; HOLDING STEADY starts minimised */
-let groupOpen={g1:true,g3:true,g2:false};
+let groupOpen={g0:true,g1:true,g3:true,g2:false};
 try{Object.assign(groupOpen,JSON.parse(localStorage.getItem("trendalert_groups_v1"))||{});}catch(e){}
 function renderCards(rows){
   const g=$("cardGrid");g.innerHTML="";
   $("cardsEmpty").style.display=rows.length?"none":"block";
-  const GROUPS=[[1,"g1","⚡ ACTION REQUIRED"],[3,"g3","◎ RE-ENTRY WATCH"],[2,"g2","— HOLDING STEADY"]];
+  const GROUPS=[[0,"g0","★ AWAITING DATA (next cycle)"],[1,"g1","⚡ ACTION REQUIRED"],[3,"g3","◎ RE-ENTRY WATCH"],[2,"g2","— HOLDING STEADY"]];
   GROUPS.forEach(([grp,cls,label])=>{
     const rs=rows.filter(d=>groupOfCard(d)===grp).sort((a,b)=>scoreOf(b)-scoreOf(a));
     if(!rs.length)return;
@@ -1161,10 +1185,18 @@ function renderHero(){
     <p>${tTr!=null?`Trend <span class="hl">${tTr}</span> and relative strength <span class="hl">${tRS}</span> ${tTr>=66?"are doing the lifting — this name leads the tape.":tTr<=33?"are the drag — the tape is carrying it.":"are middling — a hold, not a headline."}`:"Component data not published for this symbol yet."}</p>
     <p>${rv!=null?(rv<=45?`Risk <span class="hl2">${rv}</span>: volatility elevated — size accordingly. `:`Risk <span class="hl2">${rv}</span> — manageable drawdown character. `):""}${whyCard(d)}</p>${ruleHTML}`;
 }
+/* alerts live under the detail card while the table/detail grid shows
+   (fills its blank right column); below the chart in the cards overview */
+function dockAlerts(side){
+  const h=$("alertsHead"),l=$("alertList");
+  if(side){$("rightCol").appendChild(h);$("rightCol").appendChild(l);}
+  else{const f=document.querySelector("footer");f.before(h);f.before(l);}
+}
 function applyLayout(rows){
 
   const cards=settings.view!=="table";
   $("viewSeg").querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.view===(cards?"cards":"table")));
+  dockAlerts(!(cards&&!focusMode));
   if(cards&&!focusMode){
     $("cardGrid").style.display="block";
     $("cardsEmpty").style.display=rows.length?"none":"block";
@@ -1206,8 +1238,18 @@ function render(){
   const rows=activeRows(),tb=$("tbody");tb.innerHTML="";
   applyLayout(rows);
   $("emptyState").style.display=(L&&rows.length===0)?"block":"none";
-  if(L && (!selected||!L.symbols.includes(selected)) && rows[0]) selected=rows[0].symbol;
+  if(L && (!selected||!L.symbols.includes(selected)) && rows[0]) selected=(rows.find(r=>!r.pending)||rows[0]).symbol;
   rows.forEach(d=>{
+    if(d.pending){
+      const inP=listsForSymbol(d.symbol);
+      const tr=document.createElement("tr");tr.className="pend"+(d.symbol===selected?" sel":"");
+      tr.innerHTML=`
+        <td class="sym">${d.symbol}<span class="star-new" title="Newly added — not in the published data yet">★</span><span class="rm" data-rm="${d.symbol}" title="Remove from ${L?L.name:''}">✕</span></td>
+        <td colspan="5" class="pendnote">★ new symbol — data will be refreshed in the next pipeline cycle</td>
+        <td><span class="inlists">${inP.map(l=>`<span class="t">${l.name}</span>`).join("")||'<span class="t">—</span>'}</span></td>`;
+      tr.onclick=e=>{ if(e.target.dataset.rm){removeFromActive(e.target.dataset.rm);return;} selected=d.symbol;render(); };
+      tb.appendChild(tr);return;
+    }
     const dir=d.change_pct>=0?"up":"down",sc=scoreOf(d),scol=scoreColor(sc);
     const t3=trendOf(d),tl={bull:"Bullish",bear:"Bearish",mixed:"Mixed"}[t3];
     const p52=pos52(d),ph=pctFromHigh(d),zn=zoneOf(d);
@@ -1320,7 +1362,7 @@ $("addOk").onclick=()=>{
   const l=lists.find(x=>x.id===sel.value),sym=$("addSymName").textContent;
   if(l&&!l.symbols.includes(sym))l.symbols.push(sym);
   saveLists();$("addInput").value="";selected=sym;
-  $("addNote").textContent=bySym(sym)?"":`Added ${sym} to "${l.name}". Note: ${sym} isn't in the loaded data universe yet — add it to the function's SYMBOLS to get indicators.`;
+  $("addNote").textContent=bySym(sym)?"":`Added ${sym} to "${l.name}" — shown with a ★ until its data lands. If ${sym} is in the backend SYMBOLS list, data will be refreshed in the next pipeline cycle; otherwise add it to backend/main.py SYMBOLS first.`;
   $("addModal").classList.remove("on");render();
 };
 $("addCancel").onclick=()=>$("addModal").classList.remove("on");
@@ -1383,8 +1425,10 @@ const DEFAULT_CHCFG={
   rsi:{period:14, color:"#F2F4FF", ob:70, os:30},
   macd:{fast:12, slow:26, signal:9, macdColor:"#5CE1FF", signalColor:"#FFD166"},
 };
-const DEFAULT_VIS={ema20:false,ema50:true,ema150:true,ema200:false,rsi:true,macd:true,sr:true,w52:true,cross:true,chart:true,pline:true};
+const DEFAULT_VIS={candles:true,ema20:false,ema50:true,ema150:true,ema200:false,rsi:true,macd:true,sr:true,w52:true,cross:true,chart:true,pline:true};
 let chCfg=loadCh(CH_KEY,DEFAULT_CHCFG), visibilityState=loadCh(CH_KEY+"_vis",DEFAULT_VIS);
+/* saved states from before the candles toggle existed default to visible */
+if(visibilityState.candles==null)visibilityState.candles=true;
 /* at most 2 EMAs may be visible; saved states from older versions may have more */
 const EMA_KEYS=["ema20","ema50","ema150","ema200"];
 if(EMA_KEYS.filter(k=>visibilityState[k]).length>2)
@@ -1495,6 +1539,7 @@ function numInput(val,on){const n=document.createElement("input");n.type="number
 function colInput(val,on){const c=document.createElement("input");c.type="color";c.value=val;c.oninput=on;return c;}
 function buildLegend(){
   const row=$("legendRow");row.innerHTML="";
+  row.appendChild(lgItem("candles",CT().up,"Candles"));
   chCfg.ema.forEach((e,i)=>{
     row.appendChild(lgItem(e.key,e.color,e.label,[
       colInput(e.color,ev=>{chCfg.ema[i].color=ev.target.value;saveCh();renderChart($("chSym").textContent);}),
@@ -1544,7 +1589,12 @@ function renderChart(sym){
   const bars=barsFor(sym),closes=bars.map(b=>b.close);
   candle.setData(bars);
   const pl=visibilityState.pline!==false;
-  candle.applyOptions({priceLineVisible:pl,lastValueVisible:pl});
+  /* candles eye: transparent colors instead of series.visible so S/R, 52W
+     price lines and the shared price scale stay intact when hidden */
+  const cc=visibilityState.candles!==false
+    ?{upColor:CT().up,downColor:CT().down,wickUpColor:CT().up,wickDownColor:CT().down}
+    :{upColor:"transparent",downColor:"transparent",wickUpColor:"transparent",wickDownColor:"transparent"};
+  candle.applyOptions(Object.assign({priceLineVisible:pl,lastValueVisible:pl},cc));
 
   emaSeries.forEach(s=>priceChart.removeSeries(s));emaSeries=[];
   chCfg.ema.forEach(e=>{if(!visibilityState[e.key])return;
