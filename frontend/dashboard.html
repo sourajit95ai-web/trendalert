@@ -1558,7 +1558,8 @@ function renderChart(sym){
   if(visibilityState.rsi){
     const rv=rsiArr(closes,chCfg.rsi.period);
     rsiLine=rsiChart.addLineSeries({color:chCfg.rsi.color,lineWidth:2,priceFormat:{type:"price",precision:1,minMove:0.1}});
-    rsiLine.setData(bars.map((b,i)=>rv[i]!=null?{time:b.time,value:+rv[i].toFixed(1)}:null).filter(Boolean));
+    /* keep warm-up bars as whitespace so every pane shares an identical time axis */
+    rsiLine.setData(bars.map((b,i)=>rv[i]!=null?{time:b.time,value:+rv[i].toFixed(1)}:{time:b.time}));
     [[chCfg.rsi.ob,CT().downA],[chCfg.rsi.os,CT().upA]].forEach(([val,col])=>{
       const s=rsiChart.addLineSeries({color:col,lineWidth:1,lineStyle:LWC.LineStyle.Dashed,lastValueVisible:false,crosshairMarkerVisible:false});
       s.setData(bars.map(b=>({time:b.time,value:val})));rsiBands.push(s);});
@@ -1572,11 +1573,11 @@ function renderChart(sym){
   if(visibilityState.macd){
     const m=macdArr(closes,chCfg.macd.fast,chCfg.macd.slow,chCfg.macd.signal);
     macdHist=macdChart.addHistogramSeries({priceLineVisible:false,lastValueVisible:false});
-    macdHist.setData(bars.map((b,i)=>m.hist[i]!=null?{time:b.time,value:+m.hist[i].toFixed(4),color:m.hist[i]>=0?CT().histUp:CT().histDown}:null).filter(Boolean));
+    macdHist.setData(bars.map((b,i)=>m.hist[i]!=null?{time:b.time,value:+m.hist[i].toFixed(4),color:m.hist[i]>=0?CT().histUp:CT().histDown}:{time:b.time}));
     macdLine=macdChart.addLineSeries({color:chCfg.macd.macdColor,lineWidth:2,lastValueVisible:false});
-    macdLine.setData(bars.map((b,i)=>m.line[i]!=null?{time:b.time,value:+m.line[i].toFixed(4)}:null).filter(Boolean));
+    macdLine.setData(bars.map((b,i)=>m.line[i]!=null?{time:b.time,value:+m.line[i].toFixed(4)}:{time:b.time}));
     macdSig=macdChart.addLineSeries({color:chCfg.macd.signalColor,lineWidth:2,lastValueVisible:false});
-    macdSig.setData(bars.map((b,i)=>m.signal[i]!=null?{time:b.time,value:+m.signal[i].toFixed(4)}:null).filter(Boolean));
+    macdSig.setData(bars.map((b,i)=>m.signal[i]!=null?{time:b.time,value:+m.signal[i].toFixed(4)}:{time:b.time}));
   }
   applySpan();
 }
