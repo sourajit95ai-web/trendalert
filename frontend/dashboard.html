@@ -45,11 +45,11 @@
 
   .appbar{position:sticky;top:0;z-index:20;background:rgba(10,14,23,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--hair);padding:16px 18px}
   .appbar-in{max-width:1240px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px}
-  .logo{display:flex;align-items:center;gap:13px}
-  .logo .mark{width:46px;height:46px;border-radius:13px;background:linear-gradient(160deg,#14233F,#0E1626);border:1px solid #243049;display:grid;place-items:center;box-shadow:inset 0 0 0 1px #1E2C49}
-  .logo .mark svg{width:26px;height:26px}
-  .logo h1{font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;letter-spacing:-.01em;line-height:1}
-  .logo p{color:var(--muted);font-size:12.5px;margin-top:3px}
+  .logo{display:flex;align-items:center;gap:10px}
+  .logo .mark{width:36px;height:36px;border-radius:10px;background:#1E2745;border:1px solid #2E3A63;display:grid;place-items:center}
+  .logo .mark svg{width:19px;height:19px}
+  .logo h1{font-size:17px;font-weight:700;letter-spacing:-.01em;line-height:1.2;color:var(--ink)}
+  .logo p{color:var(--faint);font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;margin-top:2px}
   .settings{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--hair2);color:var(--ink);font-size:14px;font-weight:500;padding:11px 18px;border-radius:12px;cursor:pointer;transition:.15s}
   .settings:hover{background:var(--surface2);border-color:#34425f}
   .settings svg{width:17px;height:17px;opacity:.85}
@@ -344,10 +344,6 @@
     radial-gradient(700px 500px at 50% 110%,var(--aur3),transparent 60%);
     background-attachment:fixed}
   .appbar{background:var(--appbg);backdrop-filter:blur(14px);border-bottom:1px solid var(--hair)}
-  .logo h1{font-family:'Sora','Space Grotesk',sans-serif;letter-spacing:-.02em;
-    background:linear-gradient(90deg,var(--blue),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
-  .logo .mark{background:var(--surface);border-color:var(--hair2);box-shadow:none;border-radius:16px}
-  .logo .mark svg{stroke:var(--blue)}
   .card,.modal,.scard{background:var(--surface);border-color:var(--hair);backdrop-filter:blur(14px);border-radius:22px}
   .card-title,.card-head h2,.d-sym,.chart-top h2,.alerts-head,.focus-title,.modal h3,
   .scard .tsym,.bigscore .n,.acard .body .sym{font-family:'Sora','Space Grotesk',sans-serif}
@@ -480,8 +476,8 @@
   <div class="appbar">
     <div class="appbar-in">
       <div class="logo">
-        <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h3l2.5-7 4 16 3-9 2 3h5.5"/></svg></span>
-        <div><h1>TrendAlert</h1><p>Technical Indicator Configuration</p></div>
+        <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#7EA6FF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg></span>
+        <div><h1>TrendAlert</h1><p>Technical Intelligence</p></div>
       </div>
       <span class="themeseg" id="themeSeg"><span class="thlbl">THEME</span></span><button class="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</button>
     </div>
