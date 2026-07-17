@@ -64,6 +64,10 @@
   .seg button.on{background:var(--bg2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--hair2)}
   .seg button.on .cnt{color:var(--ink)}
   .seg svg{width:15px;height:15px}
+  .seg button .tbadges{display:inline-flex;gap:5px}
+  .nbadge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
+  .nbadge.act{color:var(--amber);background:rgba(255,209,102,.1);border:1px solid rgba(255,209,102,.3)}
+  .nbadge.re{color:#7FB0F8;background:rgba(127,176,248,.1);border:1px solid rgba(127,176,248,.3)}
 
   .lists-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:14px}
   .lchip{display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--hair2);color:var(--muted);font-size:13.5px;font-weight:600;padding:9px 14px;border-radius:11px;cursor:pointer;transition:.15s}
@@ -482,7 +486,7 @@
   </div>
 
   <div class="wrap">
-    <div class="region-pill"><span class="us">US</span><span>Market</span><span class="cnt" id="regionCnt">0 symbols</span></div>
+    <div class="region-pill"><span class="us">US</span><span>Market</span><span class="cnt" id="regionCnt">0 symbols</span><span id="notifTop" style="display:inline-flex;gap:6px;margin-left:4px"></span></div>
 
     <div class="seg" id="listSeg">
       <button class="on" data-type="portfolio">Portfolios <span class="cnt" id="cntPf">0</span></button>
@@ -1016,6 +1020,24 @@ function renderListChips(){
   add.onclick=openModal;row.appendChild(add);
 }
 
+/* ⚡ action-required / ◎ re-entry counts per list type (seg buttons) + overall (region pill) */
+function renderTypeBadges(){
+  let tact=0,tre=0;const seen=new Set();
+  ["portfolio","watchlist","index"].forEach(t=>{
+    const syms=[...new Set(lists.filter(l=>l.type===t).flatMap(l=>l.symbols))];
+    let act=0,re=0;
+    syms.forEach(s=>{const d=bySym(s);if(!d)return;const g=groupOfCard(d);
+      if(g===1)act++;else if(g===3)re++;
+      if(!seen.has(s)){seen.add(s);if(g===1)tact++;else if(g===3)tre++;}});
+    const b=$("listSeg").querySelector(`button[data-type="${t}"]`);if(!b)return;
+    let sp=b.querySelector(".tbadges");
+    if(!sp){sp=document.createElement("span");sp.className="tbadges";b.appendChild(sp);}
+    sp.innerHTML=(act?`<span class="nbadge act" title="Action required">⚡${act}</span>`:"")+
+      (re?`<span class="nbadge re" title="Re-entry watch">◎${re}</span>`:"");
+  });
+  $("notifTop").innerHTML=(tact?`<span class="nbadge act">⚡ ${tact} action</span>`:"")+
+    (tre?`<span class="nbadge re">◎ ${tre} re-entry</span>`:"");
+}
 function renderHead(){
   const tr=$("theadRow");tr.innerHTML="";
   COLS.forEach(c=>{
@@ -1228,7 +1250,7 @@ function render(){
   $("mGen").textContent=payload.generated_at==="demo"?"demo data":new Date(payload.generated_at).toLocaleString("en-US");
   $("mTf").textContent=payload.timeframe||"—";
   $("regionCnt").textContent=(payload.symbols||[]).length+" symbols";
-  renderListChips();renderAlerts();renderHead();
+  renderListChips();renderTypeBadges();renderAlerts();renderHead();
 
   const L=activeList();
   $("cfgTitle").textContent=L?L.name:(TYPE_LABEL[activeType]||"List");
