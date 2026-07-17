@@ -141,7 +141,10 @@
   tbody td{padding:12px 11px;border-bottom:1px solid var(--hair);text-align:right;font-size:13.5px;white-space:nowrap}
   tbody tr{cursor:pointer;transition:background .12s}tbody tr:hover{background:var(--surface2)}
   tbody tr.sel{background:var(--blue-bg)}tbody tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--blue)}
-  .sym{text-align:left;font-weight:700;font-family:'Space Grotesk',sans-serif;display:flex;align-items:center;gap:9px}
+  .sym{text-align:left}
+  .sym .l1{display:flex;align-items:center;gap:9px;font-weight:700;font-family:'Space Grotesk',sans-serif}
+  .sym .sub{display:block;font-weight:400;font-family:'Inter',system-ui,sans-serif;font-size:11px;color:var(--faint);margin-top:2px}
+  .sym .sub .zhi{color:var(--amber)}.sym .sub .zlo{color:#7FB0F8}
   .sym .rm{opacity:0;color:var(--faint);font-weight:400;font-size:13px;cursor:pointer;transition:.12s}
   tr:hover .sym .rm{opacity:.7}.sym .rm:hover{color:var(--down)}
   .chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:7px;font-size:12px;font-weight:600}
@@ -155,10 +158,9 @@
   .macd-mini{display:inline-flex;align-items:center;justify-content:center;width:48px;height:16px;position:relative;vertical-align:middle}
   .macd-mini .mid{position:absolute;top:0;bottom:0;left:50%;width:1px;background:var(--hair2)}
   .macd-mini .bar{position:absolute;top:3px;height:10px;border-radius:2px}
-  .trend{font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px}
-  .trend.bull{color:var(--up);background:var(--up-bg)}.trend.bear{color:var(--down);background:var(--down-bg)}.trend.mixed{color:var(--muted);background:var(--surface2)}
-  .inlists{display:inline-flex;gap:4px;flex-wrap:nowrap;justify-content:flex-end}  /* one line — wrapping made row heights ragged */
-  .inlists .t{font-size:10px;font-weight:600;color:var(--muted);background:var(--bg2);border:1px solid var(--hair2);padding:2px 7px;border-radius:6px}
+  .trend{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:var(--muted)}
+  .trend::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--faint);flex-shrink:0}
+  .trend.bull::before{background:var(--up)}.trend.bear::before{background:var(--down)}.trend.mixed::before{background:var(--faint)}
 
   .alerts-head{display:flex;align-items:center;gap:11px;font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:700;margin:24px 2px 14px}
   .alerts-head svg{width:23px;height:23px;color:var(--amber)}
@@ -375,7 +377,6 @@
   tbody tr:hover{background:var(--surface2)}
   tbody tr.sel{background:var(--blue-bg)}
   tbody tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--blue)}
-  .inlists .t{background:transparent;border-color:var(--hair2)}
   .scard{box-shadow:var(--shadow)}
   .scard.sel{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue),var(--shadow)}
   .scard .comp .cb,.sbar{background:var(--trackbg)}
@@ -837,8 +838,8 @@ const trendToggles={bull:true,bear:true};
 
 const COLS=[
   {key:"symbol",lbl:"Symbol"},{key:"score",lbl:"Score"},{key:"close",lbl:"Close"},
-  {key:"change_pct",lbl:"Chg%"},{key:"pos52",lbl:"52W Range"},
-  {key:"trend",lbl:"Trend"},{key:"lists",lbl:"Lists"},
+  {key:"change_pct",lbl:"Chg%"},{key:"pos52",lbl:"Off 52W High"},
+  {key:"trend",lbl:"Trend"},
 ];
 
 const clamp01=x=>Math.max(0,Math.min(1,x));
@@ -1059,8 +1060,7 @@ function renderHead(){
   COLS.forEach(c=>{
     const th=document.createElement("th");
     th.innerHTML=c.lbl+(sortKey===c.key?`<span class="ar">${sortDir<0?"▼":"▲"}</span>`:"");
-    if(c.key!=="lists") th.onclick=()=>{if(sortKey===c.key)sortDir*=-1;else{sortKey=c.key;sortDir=(c.key==="symbol")?1:-1;}render();};
-    else th.style.cursor="default";
+    th.onclick=()=>{if(sortKey===c.key)sortDir*=-1;else{sortKey=c.key;sortDir=(c.key==="symbol")?1:-1;}render();};
     tr.appendChild(th);
   });
 }
@@ -1282,27 +1282,27 @@ function render(){
       const inP=listsForSymbol(d.symbol);
       const tr=document.createElement("tr");tr.className="pend"+(d.symbol===selected?" sel":"");
       tr.innerHTML=`
-        <td class="sym">${d.symbol}<span class="star-new" title="Newly added — not in the published data yet">★</span><span class="rm" data-rm="${d.symbol}" title="Remove from ${L?L.name:''}">✕</span></td>
-        <td colspan="5" class="pendnote">★ new symbol — data will be refreshed in the next pipeline cycle</td>
-        <td><span class="inlists">${inP.map(l=>`<span class="t">${l.name}</span>`).join("")||'<span class="t">—</span>'}</span></td>`;
+        <td class="sym"><span class="l1">${d.symbol}<span class="star-new" title="Newly added — not in the published data yet">★</span><span class="rm" data-rm="${d.symbol}" title="Remove from ${L?L.name:''}">✕</span></span><span class="sub">${inP.map(l=>l.name).join(" · ")||"—"}</span></td>
+        <td colspan="5" class="pendnote">★ new symbol — data will be refreshed in the next pipeline cycle</td>`;
       tr.onclick=e=>{ if(e.target.dataset.rm){removeFromActive(e.target.dataset.rm);return;} selected=d.symbol;render(); };
       tb.appendChild(tr);return;
     }
     const dir=d.change_pct>=0?"up":"down",sc=scoreOf(d),scol=scoreColor(sc);
     const t3=trendOf(d),tl={bull:"Bullish",bear:"Bearish",mixed:"Mixed"}[t3];
     const p52=pos52(d),ph=pctFromHigh(d),zn=zoneOf(d);
-    const zchip=zoneChipHTML(d);
-    const c52=p52!=null?`<span class="r52"><span class="track"></span><span class="mk" style="left:${p52}%"></span></span><span class="r52v">${fmt(ph,1)}%</span>${zchip}`:"—";
+    const c52=p52!=null?`<span class="r52"><span class="track"></span><span class="mk" style="left:${p52}%"></span></span><span class="r52v">${fmt(ph,1)}%</span>`:"—";
     const inL=listsForSymbol(d.symbol);
+    /* lists + zone hint live under the symbol — frees the Lists/Zone columns */
+    const zsub=zn==="high"?' · <span class="zhi">near 52w high</span>':zn==="low"?' · <span class="zlo">near 52w low</span>':"";
+    const sub=(inL.map(l=>l.name).join(" · ")||"—")+zsub;
     const tr=document.createElement("tr");if(d.symbol===selected)tr.className="sel";
     tr.innerHTML=`
-      <td class="sym">${d.symbol}<span class="rm" data-rm="${d.symbol}" title="Remove from ${L?L.name:''}">✕</span></td>
+      <td class="sym"><span class="l1">${d.symbol}<span class="rm" data-rm="${d.symbol}" title="Remove from ${L?L.name:''}">✕</span></span><span class="sub">${sub}</span></td>
       <td><span class="score-cell"><span class="score-val" style="color:${scol}">${fmt(sc,0)}</span></span></td>
       <td class="num">${fmt(d.close)}</td>
       <td><span class="chip ${dir}">${d.change_pct>=0?"▲":"▼"} ${fmt(Math.abs(d.change_pct))}%</span></td>
       <td>${c52}</td>
-      <td><span class="trend ${t3}">${tl}</span></td>
-      <td><span class="inlists">${inL.map(l=>`<span class="t">${l.name}</span>`).join("")||'<span class="t">—</span>'}</span></td>`;
+      <td><span class="trend ${t3}">${tl}</span></td>`;
     tr.onclick=e=>{ if(e.target.dataset.rm){removeFromActive(e.target.dataset.rm);return;} selected=d.symbol;render(); };
     tb.appendChild(tr);
   });
