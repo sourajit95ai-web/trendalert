@@ -1324,7 +1324,7 @@ function renderDetail(){
   const sc=scoreOf(d),scol=scoreColor(sc);
   $("scoreN").textContent=fmt(sc,0);$("scoreN").style.color=scol;$("scoreBar").style.width=sc+"%";$("scoreBar").style.background=scol;
   const ss=$("scoreSig");ss.textContent=sc>=66?"Bullish bias":sc<=33?"Bearish bias":"Neutral";ss.style.color=scol;
-  const rz=rsiZone(d.rsi14);$("rsiMk").style.left=Math.max(0,Math.min(100,d.rsi14))+"%";$("rsiVal").textContent=fmt(d.rsi14);
+  const rz=rsiZone(d.rsi14);$("rsiMk").style.left="clamp(4px, "+Math.max(0,Math.min(100,d.rsi14))+"%, calc(100% - 4px))";$("rsiVal").textContent=fmt(d.rsi14);
   const rs=$("rsiSig");rs.textContent=rz;rs.style.color=rz==="Overbought"?"var(--down)":rz==="Oversold"?"var(--up)":"var(--muted)";
   $("macdV").textContent=fmt(d.macd,3);$("sigV").textContent=fmt(d.macd_signal,3);
   $("histV").textContent=signed(d.macd_hist);$("histV").style.color=d.macd_hist>=0?"var(--up)":"var(--down)";
@@ -1350,8 +1350,9 @@ function renderDetail(){
     ps.style.color=st.phase==="trigger"?"var(--amber)":st.phase==="exit"?"var(--down)":st.phase==="trail"?"var(--up)":"var(--muted)";
   }
   if(p52d!=null){
-    $("p52Mk").style.left=p52d+"%";
-    $("fromHi").textContent=fmt(phd,1)+"%";$("fromHi").style.color=znd==="high"?"var(--amber)":"var(--ink)";
+    $("p52Mk").style.left="clamp(4px, "+Math.max(0,Math.min(100,p52d))+"%, calc(100% - 4px))";
+    /* avoid "-0.0%" when the close sits on the 52w high */
+    $("fromHi").textContent=fmt(Math.abs(phd)<0.05?0:phd,1)+"%";$("fromHi").style.color=znd==="high"?"var(--amber)":"var(--ink)";
     $("fromLo").textContent="+"+fmt(pld,1)+"%";$("fromLo").style.color=znd==="low"?"#7FB0F8":"var(--ink)";
     $("lo52v").textContent="$"+fmt(d.low_252);$("hi52v").textContent="$"+fmt(d.high_252);
     const zs=$("zoneSig");
@@ -1363,7 +1364,7 @@ function renderDetail(){
       else{zs.textContent="Near low, no base — falling knife risk";zs.style.color="var(--faint)";}
     }else{zs.textContent="No action zone";zs.style.color="var(--muted)";}
   }else{
-    $("p52Mk").style.left="50%";$("fromHi").textContent="—";$("fromLo").textContent="—";
+    $("p52Mk").style.left="clamp(4px, 50%, calc(100% - 4px))";$("fromHi").textContent="—";$("fromLo").textContent="—";
     $("lo52v").textContent="low";$("hi52v").textContent="high";
     const zs=$("zoneSig");zs.textContent="no 52w data";zs.style.color="var(--faint)";
   }
