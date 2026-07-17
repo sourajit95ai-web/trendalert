@@ -740,8 +740,8 @@ const LS_KEY="trendalert_lists_v1";
 /* ============ THEMES (chart chrome per theme) ============ */
 const THEME_KEY="trendalert_theme_v1";
 const THEMES={
-  dark:{label:"Dark",sw1:"#5CE1FF",sw2:"#8B7CFF",chart:{text:"#9AA3C7",grid:"rgba(255,255,255,.05)",border:"rgba(255,255,255,.12)",cross:"#3a4468",accent:"#5CE1FF",up:"#3DFFA8",down:"#FF6480",upA:"rgba(61,255,168,.5)",downA:"rgba(255,100,128,.5)",histUp:"rgba(61,255,168,.55)",histDown:"rgba(255,100,128,.55)",sr:"#F2F4FF",gold:"#FFD166",band:"rgba(154,163,199,.10)"}},
-  light:{label:"Light",sw1:"#FFFFFF",sw2:"#C7D2FE",chart:{text:"#5B6478",grid:"rgba(15,23,42,.07)",border:"rgba(15,23,42,.14)",cross:"#b6c0d8",accent:"#2563EB",up:"#0E9F6E",down:"#DC2657",upA:"rgba(14,159,110,.5)",downA:"rgba(220,38,87,.5)",histUp:"rgba(14,159,110,.55)",histDown:"rgba(220,38,87,.55)",sr:"#1B2233",gold:"#B45309",band:"rgba(15,23,42,.07)"}}};
+  dark:{label:"Dark",sw1:"#5CE1FF",sw2:"#8B7CFF",chart:{text:"#9AA3C7",grid:"rgba(255,255,255,.05)",border:"rgba(255,255,255,.12)",cross:"#3a4468",accent:"#5CE1FF",up:"#3DFFA8",down:"#FF6480",upA:"rgba(61,255,168,.5)",downA:"rgba(255,100,128,.5)",histUp:"rgba(61,255,168,.55)",histDown:"rgba(255,100,128,.55)",sr:"#F2F4FF",gold:"#FFD166",obZone:"rgba(255,100,128,.12)",osZone:"rgba(61,255,168,.12)"}},
+  light:{label:"Light",sw1:"#FFFFFF",sw2:"#C7D2FE",chart:{text:"#5B6478",grid:"rgba(15,23,42,.07)",border:"rgba(15,23,42,.14)",cross:"#b6c0d8",accent:"#2563EB",up:"#0E9F6E",down:"#DC2657",upA:"rgba(14,159,110,.5)",downA:"rgba(220,38,87,.5)",histUp:"rgba(14,159,110,.55)",histDown:"rgba(220,38,87,.55)",sr:"#1B2233",gold:"#B45309",obZone:"rgba(220,38,87,.09)",osZone:"rgba(14,159,110,.09)"}}};
 let themeName=(function(){try{const t=localStorage.getItem(THEME_KEY);if(THEMES[t])return t;if(["aurora","amethyst","lagoon","ember"].includes(t))return "dark";return "dark";}catch(e){return "dark";}})();
 const CT=()=>THEMES[themeName].chart;
 function initThemeUI(){
@@ -1692,12 +1692,12 @@ function renderChart(sym){
   rsiBands.forEach(b=>rsiChart.removeSeries(b));rsiBands=[];
   if(visibilityState.rsi){
     const rv=rsiArr(closes,chCfg.rsi.period);
-    /* gray out the overbought (ob..100) and oversold (0..os) zones; added
-       before the RSI line so the line draws on top of the fills */
-    [[chCfg.rsi.ob,100],[chCfg.rsi.os,0]].forEach(([base,val])=>{
+    /* highlight the overbought (ob..100, red tint) and oversold (0..os,
+       green tint) zones; added before the RSI line so the line draws on top */
+    [[chCfg.rsi.ob,100,CT().obZone],[chCfg.rsi.os,0,CT().osZone]].forEach(([base,val,col])=>{
       const s=rsiChart.addBaselineSeries({baseValue:{type:"price",price:base},
-        topFillColor1:CT().band,topFillColor2:CT().band,
-        bottomFillColor1:CT().band,bottomFillColor2:CT().band,
+        topFillColor1:col,topFillColor2:col,
+        bottomFillColor1:col,bottomFillColor2:col,
         topLineColor:"rgba(0,0,0,0)",bottomLineColor:"rgba(0,0,0,0)",
         priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
       s.setData(bars.map(b=>({time:b.time,value:val})));rsiBands.push(s);});
