@@ -1,9 +1,13 @@
 """
 notes_function.py — HTTP Cloud Function persisting notes AND positions to GCS.
 
-Two stores in one function, selected by the `kind` param:
+Stores in one function, selected by the `kind` param:
   kind=notes     -> notes.json      { "AAPL": [ {text, date}, ... ] }
   kind=positions -> positions.json  { "AAPL": {entry, date, booked, bookedDate}, ... }
+  kind=settings  -> settings.json   scoring weights / thresholds
+  kind=universe  -> universe.json   [ "AAPL", ... ] — union of dashboard list
+                    symbols; the pipeline merges it into its fetch universe
+                    so UI-added tickers get data on the next cycle
 
 GET  ?kind=positions              -> the whole positions map (dashboard loads once)
 GET  ?kind=notes&symbol=AAPL      -> notes for one symbol
@@ -26,10 +30,13 @@ Concurrency: last-write-wins (single-user tool; acceptable, same as data.json).
 
 import json
 import os
+import re
 from google.cloud import storage
 
 BUCKET = os.environ.get("GCS_BUCKET", "")
-OBJECTS = {"notes": "notes.json", "positions": "positions.json", "settings": "settings.json"}
+OBJECTS = {"notes": "notes.json", "positions": "positions.json",
+           "settings": "settings.json", "universe": "universe.json"}
+_SYM_RE = re.compile(r"^[A-Z0-9./-]{1,16}$")
 
 _client = storage.Client()
 
@@ -75,7 +82,7 @@ def notes(request):
     kind = (request.args.get("kind") or
             (request.get_json(silent=True) or {}).get("kind") or "notes")
     if kind not in OBJECTS:
-        return (json.dumps({"error": "kind must be notes|positions"}), 400, _JSON)
+        return (json.dumps({"error": "kind must be notes|positions|settings|universe"}), 400, _JSON)
 
     if request.method == "GET":
         data = _read(kind)
@@ -84,10 +91,25 @@ def notes(request):
             return (json.dumps({"symbol": symbol, "notes": data.get(symbol, [])}), 200, _JSON)
         if kind == "settings":
             return (json.dumps({"settings": data}), 200, _JSON)
+        if kind == "universe":
+            return (json.dumps({"universe": data if isinstance(data, list) else []}), 200, _JSON)
         return (json.dumps({"positions": data}), 200, _JSON)
 
     if request.method == "POST":
         payload = request.get_json(silent=True) or {}
+
+        if kind == "universe":
+            syms = payload.get("data")
+            if not isinstance(syms, list):
+                return (json.dumps({"error": "data[] required"}), 400, _JSON)
+            clean, seen = [], set()
+            for s in syms[:200]:
+                s = str(s).strip().upper()[:16]
+                if s and _SYM_RE.match(s) and s not in seen:
+                    seen.add(s)
+                    clean.append(s)
+            _write("universe", clean)
+            return (json.dumps({"ok": True, "count": len(clean)}), 200, _JSON)
 
         if kind == "settings":
             cfg = payload.get("data")

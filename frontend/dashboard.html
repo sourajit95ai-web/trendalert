@@ -807,7 +807,22 @@ function loadLists(){
   try{const r=localStorage.getItem(LS_KEY);if(r)return JSON.parse(r);}catch(e){}
   return defaultLists();
 }
-function saveLists(){ try{localStorage.setItem(LS_KEY,JSON.stringify(lists));}catch(e){} }
+function saveLists(){
+  try{localStorage.setItem(LS_KEY,JSON.stringify(lists));}catch(e){}
+  try{publishUniverse();}catch(e){}  /* SYNC_URL not yet initialised during boot-time saves */
+}
+/* push the union of list symbols to the notes function -> universe.json;
+   the pipeline merges it into its fetch, so UI-added tickers get data next cycle */
+let uniT=null;
+function publishUniverse(){
+  if(!SYNC_URL)return;
+  clearTimeout(uniT);
+  uniT=setTimeout(()=>{
+    const syms=[...new Set(lists.flatMap(l=>l.symbols))];
+    fetch(SYNC_URL,{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({kind:"universe",data:syms})}).catch(()=>{});
+  },800);
+}
 const TYPE_LABEL={portfolio:"Portfolio",watchlist:"Watchlist",index:"Index"};
 const listsOfType=t=>lists.filter(l=>l.type===t);
 const activeList=()=>lists.find(l=>l.id===activeListId)||null;
@@ -1384,7 +1399,7 @@ $("addOk").onclick=()=>{
   const l=lists.find(x=>x.id===sel.value),sym=$("addSymName").textContent;
   if(l&&!l.symbols.includes(sym))l.symbols.push(sym);
   saveLists();$("addInput").value="";selected=sym;
-  $("addNote").textContent=bySym(sym)?"":`Added ${sym} to "${l.name}" — shown with a ★ until its data lands. If ${sym} is in the backend SYMBOLS list, data will be refreshed in the next pipeline cycle; otherwise add it to backend/main.py SYMBOLS first.`;
+  $("addNote").textContent=bySym(sym)?"":`Added ${sym} to "${l.name}" — shown with a ★ until the next pipeline cycle (≤30 min) fetches and publishes its data.`;
   $("addModal").classList.remove("on");render();
 };
 $("addCancel").onclick=()=>$("addModal").classList.remove("on");

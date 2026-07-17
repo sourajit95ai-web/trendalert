@@ -135,3 +135,17 @@ def test_sr_levels_bounded_and_typed():
     lv = support_resistance(frame(100 + 10 * np.sin(np.linspace(0, 12, 300)) + rng.normal(0, 0.5, 300)))
     assert 0 < len(lv) <= 4
     assert all(l["kind"] in ("support", "resistance") for l in lv)
+
+
+# ---------- dynamic universe ----------
+def test_partition_universe():
+    from main import partition_universe, SYMBOLS
+    eq, cr = partition_universe(
+        ["aapl", " CAT ", "ETH/USD", SYMBOLS[0], "CAT", "", None, "BTC/USD"])
+    assert eq == ["AAPL", "CAT"]          # cleaned, deduped, core excluded
+    assert cr == ["ETH/USD"]              # "/" routes to crypto; core BTC dropped
+
+def test_partition_universe_bad_input():
+    from main import partition_universe
+    assert partition_universe(None) == ([], [])
+    assert partition_universe({"a": 1}) == ([], [])

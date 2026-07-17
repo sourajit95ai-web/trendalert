@@ -62,6 +62,8 @@ SECTORS = {
     "BTC/USD": "Crypto",
 }
 
+MAX_EXTRA_EQUITY = 50       # dynamic-universe caps — one batched request stays one request
+MAX_EXTRA_CRYPTO = 10
 HISTORY_DAYS = 420          # calendar span requested (>=252 trading days needed)
 TIMEFRAME = "1Day"
 MIN_FETCH_RATIO = 0.9       # publish guard: abort if <90% of symbols fetched
@@ -179,6 +181,39 @@ def detect_cross_alerts(frames):
 
 
 # ----------------------------------------------------------------------
+# dynamic universe (universe.json — tickers added in the dashboard UI)
+# ----------------------------------------------------------------------
+def partition_universe(raw):
+    """Sanitize a raw symbol list -> (extra_equities, extra_cryptos).
+
+    Symbols already in the core universe are dropped; "/" marks a crypto
+    pair (Alpaca style, e.g. ETH/USD). Pure — testable without GCS."""
+    if not isinstance(raw, list):
+        return [], []
+    eq, cr, seen = [], [], set()
+    for s in raw:
+        if not isinstance(s, str):
+            continue
+        s = s.strip().upper()[:16]
+        if not s or s in seen or s in SYMBOLS or s in CRYPTO_SYMBOLS:
+            continue
+        seen.add(s)
+        (cr if "/" in s else eq).append(s)
+    return eq[:MAX_EXTRA_EQUITY], cr[:MAX_EXTRA_CRYPTO]
+
+
+def load_dynamic_universe():
+    """universe.json in the bucket (published by the notes function)."""
+    try:
+        blob = storage.Client().bucket(BUCKET).blob("universe.json")
+        if not blob.exists():
+            return [], []
+        return partition_universe(json.loads(blob.download_as_text()))
+    except Exception:
+        return [], []           # a broken universe file must never stop the run
+
+
+# ----------------------------------------------------------------------
 # settings bridge
 # ----------------------------------------------------------------------
 def apply_published_settings():
@@ -229,10 +264,13 @@ def main(request):
     trading_today = is_trading_day(et_today)
     expected_close = last_completed_trading_day()   # most recent SETTLED close
 
+    # the publish guard is measured against the CORE universe only — a typo'd
+    # ticker added in the UI must never be able to block publishing
     expected = SYMBOLS + CRYPTO_SYMBOLS
+    extra_eq, extra_cr = load_dynamic_universe()
 
-    frames = fetch_equity_bars(SYMBOLS)
-    for cs in CRYPTO_SYMBOLS:
+    frames = fetch_equity_bars(SYMBOLS + extra_eq)
+    for cs in CRYPTO_SYMBOLS + extra_cr:
         try:
             df = fetch_crypto_bars(cs, days=HISTORY_DAYS)
             if len(df):
@@ -240,11 +278,12 @@ def main(request):
         except Exception:
             pass                                   # crypto failure isn't fatal
 
-    # publish guard 1: enough of the universe fetched?
-    ratio = len(frames) / len(expected)
+    # publish guard 1: enough of the CORE universe fetched?
+    core_fetched = sum(1 for s in expected if s in frames)
+    ratio = core_fetched / len(expected)
     if ratio < MIN_FETCH_RATIO:
         return (json.dumps({"ok": False,
-                            "error": f"fetched {len(frames)}/{len(expected)} — aborting, JSON not overwritten"}),
+                            "error": f"fetched {core_fetched}/{len(expected)} core — aborting, JSON not overwritten"}),
                 500, {"Content-Type": "application/json"})
 
     settings_applied = apply_published_settings()

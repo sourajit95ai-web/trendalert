@@ -158,6 +158,19 @@ token ever leaks, revoke it in BotFather with `/revoke`.
    `720876958,987654321`, and redeploy. Each id gets its own message; one
    bad/blocked id doesn't stop delivery to the others.
 
+## Dynamic universe (added)
+
+Tickers added in the dashboard UI get data automatically — no code edit:
+1. Adding/removing a symbol in any list POSTs the union of all list symbols
+   to the notes function (`kind=universe`) -> `universe.json` in the bucket.
+2. Each pipeline run merges `universe.json` into its fetch (same single
+   batched Alpaca request; caps: 50 extra equities, 10 extra cryptos, "/"
+   marks a crypto pair). Sector shows as "Other" unless added to SECTORS.
+3. The publish guard counts CORE symbols only, so a typo'd UI ticker can
+   never block publishing — it just stays ★ in the dashboard.
+New symbols appear on the next cycle (<=30 min). The hardcoded SYMBOLS in
+main.py remain the curated core (RS benchmark SPY etc. must stay there).
+
 ## New listings / short history (added)
 
 A "52-week" level requires a 52-week window. Symbols with fewer than
