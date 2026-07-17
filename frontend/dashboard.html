@@ -85,6 +85,8 @@
   .card-sub{color:var(--muted);font-size:13px;margin-bottom:16px}
 
   .trend-toggles{display:flex;gap:12px;margin-bottom:16px}
+  .card-headrow{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .card-headrow .trend-toggles{margin-bottom:0}
   .tg{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;padding:11px 18px;border-radius:11px;background:transparent;border:1px solid var(--hair2);cursor:pointer;transition:.15s}
   .tg svg{width:18px;height:18px}
   .tg.up{color:var(--up);border-color:var(--up-bd)} .tg.up.on{background:var(--up-bg)}
@@ -496,12 +498,15 @@
 
     <div class="card">
       <div class="card-pad">
-        <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span id="cfgTitle">Portfolio</span></div>
-        <div class="card-sub" id="cfgSub">Add tickers to this list — a symbol can live in several lists at once.</div>
-
-        <div class="trend-toggles">
-          <button class="tg up on" data-trend="bull"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>Uptrend</button>
-          <button class="tg down on" data-trend="bear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 7 9 13 13 9 21 17"/><polyline points="15 17 21 17 21 11"/></svg>Downtrend</button>
+        <div class="card-headrow">
+          <div>
+            <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span id="cfgTitle">Portfolio</span></div>
+            <div class="card-sub" id="cfgSub">Add tickers to this list — a symbol can live in several lists at once.</div>
+          </div>
+          <div class="trend-toggles">
+            <button class="tg up on" data-trend="bull"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>Uptrend</button>
+            <button class="tg down on" data-trend="bear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 7 9 13 13 9 21 17"/><polyline points="15 17 21 17 21 11"/></svg>Downtrend</button>
+          </div>
         </div>
 
         <div class="sectors" id="sectors">
