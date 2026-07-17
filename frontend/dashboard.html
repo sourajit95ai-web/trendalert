@@ -147,8 +147,6 @@
   .chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:7px;font-size:12px;font-weight:600}
   .chip.up{color:var(--up);background:var(--up-bg)}.chip.down{color:var(--down);background:var(--down-bg)}
   .score-cell{display:inline-flex;align-items:center;gap:9px;justify-content:flex-end}
-  .score-bar{width:48px;height:6px;border-radius:3px;background:var(--bg2);overflow:hidden;position:relative}
-  .score-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px}
   .score-val{font-weight:700;font-size:13px;min-width:28px;text-align:right}
   .rsi-mini{display:inline-block;width:64px;height:16px;position:relative;vertical-align:middle}
   .rsi-mini .track{position:absolute;inset:5px 0;border-radius:3px;background:linear-gradient(90deg,var(--up-bg) 0 30%,var(--track) 30% 70%,var(--down-bg) 70% 100%)}
@@ -380,7 +378,7 @@
   .inlists .t{background:transparent;border-color:var(--hair2)}
   .scard{box-shadow:var(--shadow)}
   .scard.sel{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue),var(--shadow)}
-  .scard .comp .cb,.score-bar,.sbar{background:var(--trackbg)}
+  .scard .comp .cb,.sbar{background:var(--trackbg)}
   .d-lists .pick{border-radius:999px;background:transparent;border-style:dashed}
   .d-lists .pick.in{background:var(--blue-bg);border-color:var(--blue);border-style:solid;color:var(--ink)}
   .gauge .mk{background:var(--ink);box-shadow:0 0 0 2px rgba(0,0,0,.35)}
@@ -1299,7 +1297,7 @@ function render(){
     const tr=document.createElement("tr");if(d.symbol===selected)tr.className="sel";
     tr.innerHTML=`
       <td class="sym">${d.symbol}<span class="rm" data-rm="${d.symbol}" title="Remove from ${L?L.name:''}">✕</span></td>
-      <td><span class="score-cell"><span class="score-bar"><i style="width:${sc}%;background:${scol}"></i></span><span class="score-val" style="color:${scol}">${fmt(sc,0)}</span></span></td>
+      <td><span class="score-cell"><span class="score-val" style="color:${scol}">${fmt(sc,0)}</span></span></td>
       <td class="num">${fmt(d.close)}</td>
       <td><span class="chip ${dir}">${d.change_pct>=0?"▲":"▼"} ${fmt(Math.abs(d.change_pct))}%</span></td>
       <td>${c52}</td>
