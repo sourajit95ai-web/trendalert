@@ -1787,6 +1787,7 @@ setInterval(()=>{if(DATA_URL)load();},300000);
 setInterval(checkStaleness,60000);
 initThemeUI();applyTheme(themeName);
 syncPositions().then(load);
+setTimeout(()=>{try{publishUniverse();}catch(e){}},3000);  /* sync universe.json on load, not only on edits */
 </script>
 </body>
 </html>
