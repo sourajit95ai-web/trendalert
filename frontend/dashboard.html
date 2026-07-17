@@ -130,11 +130,13 @@
   .card-head h2{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600}
   .card-head .hint{font-size:11.5px;color:var(--faint)}
 
+  /* horizontal scroll inside the card instead of clipping the last columns */
+  .table-scroll{overflow-x:auto}
   table{width:100%;border-collapse:collapse}
-  thead th{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;text-align:right;padding:11px 16px;border-bottom:1px solid var(--hair);cursor:pointer;user-select:none;white-space:nowrap}
+  thead th{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;text-align:right;padding:11px 12px;border-bottom:1px solid var(--hair);cursor:pointer;user-select:none;white-space:nowrap}
   thead th:first-child{text-align:left}thead th:hover{color:var(--ink)}
   thead th .ar{font-size:9px;opacity:.8;margin-left:2px}
-  tbody td{padding:12px 16px;border-bottom:1px solid var(--hair);text-align:right;font-size:13.5px}
+  tbody td{padding:12px 11px;border-bottom:1px solid var(--hair);text-align:right;font-size:13.5px;white-space:nowrap}
   tbody tr{cursor:pointer;transition:background .12s}tbody tr:hover{background:var(--surface2)}
   tbody tr.sel{background:var(--blue-bg)}tbody tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--blue)}
   .sym{text-align:left;font-weight:700;font-family:'Space Grotesk',sans-serif;display:flex;align-items:center;gap:9px}
@@ -155,7 +157,7 @@
   .macd-mini .bar{position:absolute;top:3px;height:10px;border-radius:2px}
   .trend{font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px}
   .trend.bull{color:var(--up);background:var(--up-bg)}.trend.bear{color:var(--down);background:var(--down-bg)}.trend.mixed{color:var(--muted);background:var(--surface2)}
-  .inlists{display:inline-flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+  .inlists{display:inline-flex;gap:4px;flex-wrap:nowrap;justify-content:flex-end}  /* one line — wrapping made row heights ragged */
   .inlists .t{font-size:10px;font-weight:600;color:var(--muted);background:var(--bg2);border:1px solid var(--hair2);padding:2px 7px;border-radius:6px}
 
   .alerts-head{display:flex;align-items:center;gap:11px;font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:700;margin:24px 2px 14px}
@@ -558,7 +560,7 @@
           <input id="search" placeholder="Search symbol…">
           <select id="trendFilter"><option value="all">All trends</option><option value="bull">Bullish only</option><option value="bear">Bearish only</option><option value="mixed">Mixed only</option></select>
         </div>
-        <table><thead><tr id="theadRow"></tr></thead><tbody id="tbody"></tbody></table>
+        <div class="table-scroll"><table><thead><tr id="theadRow"></tr></thead><tbody id="tbody"></tbody></table></div>
       </div>
 
       <div class="rightcol" id="rightCol">
