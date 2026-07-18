@@ -329,6 +329,13 @@
   .scard .verdict-chip.texit{color:var(--down);background:var(--down-bg);border:1px solid var(--down-bd)}
   .scard .verdict-chip.watch{color:var(--muted);background:var(--surface2);border:1px solid var(--hair2)}
   .scard .zone{margin-left:0}
+  .act-strip{margin-top:7px;padding:6px 9px;border-radius:8px;font-size:11px;font-weight:600;line-height:1.35}
+  .act-strip b{font-weight:700}
+  .act-strip.book{color:var(--amber);background:rgba(233,185,73,.13);border:1px solid rgba(233,185,73,.4)}
+  .act-strip.exit{color:var(--down);background:var(--down-bg);border:1px solid var(--down-bd)}
+  .act-strip.trail{color:var(--up);background:var(--up-bg);border:1px solid var(--up-bd)}
+  .act-strip.re{color:#7FB0F8;background:rgba(127,176,248,.12);border:1px solid rgba(127,176,248,.4)}
+  .act-strip.plan,.act-strip.wait{color:var(--muted);background:var(--surface2);border:1px solid var(--hair2)}
   .cards-empty{text-align:center;color:var(--faint);padding:44px 0;font-size:14px}
   /* ---- focus view ---- */
   .focusbar{display:none;align-items:center;gap:12px;margin-bottom:14px}
@@ -1154,6 +1161,26 @@ function whyCard(d){
     if(weakest)return `Trend intact, nothing to do — weakest bucket: <b>${weakest[0]} ${Math.round(weakest[1])}</b>, the number to watch.`;}
   return `Quietly compounding — nothing to do.`;
 }
+/* explicit sizing line — how much of the position to book / how big a
+   re-entry tranche — shown only on ACTION REQUIRED and RE-ENTRY WATCH cards */
+function actionStrip(d){
+  const grp=groupOfCard(d);
+  if(grp!==1&&grp!==3)return "";
+  const p=posOf(d.symbol);
+  if(p){const st=ruleState(d,p);
+    if(st.phase==="trigger")return `<div class="act-strip book">⚡ Book <b>⅓ (33%)</b> of the position now — trail the remaining ⅔</div>`;
+    if(st.phase==="exit")return `<div class="act-strip exit">⚠ Sell the remaining <b>⅔ (67%)</b> — trail stop hit (close &lt; EMA50)</div>`;
+    if(st.phase==="trail")return `<div class="act-strip trail">✓ Hold the remaining <b>⅔ (67%)</b> — sell only on close &lt; EMA50${d.ema50!=null?" ($"+fmt(d.ema50)+")":""}</div>`;
+    return `<div class="act-strip plan">Plan: book <b>⅓ (33%)</b> at +${settings.gainPct}% &amp; ≤${settings.highZonePct}% from high</div>`;}
+  const zn=zoneOf(d);
+  if(zn==="high")return `<div class="act-strip book">⚡ If holding: book <b>⅓ (33%)</b> — exit review zone</div>`;
+  if(zn==="low"){
+    if(settings.reEntryMode==="near_low"||d.base_status==="confirmed")
+      return `<div class="act-strip re">◎ Re-enter with a <b>⅓ (33%)</b> tranche — scale in, never all at once</div>`;
+    if(d.base_status==="forming")return `<div class="act-strip wait">Re-entry size <b>0%</b> until the base confirms (${d.base_score!=null?d.base_score+"/5":"—"})</div>`;
+    return `<div class="act-strip wait">Re-entry size <b>0%</b> — still falling, no base</div>`;}
+  return "";
+}
 function miniCardHTML(d){
   if(d.pending)return `<div class="mini2 pending ${d.symbol===selected?"sel":""}" data-sym="${d.symbol}">
     <div style="min-width:0;flex:1">
@@ -1167,6 +1194,7 @@ function miniCardHTML(d){
       <div class="nm">${d.symbol}<span class="sec2">${d.sector||""}</span></div>
       <div class="mchg num" style="color:${dir?"var(--up)":"var(--down)"}">${dir?"▲":"▼"} ${fmt(Math.abs(d.change_pct))}% · $${fmt(d.close)}</div>
       <div class="tags2">${verdictChip(d)}${zoneChipHTML(d)}</div>
+      ${actionStrip(d)}
       <div class="why">${whyCard(d)}</div>
     </div></div>`;
 }
