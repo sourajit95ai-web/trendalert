@@ -260,6 +260,15 @@ def _validate(payload, chart):
 # entry point
 # ----------------------------------------------------------------------
 def main(request):
+    # ?mode=brief (Cloud Scheduler, 9:50 ET) — intraday morning brief only;
+    # does not recompute scores or touch data.json/chart.json
+    if request is not None and getattr(request, "args", None) \
+            and request.args.get("mode") == "brief":
+        from morning_brief import run_morning_brief
+        res = run_morning_brief(BUCKET, SYMBOLS, SECTORS, _HEADERS)
+        return (json.dumps(res), 200 if res.get("ok") else 500,
+                {"Content-Type": "application/json"})
+
     et_today = _eastern_now().date()
     trading_today = is_trading_day(et_today)
     expected_close = last_completed_trading_day()   # most recent SETTLED close

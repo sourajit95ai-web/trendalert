@@ -158,6 +158,28 @@ token ever leaks, revoke it in BotFather with `/revoke`.
    `720876958,987654321`, and redeploy. Each id gets its own message; one
    bad/blocked id doesn't stop delivery to the others.
 
+## Morning brief — 20 min after the open (added)
+
+A third scheduler job hits the pipeline function with `?mode=brief` at
+**9:50 AM America/New_York, Mon–Fri** (DST-safe via the job's time zone):
+
+    gcloud scheduler jobs create http trendalert-morning-brief \
+      --location us-central1 \
+      --schedule="50 9 * * 1-5" --time-zone="America/New_York" \
+      --uri="<pipeline-function-url>/?mode=brief" --http-method=GET \
+      --attempt-deadline=540s
+
+`mode=brief` (backend/morning_brief.py) does NOT recompute scores or touch
+data.json — it pulls intraday IEX snapshots for the whole universe (core +
+UI-added tickers) and sends one email + one Telegram message painting the
+day so far: index open gaps vs drift since the open, average first-20-min
+move per sector with best/worst names, and tracked positions (positions.json)
+with day move, sector, and gain since entry. Delivery reuses the same
+SMTP/Telegram config as EOD alerts; either channel disables the same way.
+Skipped on weekends/holidays and when no intraday bar for today exists yet.
+Note: until a backend with morning_brief.py is deployed, the job triggers a
+harmless ordinary pipeline run (unknown args are ignored).
+
 ## Dynamic universe (added)
 
 Tickers added in the dashboard UI get data automatically — no code edit:

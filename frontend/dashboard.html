@@ -45,11 +45,11 @@
 
   .appbar{position:sticky;top:0;z-index:20;background:rgba(10,14,23,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--hair);padding:16px 18px}
   .appbar-in{max-width:1240px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px}
-  .logo{display:flex;align-items:center;gap:10px}
-  .logo .mark{width:36px;height:36px;border-radius:10px;background:#1E2745;border:1px solid #2E3A63;display:grid;place-items:center}
-  .logo .mark svg{width:19px;height:19px}
-  .logo h1{font-size:17px;font-weight:700;letter-spacing:-.01em;line-height:1.2;color:var(--ink)}
-  .logo p{color:var(--faint);font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;margin-top:2px}
+  .logo{display:flex;align-items:center;gap:13px}
+  .logo .mark{width:46px;height:46px;border-radius:13px;background:#1E2745;border:1px solid #2E3A63;display:grid;place-items:center}
+  .logo .mark svg{width:26px;height:26px}
+  .logo h1{font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;letter-spacing:-.01em;line-height:1}
+  .logo p{color:var(--muted);font-size:12.5px;margin-top:3px}
   .settings{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--hair2);color:var(--ink);font-size:14px;font-weight:500;padding:11px 18px;border-radius:12px;cursor:pointer;transition:.15s}
   .settings:hover{background:var(--surface2);border-color:#34425f}
   .settings svg{width:17px;height:17px;opacity:.85}
@@ -165,8 +165,9 @@
   tr:hover .sym .rm{opacity:.7}.sym .rm:hover{color:var(--down)}
   .chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:7px;font-size:12px;font-weight:600}
   .chip.up{color:var(--up);background:var(--up-bg)}.chip.down{color:var(--down);background:var(--down-bg)}
-  .score-cell{display:inline-flex;align-items:center;gap:9px;justify-content:flex-end}
-  .score-val{font-weight:700;font-size:13px;min-width:28px;text-align:right}
+  .score-cell{display:inline-flex;align-items:center;gap:9px;justify-content:center}
+  .score-val{font-weight:700;font-size:13px;min-width:28px;text-align:center}
+  thead th.th-score,tbody td.td-score{text-align:center}
   .rsi-mini{display:inline-block;width:64px;height:16px;position:relative;vertical-align:middle}
   .rsi-mini .track{position:absolute;inset:5px 0;border-radius:3px;background:linear-gradient(90deg,var(--up-bg) 0 30%,var(--track) 30% 70%,var(--down-bg) 70% 100%)}
   .rsi-mini .mk{position:absolute;top:2px;width:2px;height:12px;background:var(--ink);border-radius:1px;transform:translateX(-1px)}
@@ -201,6 +202,16 @@
   .acard.bull .badge{color:var(--up);background:rgba(47,191,113,.14)}.acard.bear .badge{color:var(--down);background:rgba(229,72,77,.14)}
   .acard .body .desc{color:var(--muted);font-size:14px;margin-top:5px}
   .alerts-empty{color:var(--faint);font-size:14px;padding:8px 2px}
+  .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:60;background:var(--surface);border:1px solid var(--hair2);color:var(--ink);font-size:13px;font-weight:600;padding:12px 18px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .25s;max-width:90vw}
+  .toast.show{opacity:1}
+  .pie-wrap{display:flex;align-items:center;gap:26px;flex-wrap:wrap}
+  .pie-wrap svg{width:150px;height:150px;flex-shrink:0}
+  .pie-legend{display:flex;flex-direction:column;gap:8px;min-width:0;flex:1}
+  .pie-legend .prow{display:flex;align-items:center;gap:9px;font-size:13px}
+  .pie-legend .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+  .pie-legend .nm{font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pie-legend .ct{color:var(--muted);font-size:12px}
+  .pie-legend .pc{font-weight:700;min-width:48px;text-align:right}
 
   .d-head{padding:18px 20px;border-bottom:1px solid var(--hair)}
   .d-sym{font-family:'Space Grotesk',sans-serif;font-size:23px;font-weight:700}
@@ -370,6 +381,8 @@
     radial-gradient(700px 500px at 50% 110%,var(--aur3),transparent 60%);
     background-attachment:fixed}
   .appbar{background:var(--appbg);backdrop-filter:blur(14px);border-bottom:1px solid var(--hair)}
+  .logo h1{font-family:'Sora','Space Grotesk',sans-serif;letter-spacing:-.02em;
+    background:linear-gradient(90deg,var(--blue),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
   .card,.modal,.scard{background:var(--surface);border-color:var(--hair);backdrop-filter:blur(14px);border-radius:22px}
   .card-title,.card-head h2,.d-sym,.chart-top h2,.alerts-head,.focus-title,.modal h3,
   .scard .tsym,.bigscore .n,.acard .body .sym{font-family:'Sora','Space Grotesk',sans-serif}
@@ -502,7 +515,7 @@
     <div class="appbar-in">
       <div class="logo">
         <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#7EA6FF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg></span>
-        <div><h1>TrendAlert</h1><p>Technical Intelligence</p></div>
+        <div><h1>TrendAlert</h1><p>Technical Indicator Configuration</p></div>
       </div>
       <span class="themeseg" id="themeSeg"><span class="thlbl">THEME</span></span><button class="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</button>
     </div>
@@ -683,6 +696,12 @@
     <div class="alerts-head" id="alertsHead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>Recent Alerts</div>
     <div class="alert-list" id="alertList"></div>
 
+    <div class="card" id="secPieCard" style="display:none;margin-top:18px;padding:18px 20px">
+      <div class="card-title" style="font-size:17px;margin-bottom:2px">Holdings split</div>
+      <div class="card-sub" style="margin-bottom:14px">How many of the stocks you hold sit in each sector (portfolio lists)</div>
+      <div class="pie-wrap"><svg id="secPieSvg" viewBox="0 0 42 42"></svg><div class="pie-legend" id="secPieLegend"></div></div>
+    </div>
+
     <footer>
       US market · multiple portfolios & watchlists · a symbol can belong to several lists. Lists are saved in this browser.<br>
       Signal score is a 0–100 cross-sectional rank — trend 30% · momentum 20% · volume 20% · rel. strength 20% · risk 10% — a scanning aid, not advice.
@@ -745,6 +764,17 @@
       <div class="mfoot">
         <button class="btn btn-ghost" id="addCancel">Cancel</button>
         <button class="btn btn-primary" id="addOk">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="pbreModal">
+    <div class="modal" style="width:420px">
+      <h3 id="pbreTitle">Confirm</h3>
+      <div class="mbody"><div class="set-note" id="pbreMsg" style="margin:0"></div></div>
+      <div class="mfoot">
+        <button class="btn btn-ghost" id="pbreCancel">Cancel</button>
+        <button class="btn btn-primary" id="pbreOk">OK</button>
       </div>
     </div>
   </div>
@@ -950,10 +980,32 @@ async function syncPbre(){
     if(r.ok){const j=await r.json();if(j.pbre&&Object.keys(j.pbre).length){pbre=j.pbre;
       try{localStorage.setItem(PBRE_KEY,JSON.stringify(pbre));}catch(e){}}}}catch(e){}
 }
+/* click -> OK/Cancel confirm; OK lights the button. When PB and RE are both
+   confirmed the book->re-enter cycle is complete: both reset to default. */
+let pbrePending=null;
 function togglePbre(sym,k){
-  pbre[sym]=pbre[sym]||{};pbre[sym][k]=pbre[sym][k]?0:1;
-  if(!pbre[sym].pb&&!pbre[sym].re)delete pbre[sym];
-  savePbre();render();
+  const st=pbre[sym]||{},marking=!st[k];
+  $("pbreTitle").textContent=(k==="pb"?"Profit booking":"Re-entry")+" — "+sym;
+  $("pbreMsg").textContent=k==="pb"
+    ?(marking?`Have you booked profit on ${sym}? OK highlights PB.`:`Remove the PB (profit booked) mark on ${sym}?`)
+    :(marking?`Have you re-entered ${sym}? OK highlights RE.`:`Remove the RE (re-entered) mark on ${sym}?`);
+  pbrePending={sym,k,marking};
+  $("pbreModal").classList.add("on");
+}
+function closePbre(){$("pbreModal").classList.remove("on");pbrePending=null;}
+function applyPbre(){
+  if(!pbrePending)return;
+  const {sym,k,marking}=pbrePending;
+  pbre[sym]=pbre[sym]||{};pbre[sym][k]=marking?1:0;
+  if(pbre[sym].pb&&pbre[sym].re){delete pbre[sym];toast(`${sym}: profit booked → re-entered — cycle complete, PB/RE reset.`);}
+  else if(!pbre[sym].pb&&!pbre[sym].re)delete pbre[sym];
+  closePbre();savePbre();render();
+}
+function toast(msg){
+  let t=document.getElementById("toast");
+  if(!t){t=document.createElement("div");t.id="toast";t.className="toast";document.body.appendChild(t);}
+  t.textContent=msg;requestAnimationFrame(()=>t.classList.add("show"));
+  clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),4500);
 }
 function pbreHTML(sym){
   const st=pbre[sym]||{};
@@ -1112,6 +1164,7 @@ function renderHead(){
   const tr=$("theadRow");tr.innerHTML="";
   COLS.forEach(c=>{
     const th=document.createElement("th");
+    if(c.key==="score")th.className="th-score";
     th.innerHTML=c.lbl+(sortKey===c.key?`<span class="ar">${sortDir<0?"▼":"▲"}</span>`:"");
     th.onclick=()=>{if(sortKey===c.key)sortDir*=-1;else{sortKey=c.key;sortDir=(c.key==="symbol")?1:-1;}render();};
     tr.appendChild(th);
@@ -1231,7 +1284,7 @@ function miniCardHTML(d){
   if(d.pending)return `<div class="mini2 pending ${d.symbol===selected?"sel":""}" data-sym="${d.symbol}">
     <div style="min-width:0;flex:1">
       <div class="nm">${d.symbol}<span class="star-new">★</span><span class="sec2">new</span></div>
-      <div class="why">★ Newly added — data will be refreshed in the next pipeline cycle.</div>
+      <div class="why">★ Newly added — data arrives on the next pipeline run (midday &amp; after the close).</div>
     </div></div>`;
   const sc=scoreOf(d),scl=scoreColor(sc),dir=d.change_pct>=0;
   return `<div class="mini2 ${d.symbol===selected?"sel":""}" data-sym="${d.symbol}">
@@ -1303,9 +1356,9 @@ function renderHero(){
 /* alerts live under the detail card while the table/detail grid shows
    (fills its blank right column); below the chart in the cards overview */
 function dockAlerts(side){
-  const h=$("alertsHead"),l=$("alertList");
-  if(side){$("rightCol").appendChild(h);$("rightCol").appendChild(l);}
-  else{const f=document.querySelector("footer");f.before(h);f.before(l);}
+  const h=$("alertsHead"),l=$("alertList"),p=$("secPieCard");
+  if(side){$("rightCol").appendChild(h);$("rightCol").appendChild(l);if(p)$("rightCol").appendChild(p);}
+  else{const f=document.querySelector("footer");f.before(h);f.before(l);if(p)f.before(p);}
 }
 function applyLayout(rows){
 
@@ -1374,13 +1427,35 @@ function renderHeatmap(){
     return `<div class="tile" style="background:${bg}"><div class="n">${x.n}</div><div class="p num" style="color:${x.p>=0?"var(--up)":"var(--down)"}">${x.p>=0?"+":""}${fmt(x.p,1)}%</div><div class="h">${x.h} held</div></div>`;
   }).join("");
 }
+/* holdings-by-sector donut — a COUNT of held names per sector (portfolio
+   lists), not a value weighting; lives below Recent Alerts in both layouts */
+const PIE_COLORS=["#8B7CFF","#5CE1FF","#3DFFA8","#FFD166","#FF6480","#7FB0F8","#B78CFF","#FF9E64","#9AA3C7"];
+function renderSectorPie(){
+  const card=$("secPieCard");if(!card)return;
+  const held=[...new Set(lists.filter(l=>l.type==="portfolio").flatMap(l=>l.symbols))];
+  const by={};
+  held.forEach(s=>{const d=bySym(s);const sec=(d&&!d.pending&&d.sector)||"Other";(by[sec]=by[sec]||[]).push(s);});
+  const secs=Object.entries(by).map(([n,syms])=>({n,syms,c:syms.length})).sort((a,b)=>b.c-a.c);
+  const total=secs.reduce((x,y)=>x+y.c,0);
+  if(!total){card.style.display="none";return;}
+  card.style.display="block";
+  let cum=0,segs="",rows="";
+  secs.forEach((s,i)=>{
+    const pct=s.c/total*100,col=PIE_COLORS[i%PIE_COLORS.length];
+    segs+=`<circle r="15.9155" cx="21" cy="21" fill="transparent" stroke="${col}" stroke-width="6.5" stroke-dasharray="${pct} ${100-pct}" stroke-dashoffset="${125-cum}"><title>${s.n}: ${s.syms.join(", ")}</title></circle>`;
+    rows+=`<div class="prow" title="${s.syms.join(", ")}"><span class="dot" style="background:${col}"></span><span class="nm">${s.n}</span><span class="ct num">${s.c} stock${s.c!==1?"s":""}</span><span class="pc num">${fmt(pct,1)}%</span></div>`;
+    cum+=pct;
+  });
+  $("secPieSvg").innerHTML=segs;
+  $("secPieLegend").innerHTML=rows;
+}
 function render(){
   if(!payload)return;
   $("mGen").textContent=payload.generated_at==="demo"?"demo data":new Date(payload.generated_at).toLocaleString("en-US");
   $("mTf").textContent=payload.timeframe||"—";
   $("regionCnt").textContent=(payload.symbols||[]).length+" symbols";
   renderListChips();renderTypeBadges();renderAlerts();renderHead();
-  renderTape();renderHeatmap();
+  renderTape();renderHeatmap();renderSectorPie();
 
   const L=activeList();
   $("cfgTitle").textContent=L?L.name:(TYPE_LABEL[activeType]||"List");
@@ -1397,7 +1472,7 @@ function render(){
       const tr=document.createElement("tr");tr.className="pend"+(d.symbol===selected?" sel":"");
       tr.innerHTML=`
         <td class="sym"><span class="l1">${d.symbol}<span class="star-new" title="Newly added — not in the published data yet">★</span><span class="rm" data-rm="${d.symbol}" title="Remove from ${L?L.name:''}">✕</span></span><span class="sub">${inP.map(l=>l.name).join(" · ")||"—"}</span></td>
-        <td colspan="5" class="pendnote">★ new symbol — data will be refreshed in the next pipeline cycle</td>`;
+        <td colspan="5" class="pendnote">★ new symbol — data arrives on the next pipeline run (midday &amp; after the close)</td>`;
       tr.onclick=e=>{ if(e.target.dataset.rm){removeFromActive(e.target.dataset.rm);return;} selected=d.symbol;render(); };
       tb.appendChild(tr);return;
     }
@@ -1412,7 +1487,7 @@ function render(){
     const tr=document.createElement("tr");if(d.symbol===selected)tr.className="sel";
     tr.innerHTML=`
       <td class="sym"><span class="l1">${d.symbol}${pbreHTML(d.symbol)}<span class="rm" data-rm="${d.symbol}" title="Remove from ${L?L.name:''}">✕</span></span><span class="sub">${sub}</span></td>
-      <td><span class="score-cell"><span class="score-val" style="color:${scol}">${fmt(sc,0)}</span></span></td>
+      <td class="td-score"><span class="score-cell"><span class="score-val" style="color:${scol}">${fmt(sc,0)}</span></span></td>
       <td class="num">${fmt(d.close)}</td>
       <td><span class="chip ${dir}">${d.change_pct>=0?"▲":"▼"} ${fmt(Math.abs(d.change_pct))}%</span></td>
       <td>${c52}</td>
@@ -1517,11 +1592,14 @@ $("addOk").onclick=()=>{
   const l=lists.find(x=>x.id===sel.value),sym=$("addSymName").textContent;
   if(l&&!l.symbols.includes(sym))l.symbols.push(sym);
   saveLists();$("addInput").value="";selected=sym;
-  $("addNote").textContent=bySym(sym)?"":`Added ${sym} to "${l.name}" — shown with a ★ until the next pipeline cycle (≤30 min) fetches and publishes its data.`;
+  $("addNote").textContent=bySym(sym)?"":`Added ${sym} to "${l.name}" — shown with a ★ until the next pipeline run (midday & after the close ET) fetches and publishes its data.`;
   $("addModal").classList.remove("on");render();
 };
 $("addCancel").onclick=()=>$("addModal").classList.remove("on");
 $("addModal").addEventListener("click",e=>{if(e.target.id==="addModal")$("addModal").classList.remove("on");});
+$("pbreOk").onclick=applyPbre;
+$("pbreCancel").onclick=closePbre;
+$("pbreModal").addEventListener("click",e=>{if(e.target.id==="pbreModal")closePbre();});
 function removeFromActive(sym){
   const L=activeList();if(!L)return;
   L.symbols=L.symbols.filter(s=>s!==sym);saveLists();render();

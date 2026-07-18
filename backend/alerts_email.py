@@ -120,7 +120,8 @@ def transition_filter(events, cross_alerts, state):
 # ----------------------------------------------------------------------
 # send
 # ----------------------------------------------------------------------
-def _send(lines, asof):
+def send_email_text(subject, body):
+    """Generic email sender (EOD alerts + morning brief share the config)."""
     user = os.environ.get("SMTP_USER", "")
     if not user:
         return "email:disabled"
@@ -129,11 +130,8 @@ def _send(lines, asof):
     pw = os.environ.get("SMTP_PASS", "")
     to = [a.strip() for a in os.environ.get("ALERT_TO", user).split(",") if a.strip()]
 
-    body = (f"TrendAlert EOD — {asof}\n\n" + "\n\n".join(lines) +
-            "\n\nSignals are computed on confirmed daily closes. "
-            "Execution reference: next session's open.\n")
     msg = MIMEText(body, "plain", "utf-8")
-    msg["Subject"] = f"TrendAlert EOD {asof}: {len(lines)} signal{'s' if len(lines) != 1 else ''}"
+    msg["Subject"] = subject
     msg["From"] = os.environ.get("ALERT_FROM", user)
     msg["To"] = ", ".join(to)
 
@@ -141,20 +139,17 @@ def _send(lines, asof):
         s.starttls()
         s.login(user, pw)
         s.sendmail(msg["From"], to, msg.as_string())
-    return f"email:sent({len(lines)})"
+    return "email:sent"
 
 
-def _send_telegram(lines, asof):
+def send_telegram_text(body):
+    """Generic Telegram sender — one bot, comma-separated chat ids; each
+    person must have messaged the bot once (bots cannot message first)."""
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    # comma-separated: one bot, many chats — each person must have messaged
-    # the bot at least once (Telegram bots cannot message first)
     chat_ids = [c.strip() for c in os.environ.get("TELEGRAM_CHAT_ID", "").split(",") if c.strip()]
     if not token or not chat_ids:
         return "telegram:disabled"
     import requests
-    body = (f"TrendAlert EOD — {asof}\n\n" + "\n\n".join(lines) +
-            "\n\nSignals are computed on confirmed daily closes. "
-            "Execution reference: next session's open.")
     sent, failed = 0, 0
     for chat_id in chat_ids:
         try:
@@ -165,6 +160,22 @@ def _send_telegram(lines, asof):
         except Exception:
             failed += 1   # one recipient's bad/blocked chat must not stop the rest
     return f"telegram:sent({sent}/{len(chat_ids)})" if not failed else f"telegram:sent({sent}/{len(chat_ids)},failed={failed})"
+
+
+def _eod_body(lines, asof):
+    return (f"TrendAlert EOD — {asof}\n\n" + "\n\n".join(lines) +
+            "\n\nSignals are computed on confirmed daily closes. "
+            "Execution reference: next session's open.\n")
+
+
+def _send(lines, asof):
+    subject = f"TrendAlert EOD {asof}: {len(lines)} signal{'s' if len(lines) != 1 else ''}"
+    status = send_email_text(subject, _eod_body(lines, asof))
+    return f"email:sent({len(lines)})" if status == "email:sent" else status
+
+
+def _send_telegram(lines, asof):
+    return send_telegram_text(_eod_body(lines, asof).rstrip("\n"))
 
 
 def send_eod_alerts(records, cross_alerts, bucket, asof, trading_day=True):
