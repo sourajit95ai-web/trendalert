@@ -6,6 +6,7 @@ Stores in one function, selected by the `kind` param:
   kind=positions -> positions.json  { "AAPL": {entry, date, booked, bookedDate}, ... }
   kind=settings  -> settings.json   scoring weights / thresholds
   kind=universe  -> universe.json   [ "AAPL", ... ] — union of dashboard list
+  kind=pbre      -> pbre.json       { "AAPL": {pb:1, re:1}, ... } — booked/re-entered markers
                     symbols; the pipeline merges it into its fetch universe
                     so UI-added tickers get data on the next cycle
 
@@ -35,7 +36,8 @@ from google.cloud import storage
 
 BUCKET = os.environ.get("GCS_BUCKET", "")
 OBJECTS = {"notes": "notes.json", "positions": "positions.json",
-           "settings": "settings.json", "universe": "universe.json"}
+           "settings": "settings.json", "universe": "universe.json",
+           "pbre": "pbre.json"}
 _SYM_RE = re.compile(r"^[A-Z0-9./-]{1,16}$")
 
 _client = storage.Client()
@@ -82,7 +84,7 @@ def notes(request):
     kind = (request.args.get("kind") or
             (request.get_json(silent=True) or {}).get("kind") or "notes")
     if kind not in OBJECTS:
-        return (json.dumps({"error": "kind must be notes|positions|settings|universe"}), 400, _JSON)
+        return (json.dumps({"error": "kind must be notes|positions|settings|universe|pbre"}), 400, _JSON)
 
     if request.method == "GET":
         data = _read(kind)
@@ -93,6 +95,8 @@ def notes(request):
             return (json.dumps({"settings": data}), 200, _JSON)
         if kind == "universe":
             return (json.dumps({"universe": data if isinstance(data, list) else []}), 200, _JSON)
+        if kind == "pbre":
+            return (json.dumps({"pbre": data}), 200, _JSON)
         return (json.dumps({"positions": data}), 200, _JSON)
 
     if request.method == "POST":
@@ -157,6 +161,24 @@ def notes(request):
                     "bookedDate": str(p.get("bookedDate", ""))[:10],
                 }
             _write("positions", clean)
+            return (json.dumps({"ok": True, "count": len(clean)}), 200, _JSON)
+
+        if kind == "pbre":
+            m = payload.get("data")
+            if not isinstance(m, dict):
+                return (json.dumps({"error": "data{} required"}), 400, _JSON)
+            clean = {}
+            for sym, st in list(m.items())[:500]:
+                if not isinstance(st, dict):
+                    continue
+                e = {}
+                if st.get("pb"):
+                    e["pb"] = 1
+                if st.get("re"):
+                    e["re"] = 1
+                if e:
+                    clean[str(sym)[:16]] = e
+            _write("pbre", clean)
             return (json.dumps({"ok": True, "count": len(clean)}), 200, _JSON)
 
         symbol = payload.get("symbol")

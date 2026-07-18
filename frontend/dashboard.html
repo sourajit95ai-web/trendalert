@@ -54,6 +54,22 @@
   .settings:hover{background:var(--surface2);border-color:#34425f}
   .settings svg{width:17px;height:17px;opacity:.85}
 
+  .idx-tape{position:sticky;z-index:19;background:var(--appbg);backdrop-filter:blur(10px);border-bottom:1px solid var(--hair);padding:8px 18px;display:none;gap:26px;overflow-x:auto;scrollbar-width:none}
+  .idx-tape::-webkit-scrollbar{display:none}
+  .idx-tape .ii{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;cursor:pointer}
+  .idx-tape .ii .nm{font-size:12px;font-weight:600;color:var(--muted)}
+  .idx-tape .ii .vl{font-size:12.5px;font-weight:600}
+  .idx-tape .ii .ch{font-size:12px;font-weight:600}
+  .idx-tape .ii:hover .nm{color:var(--ink)}
+  .pbre{display:inline-flex;gap:4px}
+  .pbre button{font-size:9px;font-weight:700;letter-spacing:.05em;padding:2px 7px;border-radius:6px;cursor:pointer;background:transparent;border:1px solid var(--hair2);color:var(--faint);font-family:inherit;transition:.12s;line-height:1.4}
+  .pbre button.pb.on{background:rgba(233,185,73,.16);border-color:var(--amber);color:var(--amber)}
+  .pbre button.re.on{background:rgba(127,176,248,.16);border-color:#7FB0F8;color:#7FB0F8}
+  .hm{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px}
+  .hm .tile{border-radius:12px;padding:12px 13px;border:1px solid var(--hair)}
+  .hm .tile .n{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hm .tile .p{font-size:17px;font-weight:700;margin:3px 0 1px}
+  .hm .tile .h{font-size:10.5px;color:var(--faint)}
   .region-pill{display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--hair);border-radius:11px;padding:10px 16px;font-size:14px;font-weight:600;margin:18px 0 14px}
   .region-pill .us{color:#fff;background:var(--blue);font-size:12px;font-weight:700;padding:3px 9px;border-radius:6px}
   .region-pill .cnt{color:var(--muted);font-size:12.5px}
@@ -167,7 +183,8 @@
   .alert-list{display:flex;flex-direction:column;gap:13px}
   /* alerts docked under the detail card fill the right column's blank space in table view;
      sticky so the scorecard + alerts follow while scrolling a long table */
-  .rightcol{display:flex;flex-direction:column;gap:0;min-width:0;position:sticky;top:14px;align-self:start;max-height:calc(100vh - 28px);overflow-y:auto}
+  /* flows with the page — a viewport-capped sticky scroller cut the detail card mid-row */
+  .rightcol{display:flex;flex-direction:column;gap:0;min-width:0;align-self:start}
   .rightcol .alerts-head{margin:18px 2px 12px;font-size:16px}
   .rightcol .alerts-head svg{width:18px;height:18px}
   .rightcol .acard{padding:13px 15px;gap:12px}
@@ -491,6 +508,8 @@
     </div>
   </div>
 
+  <div class="idx-tape" id="idxTape"></div>
+
   <div class="wrap">
     <div class="region-pill"><span class="us">US</span><span>Market</span><span class="cnt" id="regionCnt">0 symbols</span><span id="notifTop" style="display:inline-flex;gap:6px;margin-left:4px"></span></div>
 
@@ -501,6 +520,12 @@
     </div>
 
     <div class="lists-row" id="listsRow"></div>
+
+    <div class="card" id="sectorPulse" style="display:none;padding:18px 20px;margin-bottom:18px">
+      <div class="card-title" style="font-size:17px;margin-bottom:2px">Sector pulse</div>
+      <div class="card-sub" style="margin-bottom:14px">Today's move in every sector you hold — tile intensity = size of the move</div>
+      <div class="hm"></div>
+    </div>
 
     <div class="card">
       <div class="card-pad">
@@ -590,9 +615,6 @@
           </div>
           <div class="ind">
             <div class="lbl"><span>MACD (12,26,9)</span><span id="macdSig">—</span></div>
-            <div class="row2"><span class="k">MACD</span><span class="v num" id="macdV">—</span></div>
-            <div class="row2"><span class="k">Signal</span><span class="v num" id="sigV">—</span></div>
-            <div class="row2"><span class="k">Histogram</span><span class="v num" id="histV">—</span></div>
           </div>
           <div class="ind">
             <div class="lbl"><span>52-week range</span><span id="zoneSig">—</span></div>
@@ -913,6 +935,30 @@ async function syncPositions(){
       try{localStorage.setItem(POS_KEY,JSON.stringify(positions));}catch(e){}}}}catch(e){}
 }
 function posOf(sym){return positions[sym]||null;}
+
+/* PB (profit booked) / RE (re-entered) markers — same store/sync pattern as positions */
+const PBRE_KEY="trendalert_pbre_v1";
+let pbre=(function(){try{return JSON.parse(localStorage.getItem(PBRE_KEY))||{};}catch(e){return {};}})();
+function savePbre(){
+  try{localStorage.setItem(PBRE_KEY,JSON.stringify(pbre));}catch(e){}
+  if(SYNC_URL){fetch(SYNC_URL,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({kind:"pbre",data:pbre})}).catch(()=>{});}
+}
+async function syncPbre(){
+  if(!SYNC_URL)return;
+  try{const r=await fetch(SYNC_URL+"?kind=pbre&t="+Date.now());
+    if(r.ok){const j=await r.json();if(j.pbre&&Object.keys(j.pbre).length){pbre=j.pbre;
+      try{localStorage.setItem(PBRE_KEY,JSON.stringify(pbre));}catch(e){}}}}catch(e){}
+}
+function togglePbre(sym,k){
+  pbre[sym]=pbre[sym]||{};pbre[sym][k]=pbre[sym][k]?0:1;
+  if(!pbre[sym].pb&&!pbre[sym].re)delete pbre[sym];
+  savePbre();render();
+}
+function pbreHTML(sym){
+  const st=pbre[sym]||{};
+  return `<span class="pbre"><button class="pb ${st.pb?"on":""}" data-pbre="pb" data-sym="${sym}" title="Profit booked — click to toggle">PB</button><button class="re ${st.re?"on":""}" data-pbre="re" data-sym="${sym}" title="Re-entered — click to toggle">RE</button></span>`;
+}
 function ruleState(d,p){
   // Option C: book 1/3 at (gain>=+20% AND within 2% of 52w high); trail remainder on close<EMA50
   const gain=(d.close-p.entry)/p.entry*100;
@@ -1191,7 +1237,7 @@ function miniCardHTML(d){
   return `<div class="mini2 ${d.symbol===selected?"sel":""}" data-sym="${d.symbol}">
     <div class="mring" style="--v:${sc};--c:${scl}"><div class="in num">${fmt(sc,0)}</div></div>
     <div style="min-width:0;flex:1">
-      <div class="nm">${d.symbol}<span class="sec2">${d.sector||""}</span></div>
+      <div class="nm">${d.symbol}${pbreHTML(d.symbol)}<span class="sec2">${d.sector||""}</span></div>
       <div class="mchg num" style="color:${dir?"var(--up)":"var(--down)"}">${dir?"▲":"▼"} ${fmt(Math.abs(d.change_pct))}% · $${fmt(d.close)}</div>
       <div class="tags2">${verdictChip(d)}${zoneChipHTML(d)}</div>
       ${actionStrip(d)}
@@ -1219,7 +1265,10 @@ function renderCards(rows){
     if(!open)return;
     const rail=document.createElement("div");rail.className="rail";
     rail.innerHTML=rs.map(miniCardHTML).join("");
-    rail.querySelectorAll(".mini2").forEach(el=>el.onclick=()=>{selected=el.dataset.sym;focusMode=true;render();});
+    rail.querySelectorAll(".mini2").forEach(el=>el.onclick=e=>{
+      const pb=e.target.closest("[data-pbre]");
+      if(pb){togglePbre(pb.dataset.sym,pb.dataset.pbre);return;}
+      selected=el.dataset.sym;focusMode=true;render();});
     g.appendChild(rail);
   });
 }
@@ -1289,12 +1338,49 @@ function resizeCharts(){
     const w=$(id).clientWidth;if(c&&w>0)c.applyOptions({width:w});});
   applySpan();
 }
+/* index ticker tape — every symbol from Index-type lists, pinned under the appbar */
+function tapeSpark(sym,neg){
+  const bars=chartStore&&chartStore[sym];if(!bars||bars.length<2)return "";
+  const cl=bars.slice(-30).map(b=>b.close),mn=Math.min(...cl),mx=Math.max(...cl),rg=(mx-mn)||1;
+  const pts=cl.map((v,i)=>((i/(cl.length-1))*46).toFixed(1)+","+(14-(v-mn)/rg*11).toFixed(1)).join(" ");
+  return `<svg width="46" height="16" viewBox="0 0 46 16"><polyline points="${pts}" fill="none" stroke="${neg?"var(--down)":"var(--up)"}" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+}
+function renderTape(){
+  const el=$("idxTape");if(!el)return;
+  const items=[...new Set(lists.filter(l=>l.type==="index").flatMap(l=>l.symbols))]
+    .map(bySym).filter(Boolean);
+  if(!items.length){el.style.display="none";return;}
+  el.style.display="flex";
+  el.style.top=document.querySelector(".appbar").offsetHeight+"px";
+  el.innerHTML=items.map(d=>{
+    const neg=d.change_pct<0,c=neg?"var(--down)":"var(--up)";
+    return `<span class="ii" data-sym="${d.symbol}">${tapeSpark(d.symbol,neg)}<span class="nm">${d.symbol}</span><span class="vl num">${fmt(d.close)}</span><span class="ch num" style="color:${c}">${neg?"▼":"▲"} ${fmt(Math.abs(d.change_pct))}%</span></span>`;
+  }).join("");
+  el.querySelectorAll(".ii").forEach(x=>x.onclick=()=>{selected=x.dataset.sym;render();});
+}
+/* sector heatmap — avg day move per sector across portfolio holdings */
+function renderHeatmap(){
+  const el=$("sectorPulse");if(!el)return;
+  const held=[...new Set(lists.filter(l=>l.type==="portfolio").flatMap(l=>l.symbols))]
+    .map(bySym).filter(d=>d&&!d.pending);
+  const by={};held.forEach(d=>{const s=d.sector||"Other";(by[s]=by[s]||[]).push(d.change_pct||0);});
+  const secs=Object.entries(by).map(([n,a])=>({n,p:a.reduce((x,y)=>x+y,0)/a.length,h:a.length}))
+    .sort((a,b)=>b.p-a.p);
+  if(!secs.length){el.style.display="none";return;}
+  el.style.display="block";
+  el.querySelector(".hm").innerHTML=secs.map(x=>{
+    const a=Math.min(.42,Math.abs(x.p)*.16+.08);
+    const bg=x.p>=0?`rgba(61,255,168,${a})`:`rgba(255,100,128,${a})`;
+    return `<div class="tile" style="background:${bg}"><div class="n">${x.n}</div><div class="p num" style="color:${x.p>=0?"var(--up)":"var(--down)"}">${x.p>=0?"+":""}${fmt(x.p,1)}%</div><div class="h">${x.h} held</div></div>`;
+  }).join("");
+}
 function render(){
   if(!payload)return;
   $("mGen").textContent=payload.generated_at==="demo"?"demo data":new Date(payload.generated_at).toLocaleString("en-US");
   $("mTf").textContent=payload.timeframe||"—";
   $("regionCnt").textContent=(payload.symbols||[]).length+" symbols";
   renderListChips();renderTypeBadges();renderAlerts();renderHead();
+  renderTape();renderHeatmap();
 
   const L=activeList();
   $("cfgTitle").textContent=L?L.name:(TYPE_LABEL[activeType]||"List");
@@ -1325,13 +1411,17 @@ function render(){
     const sub=(inL.map(l=>l.name).join(" · ")||"—")+zsub;
     const tr=document.createElement("tr");if(d.symbol===selected)tr.className="sel";
     tr.innerHTML=`
-      <td class="sym"><span class="l1">${d.symbol}<span class="rm" data-rm="${d.symbol}" title="Remove from ${L?L.name:''}">✕</span></span><span class="sub">${sub}</span></td>
+      <td class="sym"><span class="l1">${d.symbol}${pbreHTML(d.symbol)}<span class="rm" data-rm="${d.symbol}" title="Remove from ${L?L.name:''}">✕</span></span><span class="sub">${sub}</span></td>
       <td><span class="score-cell"><span class="score-val" style="color:${scol}">${fmt(sc,0)}</span></span></td>
       <td class="num">${fmt(d.close)}</td>
       <td><span class="chip ${dir}">${d.change_pct>=0?"▲":"▼"} ${fmt(Math.abs(d.change_pct))}%</span></td>
       <td>${c52}</td>
       <td><span class="trend ${t3}">${tl}</span></td>`;
-    tr.onclick=e=>{ if(e.target.dataset.rm){removeFromActive(e.target.dataset.rm);return;} selected=d.symbol;render(); };
+    tr.onclick=e=>{
+      if(e.target.dataset.rm){removeFromActive(e.target.dataset.rm);return;}
+      const pb=e.target.closest("[data-pbre]");
+      if(pb){togglePbre(pb.dataset.sym,pb.dataset.pbre);return;}
+      selected=d.symbol;render(); };
     tb.appendChild(tr);
   });
   renderDetail();
@@ -1353,8 +1443,6 @@ function renderDetail(){
   const ss=$("scoreSig");ss.textContent=sc>=66?"Bullish bias":sc<=33?"Bearish bias":"Neutral";ss.style.color=scol;
   const rz=rsiZone(d.rsi14);$("rsiMk").style.left="clamp(4px, "+Math.max(0,Math.min(100,d.rsi14))+"%, calc(100% - 4px))";$("rsiVal").textContent=fmt(d.rsi14);
   const rs=$("rsiSig");rs.textContent=rz;rs.style.color=rz==="Overbought"?"var(--down)":rz==="Oversold"?"var(--up)":"var(--muted)";
-  $("macdV").textContent=fmt(d.macd,3);$("sigV").textContent=fmt(d.macd_signal,3);
-  $("histV").textContent=signed(d.macd_hist);$("histV").style.color=d.macd_hist>=0?"var(--up)":"var(--down)";
   const ms=$("macdSig"),bull=d.macd_hist>=0;ms.textContent=bull?"Bullish (MACD > signal)":"Bearish (MACD < signal)";ms.style.color=bull?"var(--up)":"var(--down)";
   const p52d=pos52(d),phd=pctFromHigh(d),pld=pctFromLow(d),znd=zoneOf(d);
   /* position / booking rule */
@@ -1472,7 +1560,7 @@ $("addBtn").onclick=addToActive;$("addInput").addEventListener("keydown",e=>{if(
 $("loadBtn").onclick=()=>{DATA_URL=$("dataUrl").value.trim();
   try{localStorage.setItem(DATA_KEY,DATA_URL);}catch(e){}
   SYNC_URL=$("syncUrl").value.trim();try{localStorage.setItem(SYNC_KEY,SYNC_URL);}catch(e){}
-  syncPositions().then(load);};
+  Promise.all([syncPositions(),syncPbre()]).then(load);};
 $("dataUrl").addEventListener("keydown",e=>{if(e.key==="Enter"){DATA_URL=$("dataUrl").value.trim();
   try{localStorage.setItem(DATA_KEY,DATA_URL);}catch(e){}load();}});
 $("search").addEventListener("input",e=>{q=e.target.value.trim().toLowerCase();render();});
@@ -1832,7 +1920,7 @@ $("dataUrl").value=DATA_URL;$("syncUrl").value=SYNC_URL;
 setInterval(()=>{if(DATA_URL)load();},300000);
 setInterval(checkStaleness,60000);
 initThemeUI();applyTheme(themeName);
-syncPositions().then(load);
+Promise.all([syncPositions(),syncPbre()]).then(load);
 setTimeout(()=>{try{publishUniverse();}catch(e){}},3000);  /* sync universe.json on load, not only on edits */
 </script>
 </body>
