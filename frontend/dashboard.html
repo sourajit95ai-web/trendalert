@@ -210,7 +210,6 @@
   .pie-legend .prow{display:flex;align-items:center;gap:9px;font-size:13px}
   .pie-legend .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
   .pie-legend .nm{font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .pie-legend .ct{color:var(--muted);font-size:12px}
   .pie-legend .pc{font-weight:700;min-width:48px;text-align:right}
 
   .d-head{padding:18px 20px;border-bottom:1px solid var(--hair)}
@@ -698,7 +697,7 @@
 
     <div class="card" id="secPieCard" style="display:none;margin-top:18px;padding:18px 20px">
       <div class="card-title" style="font-size:17px;margin-bottom:2px">Holdings split</div>
-      <div class="card-sub" style="margin-bottom:14px">How many of the stocks you hold sit in each sector (portfolio lists)</div>
+      <div class="card-sub" style="margin-bottom:14px">Sector share of the stocks you hold — hover a slice for the count and tickers</div>
       <div class="pie-wrap"><svg id="secPieSvg" viewBox="0 0 42 42"></svg><div class="pie-legend" id="secPieLegend"></div></div>
     </div>
 
@@ -1442,8 +1441,9 @@ function renderSectorPie(){
   let cum=0,segs="",rows="";
   secs.forEach((s,i)=>{
     const pct=s.c/total*100,col=PIE_COLORS[i%PIE_COLORS.length];
-    segs+=`<circle r="15.9155" cx="21" cy="21" fill="transparent" stroke="${col}" stroke-width="6.5" stroke-dasharray="${pct} ${100-pct}" stroke-dashoffset="${125-cum}"><title>${s.n}: ${s.syms.join(", ")}</title></circle>`;
-    rows+=`<div class="prow" title="${s.syms.join(", ")}"><span class="dot" style="background:${col}"></span><span class="nm">${s.n}</span><span class="ct num">${s.c} stock${s.c!==1?"s":""}</span><span class="pc num">${fmt(pct,1)}%</span></div>`;
+    const tip=`${s.n}: ${s.c} stock${s.c!==1?"s":""} — ${s.syms.join(", ")}`;
+    segs+=`<circle r="15.9155" cx="21" cy="21" fill="transparent" stroke="${col}" stroke-width="6.5" stroke-dasharray="${pct} ${100-pct}" stroke-dashoffset="${125-cum}"><title>${tip}</title></circle>`;
+    rows+=`<div class="prow" title="${tip}"><span class="dot" style="background:${col}"></span><span class="nm">${s.n}</span><span class="pc num">${fmt(pct,1)}%</span></div>`;
     cum+=pct;
   });
   $("secPieSvg").innerHTML=segs;
