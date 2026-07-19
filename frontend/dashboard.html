@@ -551,6 +551,46 @@
   .thsw:hover{transform:scale(1.12)}
   .thsw.on{border-color:var(--ink);box-shadow:0 0 0 2px rgba(0,0,0,.4),0 0 10px var(--blue)}
 
+  /* ============ TYPOGRAPHY REFRESH ============
+     Interface text -> Inter; numbers stay IBM Plex Mono; the "TrendAlert"
+     wordmark keeps its display face. One scale (12 caption / 14 metadata /
+     16 body / 20 section / 28 symbol / 40 prime), sentence-case labels, and a
+     single heavy weight per panel (the price is the one prime metric).
+     Intentionally last so it is the final word on type over the skin block. */
+  :root{--sans:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif}
+  /* form controls don't inherit font by default — pull them onto Inter
+     (explicit mono/Inter rules elsewhere are more specific and still win) */
+  button,select,input,textarea{font-family:inherit}
+
+  /* titles off the display faces */
+  .card-title,.card-head h2,.chart-top h2,.alerts-head,.focus-title,.modal h3,
+  .scard .tsym,.acard .body .sym,.d-sym,.h2b,.mini2 .nm{font-family:var(--sans);letter-spacing:-.004em}
+  /* short labels/eyebrows/symbols -> Inter, keep their own tracking */
+  .pane-t,.gh h3,.insight2 h3,.sym .l1{font-family:var(--sans)}
+  /* numbers stay mono even where a display face was forced onto them */
+  .bigscore .n,.scard .bignum,.bigring .n,.mring .in{font-family:'IBM Plex Mono',ui-monospace,monospace}
+
+  /* scale + weight discipline — detail panel (one heavy: the price) */
+  .d-sym{font-size:28px;font-weight:600}
+  .d-price{font-size:40px;font-weight:700;margin-top:6px}
+  .d-chg{font-size:14px;font-weight:500}
+  .bigscore .n{font-size:28px;font-weight:600}
+
+  /* section titles -> 20 */
+  .card-title,.alerts-head{font-size:20px;font-weight:600;letter-spacing:-.005em}
+
+  /* eyebrow labels -> sentence case, 12px, calm tracking */
+  .ind .lbl,thead th,.url-field label,.set-sec h4,.modal .mrow .ty,
+  .modal .addlrow .ty{text-transform:none;letter-spacing:.01em;font-size:12px;font-weight:600}
+
+  /* table + controls -> single weight, metadata size */
+  tbody td{font-size:14px}
+  .sym .l1{font-weight:600}
+  .score-val{font-weight:600}
+  .tg{font-size:16px;font-weight:600}
+  .sector{font-size:15px;font-weight:500}
+  .toolbar input,.toolbar select{font-size:14px}
+
 </style>
 </head>
 <body>
