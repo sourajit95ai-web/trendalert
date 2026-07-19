@@ -180,6 +180,52 @@ Skipped on weekends/holidays and when no intraday bar for today exists yet.
 Note: until a backend with morning_brief.py is deployed, the job triggers a
 harmless ordinary pipeline run (unknown args are ignored).
 
+## Bloodbath alarm — 1 hour before the open (added)
+
+A fourth scheduler job hits the pipeline function with `?mode=bloodbath` at
+**8:30 AM America/New_York, Mon–Fri** — one hour before the bell, by which
+time IEX pre-market (from 8:00 ET) has printed:
+
+    gcloud scheduler jobs create http trendalert-bloodbath \
+      --location us-central1 \
+      --schedule="30 8 * * 1-5" --time-zone="America/New_York" \
+      --uri="<pipeline-function-url>/?mode=bloodbath" --http-method=GET \
+      --attempt-deadline=300s
+
+`mode=bloodbath` (backend/bloodbath.py) recomputes nothing and is **silent
+on normal days** — it is an alarm, not a digest. It delivers only when:
+
+    GATE     SPY AND QQQ both <= -indexDropPct vs prior close, AND
+    BREADTH  >= sectorFrac of sectors averaging <= -sectorDropPct,
+             OR >= declinerFrac of fresh-quote names red
+
+With fewer than `minCoverage` fresh pre-market prints breadth is
+unmeasurable and the gate alone fires (the message says so — thin IEX
+pre-market is normal for smaller names an hour before the open).
+
+| param | default | meaning |
+|---|---|---|
+| `indexDropPct`  | 2.0  | both indexes must be down at least this much |
+| `sectorDropPct` | 1.5  | a sector is "down hard" at this avg or worse |
+| `sectorFrac`    | 0.7  | fraction of sectors down hard to confirm |
+| `declinerFrac`  | 0.75 | fraction of names red to confirm (alternate) |
+| `minCoverage`   | 10   | fresh quotes needed before breadth is trusted |
+
+Severity from the SPY/QQQ average: **RED OPEN** (gate met) → **BLOODBATH**
+(<= -3%, or <= -2.5% with >=90% red) → **CRASH WATCH** (<= -5%; the S&P's
+level-1 circuit breaker halts trading at -7%). VIXY is fetched as a fear
+proxy and reported, never gating.
+
+Tune without redeploying — add a `bloodbath` key to published settings.json:
+
+    {"bloodbath": {"indexDropPct": 2.5, "sectorFrac": 0.8}}
+
+Junk values silently fall back to the defaults above. The message carries
+indexes, per-sector averages, tracked positions with a ⚠ flag on any name
+gapping under its EMA50, and a playbook reminder that the trail-exit rule
+fires on the CLOSE, not a panic open. Skipped on weekends/holidays and
+when SPY/QQQ have no pre-market print.
+
 ## Dynamic universe (added)
 
 Tickers added in the dashboard UI get data automatically — no code edit:
