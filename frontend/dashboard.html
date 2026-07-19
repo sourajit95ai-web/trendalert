@@ -110,13 +110,20 @@
   .region-pill .us{color:#fff;background:var(--blue);font-size:12px;font-weight:700;padding:3px 9px;border-radius:6px}
   .region-pill .cnt{color:var(--muted);font-size:12.5px}
 
-  .seg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:5px;margin-bottom:12px}
+  .seg{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);gap:0;background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:5px;margin-bottom:12px}
   .seg button{background:transparent;border:0;color:var(--muted);font-family:'Inter';font-size:14px;font-weight:600;padding:12px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px;transition:.15s}
   .seg button .cnt{font-size:12px;font-weight:600;color:var(--muted);background:var(--bg2);border:1px solid var(--hair2);min-width:24px;height:24px;border-radius:999px;display:grid;place-items:center}
   .seg button.on{background:var(--bg2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--hair2)}
   .seg button.on .cnt{color:var(--ink)}
   .seg svg{width:15px;height:15px}
   .seg button .tbadges{display:inline-flex;gap:5px}
+  /* phones: the three tab labels can't fit at full size — drop icons + badges
+     (both repeated in the region pill above) and tighten so nothing overflows */
+  @media(max-width:560px){
+    .seg button{font-size:12px;padding:11px 4px;gap:5px}
+    .seg button svg,.seg button .tbadges{display:none}
+    .seg button .cnt{min-width:20px;height:20px;font-size:11px}
+  }
   .nbadge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
   .nbadge.act{color:var(--amber);background:rgba(255,209,102,.1);border:1px solid rgba(255,209,102,.3)}
   .nbadge.re{color:#7FB0F8;background:rgba(127,176,248,.1);border:1px solid rgba(127,176,248,.3)}
@@ -141,9 +148,10 @@
   .card-headrow .trend-toggles{margin-bottom:0}
   .tg{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;padding:11px 18px;border-radius:11px;background:transparent;border:1px solid var(--hair2);cursor:pointer;transition:.15s}
   .tg svg{width:18px;height:18px}
-  .tg.up{color:var(--up);border-color:var(--up-bd)} .tg.up.on{background:var(--up-bg)}
-  .tg.down{color:var(--down);border-color:var(--down-bd)} .tg.down.on{background:var(--down-bg)}
-  .tg:not(.on){opacity:.78}
+  .tg.up.on{color:var(--up);border-color:var(--up);background:var(--up-bg);box-shadow:inset 0 0 0 1px var(--up)}
+  .tg.down.on{color:var(--down);border-color:var(--down);background:var(--down-bg);box-shadow:inset 0 0 0 1px var(--down)}
+  .tg:not(.on){color:var(--faint);border-color:var(--hair)}
+  .tg:not(.on):hover{color:var(--muted);border-color:var(--hair2)}
 
   .sectors{display:flex;flex-wrap:wrap;gap:10px 22px;margin-bottom:18px}
   .sector{font-size:15px;font-weight:600;color:var(--muted);background:transparent;border:0;cursor:pointer;padding:7px 4px;transition:.15s;border-radius:9px}
