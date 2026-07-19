@@ -260,12 +260,18 @@ def _validate(payload, chart):
 # entry point
 # ----------------------------------------------------------------------
 def main(request):
-    # ?mode=brief (Cloud Scheduler, 9:50 ET) — intraday morning brief only;
-    # does not recompute scores or touch data.json/chart.json
-    if request is not None and getattr(request, "args", None) \
-            and request.args.get("mode") == "brief":
-        from morning_brief import run_morning_brief
-        res = run_morning_brief(BUCKET, SYMBOLS, SECTORS, _HEADERS)
+    # Scheduler side-modes — neither recomputes scores or touches data.json:
+    #   ?mode=brief      9:50 ET intraday morning brief
+    #   ?mode=bloodbath  8:30 ET pre-open crash alarm (silent on normal days)
+    mode = request.args.get("mode") if request is not None \
+        and getattr(request, "args", None) else None
+    if mode in ("brief", "bloodbath"):
+        if mode == "brief":
+            from morning_brief import run_morning_brief
+            res = run_morning_brief(BUCKET, SYMBOLS, SECTORS, _HEADERS)
+        else:
+            from bloodbath import run_bloodbath_check
+            res = run_bloodbath_check(BUCKET, SYMBOLS, SECTORS, _HEADERS)
         return (json.dumps(res), 200 if res.get("ok") else 500,
                 {"Content-Type": "application/json"})
 
