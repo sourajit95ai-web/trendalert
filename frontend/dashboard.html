@@ -1480,11 +1480,13 @@ function dockPulse(toRail){
   if(tgt&&el.parentNode!==tgt)tgt.appendChild(el);
 }
 function dockAdd(toRail){
-  /* runs before dockPulse/dockAlerts so the Add ticker card sits at the top of
-     the rail, above the sectors donut, in both views */
+  /* cards view: runs before dockPulse/dockAlerts so the card tops the rail;
+     table view: inserted before the detail panel so it tops the right column */
   const el=$("addCard");if(!el)return;
   const tgt=toRail?$("ovRail"):$("rightCol");
-  if(tgt&&el.parentNode!==tgt)tgt.appendChild(el);
+  if(!tgt)return;
+  if(toRail){if(el.parentNode!==tgt)tgt.appendChild(el);}
+  else if(el.parentNode!==tgt||tgt.firstElementChild!==el)tgt.insertBefore(el,tgt.firstElementChild);
 }
 function sectorTable(sec){
   const rows=sec.arr.slice().sort((a,b)=>(a.change_pct||0)-(b.change_pct||0));
