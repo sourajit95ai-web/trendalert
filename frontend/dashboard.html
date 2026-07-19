@@ -274,6 +274,24 @@
   .d-lists{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
   .d-lists .pick{font-size:11.5px;font-weight:600;padding:5px 11px;border-radius:8px;border:1px solid var(--hair2);background:var(--surface2);color:var(--muted);cursor:pointer;transition:.12s}
   .d-lists .pick.in{background:var(--blue-bg);border-color:#2c4b80;color:var(--ink)}
+  /* signals & levels panel */
+  .sig-chips{display:flex;flex-wrap:wrap;gap:6px;margin:11px 0 2px}
+  .sig-chip{font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:999px;border:1px solid var(--hair2);color:var(--muted);background:var(--surface2)}
+  .sig-chip.good{color:var(--up);border-color:var(--up-bd);background:var(--up-bg)}
+  .sig-chip.bad{color:var(--down);border-color:var(--down-bd);background:var(--down-bg)}
+  .sig-chip.warn{color:var(--amber);border-color:rgba(255,209,102,.42);background:var(--inp)}
+  .sig-ladder{margin-top:13px;display:flex;flex-direction:column}
+  .sig-ladder .lv{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:7px 0;border-bottom:1px solid var(--hair)}
+  .sig-ladder .lv:last-child{border-bottom:0}
+  .sig-ladder .lvn{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:7px}
+  .sig-ladder .lvv{font-size:13px;text-align:right;min-width:66px}
+  .sig-ladder .lvd{font-size:12px;text-align:right;min-width:54px;color:var(--faint)}
+  .sig-ladder .tagr,.sig-ladder .tags{font-size:9px;font-weight:700;letter-spacing:.05em;padding:1px 6px;border-radius:5px;text-transform:uppercase}
+  .sig-ladder .tagr{color:var(--amber);background:var(--inp);border:1px solid rgba(255,209,102,.4)}
+  .sig-ladder .tags{color:#7FB0F8;background:var(--blue-bg);border:1px solid #2c4b80}
+  .sig-ladder .lv.now{background:linear-gradient(90deg,var(--blue-bg),transparent);border-radius:9px;margin:3px 0;padding:9px 10px;border-bottom:0;box-shadow:inset 0 0 0 1px #2c4b80}
+  .sig-ladder .lv.now .lvn{color:var(--ink);font-weight:600}
+  .sig-ladder .lv.now .lvv{color:#7FB0F8;font-weight:700}
 
   .modal-bg{position:fixed;inset:0;background:rgba(4,7,13,.66);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:50}
   .modal-bg.on{display:flex}
@@ -726,32 +744,10 @@
             <div class="row2" style="margin-top:30px"><span class="k">From 52w high</span><span class="v num" id="fromHi">—</span></div>
             <div class="row2"><span class="k">From 52w low</span><span class="v num" id="fromLo">—</span></div>
           </div>
-          <div class="ind">
-            <div class="lbl"><span>Position · booking rule</span><span id="posSig">—</span></div>
-            <div id="posEmpty">
-              <div class="pos-form">
-                <input class="pprice" id="entryPrice" type="number" step="0.01" placeholder="entry $">
-                <input class="pdate" id="entryDate" type="date">
-                <button class="btn btn-primary" id="entrySave">Track</button>
-              </div>
-              <div class="addnote" style="margin-top:8px">Set your entry to activate the +20% / near-high booking rule.</div>
-            </div>
-            <div id="posLive" style="display:none">
-              <div class="row2"><span class="k">Entry</span><span class="v num" id="pEntry">—</span></div>
-              <div class="row2"><span class="k">Gain since entry</span><span class="v num" id="pGain">—</span></div>
-              <div class="row2"><span class="k">Rule status</span><span class="v" id="pRule">—</span></div>
-              <div class="verdict" id="pVerdict">—</div>
-              <div class="pos-actions">
-                <button class="btn btn-amber" id="bookBtn" style="display:none">Mark ⅓ booked</button>
-                <button class="btn btn-danger" id="posClear">Clear position</button>
-              </div>
-            </div>
-          </div>
-          <div class="ind">
-            <div class="lbl"><span>EMA stack</span><span id="emaSig">—</span></div>
-            <div class="ema-row"><span class="nm">EMA 20</span><span class="vw"><span class="num" id="e20">—</span><span class="chip" id="e20d">—</span></span></div>
-            <div class="ema-row"><span class="nm">EMA 50</span><span class="vw"><span class="num" id="e50">—</span><span class="chip" id="e50d">—</span></span></div>
-            <div class="ema-row"><span class="nm">EMA 200</span><span class="vw"><span class="num" id="e200">—</span><span class="chip" id="e200d">—</span></span></div>
+          <div class="ind" id="sigInd">
+            <div class="lbl"><span>Signals &amp; levels</span><span id="sigSig">—</span></div>
+            <div id="sigChips" class="sig-chips"></div>
+            <div id="sigLadder" class="sig-ladder"></div>
           </div>
         </div>
       </div>
@@ -1651,25 +1647,6 @@ function renderDetail(){
   const rs=$("rsiSig");rs.textContent=rz;rs.style.color=rz==="Overbought"?"var(--down)":rz==="Oversold"?"var(--up)":"var(--muted)";
   const ms=$("macdSig"),bull=d.macd_hist>=0;ms.textContent=bull?"Bullish (MACD > signal)":"Bearish (MACD < signal)";ms.style.color=bull?"var(--up)":"var(--down)";
   const p52d=pos52(d),phd=pctFromHigh(d),pld=pctFromLow(d),znd=zoneOf(d);
-  /* position / booking rule */
-  const pos=posOf(d.symbol);
-  if(!pos){
-    $("posEmpty").style.display="block";$("posLive").style.display="none";
-    $("entryPrice").value=d.close!=null?d.close.toFixed(2):"";
-    $("entryDate").value=new Date().toISOString().slice(0,10);
-    const ps=$("posSig");ps.textContent="not tracked";ps.style.color="var(--faint)";
-  }else{
-    $("posEmpty").style.display="none";$("posLive").style.display="block";
-    const st=ruleState(d,pos);
-    $("pEntry").textContent="$"+fmt(pos.entry)+" · "+pos.date+(pos.booked?" · ⅓ booked":"");
-    $("pGain").textContent=signed(st.gain)+"%";$("pGain").style.color=st.gain>=0?"var(--up)":"var(--down)";
-    $("pRule").textContent=pos.booked?"trail ⅔ vs EMA50":"+"+settings.gainPct+"% & ≤"+settings.highZonePct+"% from high";
-    const v=$("pVerdict");v.textContent=st.label;v.className="verdict "+st.cls;
-    $("bookBtn").style.display=(st.phase==="trigger")?"inline-block":"none";
-    const ps=$("posSig");
-    ps.textContent={watch:"watching",trigger:"BOOK "+BOOK_FRACTION,trail:"trailing",exit:"TRAIL EXIT"}[st.phase];
-    ps.style.color=st.phase==="trigger"?"var(--amber)":st.phase==="exit"?"var(--down)":st.phase==="trail"?"var(--up)":"var(--muted)";
-  }
   if(p52d!=null){
     $("p52Mk").style.left="clamp(4px, "+Math.max(0,Math.min(100,p52d))+"%, calc(100% - 4px))";
     /* avoid "-0.0%" when the close sits on the 52w high */
@@ -1689,10 +1666,41 @@ function renderDetail(){
     $("lo52v").textContent="low";$("hi52v").textContent="high";
     const zs=$("zoneSig");zs.textContent="no 52w data";zs.style.color="var(--faint)";
   }
-  const setEma=(vid,did,v)=>{$(vid).textContent=fmt(v);const ab=d.close>=v,pct=(d.close-v)/v*100,c=$(did);c.textContent=(ab?"▲ ":"▼ ")+fmt(Math.abs(pct))+"%";c.className="chip "+(ab?"up":"down");};
-  setEma("e20","e20d",d.ema20);setEma("e50","e50d",d.ema50);setEma("e200","e200d",d.ema200);
-  const t3=trendOf(d),es=$("emaSig");es.textContent={bull:"Aligned up",bear:"Aligned down",mixed:"Mixed"}[t3];es.style.color=t3==="bull"?"var(--up)":t3==="bear"?"var(--down)":"var(--muted)";
+  renderSignals(d);
   renderChart(d.symbol);
+}
+
+/* Signals & levels — an auto read of the selected stock's setup (trend / EMA50 /
+   RSI / MACD / 52w position) plus a price ladder of the levels that matter, with
+   the nearest level above/below the current price tagged resistance/support.
+   All from indicator fields already loaded; no manual input, unlike the old
+   booking-rule box it replaced. The EMA values also live here, so the separate
+   EMA-stack block was dropped as redundant. */
+function renderSignals(d){
+  const chipsEl=$("sigChips"),ladEl=$("sigLadder"),sigEl=$("sigSig");
+  if(!chipsEl)return;
+  const px=d.close,t=trendOf(d),rz=rsiZone(d.rsi14),zn=zoneOf(d),ph=pctFromHigh(d),mb=d.macd_hist>=0;
+  const chips=[
+    {t:{bull:"Uptrend",bear:"Downtrend",mixed:"Mixed trend"}[t],c:{bull:"good",bear:"bad",mixed:"warn"}[t]},
+    {t:(px>=d.ema50?"Above":"Below")+" EMA50",c:px>=d.ema50?"good":"bad"},
+    {t:"RSI "+fmt(d.rsi14,0)+" · "+rz.toLowerCase(),c:rz==="Overbought"?"bad":rz==="Oversold"?"good":""},
+    {t:"MACD "+(mb?"bullish":"bearish"),c:mb?"good":"bad"},
+    zn==="high"?{t:"Near 52w high",c:"warn"}:zn==="low"?{t:"Near 52w low",c:"bad"}:{t:fmt(Math.abs(ph||0),1)+"% below high",c:""}
+  ];
+  chipsEl.innerHTML=chips.map(x=>`<span class="sig-chip ${x.c}">${x.t}</span>`).join("");
+  sigEl.textContent=t==="bull"?"constructive":t==="bear"?"weak":"mixed";
+  sigEl.style.color=t==="bull"?"var(--up)":t==="bear"?"var(--down)":"var(--muted)";
+  const lv=[{n:"52w high",v:d.high_252},{n:"EMA 20",v:d.ema20},{n:"EMA 50",v:d.ema50},{n:"EMA 200",v:d.ema200},{n:"52w low",v:d.low_252}]
+    .filter(l=>l.v!=null).map(l=>({n:l.n,v:l.v,dist:(l.v-px)/px*100}));
+  lv.push({n:"Current",v:px,cur:true});
+  lv.sort((a,b)=>b.v-a.v);
+  const ci=lv.findIndex(r=>r.cur);
+  lv.forEach((r,i)=>{if(i===ci-1)r.res=true;if(i===ci+1)r.sup=true;});
+  ladEl.innerHTML=lv.map(r=>{
+    if(r.cur)return `<div class="lv now"><span class="lvn">Current price</span><span class="lvv num">$${fmt(px)}</span><span class="lvd"></span></div>`;
+    const tag=r.res?`<span class="tagr">resist</span>`:r.sup?`<span class="tags">support</span>`:"";
+    return `<div class="lv"><span class="lvn">${r.n}${tag}</span><span class="lvv num">$${fmt(r.v)}</span><span class="lvd num">${r.dist>0?"+":""}${fmt(r.dist,1)}%</span></div>`;
+  }).join("");
 }
 
 /* "+" opens a chooser; the symbol is only added after the user clicks OK */
@@ -2060,23 +2068,6 @@ async function loadChart(){
   renderChart(selected);
 }
 
-/* position tracking buttons */
-$("entrySave").onclick=()=>{
-  const sym=$("dSym").textContent;if(!sym||sym==="—")return;
-  const price=parseFloat($("entryPrice").value);
-  if(isNaN(price)||price<=0){$("entryPrice").style.borderColor="var(--down)";return;}
-  positions[sym]={entry:price,date:$("entryDate").value||new Date().toISOString().slice(0,10),booked:false};
-  savePos();render();
-};
-$("bookBtn").onclick=()=>{
-  const sym=$("dSym").textContent,p=posOf(sym);if(!p)return;
-  p.booked=true;p.bookedDate=new Date().toISOString().slice(0,10);
-  savePos();render();
-};
-$("posClear").onclick=()=>{
-  const sym=$("dSym").textContent;
-  if(positions[sym]&&confirm("Clear tracked position for "+sym+"?")){delete positions[sym];savePos();render();}
-};
 
 /* settings modal */
 let pendHorizon="long",pendReentry="base";
