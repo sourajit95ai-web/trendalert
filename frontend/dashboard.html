@@ -54,13 +54,18 @@
   .settings:hover{background:var(--surface2);border-color:#34425f}
   .settings svg{width:17px;height:17px;opacity:.85}
 
-  .idx-tape{position:sticky;z-index:19;background:var(--appbg);backdrop-filter:blur(10px);border-bottom:1px solid var(--hair);padding:8px 18px;display:none;gap:26px;overflow-x:auto;scrollbar-width:none}
-  .idx-tape::-webkit-scrollbar{display:none}
-  .idx-tape .ii{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;cursor:pointer}
+  .idx-tape{position:sticky;z-index:19;background:var(--appbg);backdrop-filter:blur(10px);border-bottom:1px solid var(--hair);padding:8px 0;display:none;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 42px,#000 calc(100% - 42px),transparent);mask-image:linear-gradient(90deg,transparent,#000 42px,#000 calc(100% - 42px),transparent)}
+  .idx-tape .tape-track{display:flex;width:max-content;animation:tape-scroll var(--tape-dur,52s) linear infinite;will-change:transform}
+  .idx-tape:hover .tape-track{animation-play-state:paused}
+  @keyframes tape-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+  .idx-tape .ii{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;cursor:pointer;margin-right:26px}
   .idx-tape .ii .nm{font-size:12px;font-weight:600;color:var(--muted)}
   .idx-tape .ii .vl{font-size:12.5px;font-weight:600}
   .idx-tape .ii .ch{font-size:12px;font-weight:600}
   .idx-tape .ii:hover .nm{color:var(--ink)}
+  .idx-tape .ii .w52{font-size:9px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:5px;line-height:1.55}
+  .idx-tape .ii .w52.hi{background:var(--up-bg);color:var(--up);border:1px solid var(--up-bd)}
+  .idx-tape .ii .w52.lo{background:var(--down-bg);color:var(--down);border:1px solid var(--down-bd)}
   .pbre{display:inline-flex;gap:4px}
   .pbre button{font-size:9px;font-weight:700;letter-spacing:.05em;padding:2px 7px;border-radius:6px;cursor:pointer;background:transparent;border:1px solid var(--hair2);color:var(--faint);font-family:inherit;transition:.12s;line-height:1.4}
   .pbre button.pb.on{background:rgba(233,185,73,.16);border-color:var(--amber);color:var(--amber)}
@@ -70,6 +75,37 @@
   .hm .tile .n{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .hm .tile .p{font-size:17px;font-weight:700;margin:3px 0 1px}
   .hm .tile .h{font-size:10.5px;color:var(--faint)}
+  /* merged portfolio-sectors donut (share = slice, shade = size of the move) + right-rail overview split */
+  .overview{display:block}
+  .overview.split{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px;align-items:start}
+  .ov-rail{align-self:start;min-width:0}
+  .ov-rail .alerts-head{margin:16px 2px 12px;font-size:16px}
+  .rightcol #sectorPulse{margin-top:18px;margin-bottom:0}
+  .rightcol #addCard{margin-top:18px;margin-bottom:0}
+  #addCard .addrow .inp{padding:0 12px;border-radius:11px}
+  #addCard .addrow input{font-size:13px;padding:11px 0}
+  #addCard .addrow .plus{width:46px;font-size:20px;border-radius:11px}
+  @media(max-width:920px){.overview.split{display:block}}
+  .spie{position:relative;display:flex;flex-direction:column;gap:14px}
+  .spie svg{width:150px;height:150px;margin:0 auto;display:block}
+  .spie circle{cursor:default;transition:stroke-width .12s}
+  .spie circle:hover{stroke-width:8.6}
+  .sleg{display:flex;flex-direction:column;gap:1px}
+  .sleg .srow{display:flex;align-items:center;gap:9px;padding:5px 7px;border-radius:8px;cursor:default;font-size:12.5px}
+  .sleg .srow:hover{background:var(--surface2)}
+  .sleg .dot{width:11px;height:11px;border-radius:3px;flex:none}
+  .sleg .nm{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sleg .sh{width:46px;text-align:right;font-weight:600}
+  .sleg .mv{width:56px;text-align:right;font-size:11.5px;font-weight:600}
+  .stip{position:absolute;display:none;z-index:30;min-width:170px;max-width:240px;background:var(--bg);border:1px solid var(--hair2);border-radius:10px;box-shadow:0 10px 26px rgba(0,0,0,.45);pointer-events:none;overflow:hidden}
+  .stip .hd{display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:8px 11px 7px;border-bottom:1px solid var(--hair)}
+  .stip .hd b{font-size:12px;color:var(--ink)}
+  .stip .hd span{font-size:10px;color:var(--muted)}
+  .stip table{border-collapse:collapse;width:100%}
+  .stip th{font-size:9px;letter-spacing:.05em;color:var(--faint);text-align:left;font-weight:600;padding:5px 11px 3px}
+  .stip th.r,.stip td.r{text-align:right}
+  .stip td{font-size:11.5px;padding:2.5px 11px;color:var(--ink)}
+  .stip tbody tr:nth-child(even){background:var(--bg2)}
   .region-pill{display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--hair);border-radius:11px;padding:10px 16px;font-size:14px;font-weight:600;margin:18px 0 14px}
   .region-pill .us{color:#fff;background:var(--blue);font-size:12px;font-weight:700;padding:3px 9px;border-radius:6px}
   .region-pill .cnt{color:var(--muted);font-size:12.5px}
@@ -516,7 +552,7 @@
         <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#7EA6FF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg></span>
         <div><h1>TrendAlert</h1><p>Technical Indicator Configuration</p></div>
       </div>
-      <span class="themeseg" id="themeSeg"><span class="thlbl">THEME</span></span><button class="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</button>
+      <button class="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</button>
     </div>
   </div>
 
@@ -534,9 +570,18 @@
     <div class="lists-row" id="listsRow"></div>
 
     <div class="card" id="sectorPulse" style="display:none;padding:18px 20px;margin-bottom:18px">
-      <div class="card-title" style="font-size:17px;margin-bottom:2px">Sector pulse</div>
-      <div class="card-sub" style="margin-bottom:14px">Today's move in every sector you hold — tile intensity = size of the move</div>
-      <div class="hm"></div>
+      <div class="card-title" style="font-size:17px;margin-bottom:2px">Portfolio sectors</div>
+      <div class="card-sub" style="margin-bottom:14px">Slice = share of holdings · darker = further down today · hover for the stocks</div>
+      <div class="spie"><svg id="spieSvg" viewBox="0 0 42 42"></svg><div class="sleg" id="spieLeg"></div><div class="stip" id="spieTip"></div></div>
+    </div>
+
+    <div class="card" id="addCard" style="padding:16px 16px 14px;margin-bottom:14px">
+      <div class="card-title" style="font-size:14px;margin-bottom:10px">Add ticker</div>
+      <div class="addrow">
+        <div class="inp"><input id="addInput" placeholder="e.g., AAPL" maxlength="10"></div>
+        <button class="plus" id="addBtn">+</button>
+      </div>
+      <div class="addnote" id="addNote"></div>
     </div>
 
     <div class="card">
@@ -564,13 +609,7 @@
           <button class="sector" data-sec="Crypto">Crypto</button>
         </div>
 
-        <div class="addrow">
-          <div class="inp"><input id="addInput" placeholder="e.g.,  AAPL — add to this list" maxlength="10"></div>
-          <button class="plus" id="addBtn">+</button>
-        </div>
-        <div class="addnote" id="addNote"></div>
-
-        <div class="empty" id="emptyState" style="display:none"><div class="big">This list is empty.</div><div class="sm">Add a ticker above, or adjust the filters.</div></div>
+        <div class="empty" id="emptyState" style="display:none"><div class="big">This list is empty.</div><div class="sm">Add a ticker from the panel on the right, or adjust the filters.</div></div>
       </div>
     </div>
 
@@ -594,8 +633,13 @@
       <div class="glass2 insight2" id="heroInsight"></div>
     </div>
 
-    <div class="cardgrid" id="cardGrid" style="margin-bottom:18px"></div>
-    <div class="cards-empty" id="cardsEmpty" style="display:none">No symbols match the current filters.</div>
+    <div class="overview" id="overview">
+      <div class="ov-main">
+        <div class="cardgrid" id="cardGrid" style="margin-bottom:18px"></div>
+        <div class="cards-empty" id="cardsEmpty" style="display:none">No symbols match the current filters.</div>
+      </div>
+      <aside class="ov-rail" id="ovRail"></aside>
+    </div>
 
     <div class="grid" id="mainGrid">
       <div class="card" style="margin-bottom:0">
@@ -695,12 +739,6 @@
     <div class="alerts-head" id="alertsHead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>Recent Alerts</div>
     <div class="alert-list" id="alertList"></div>
 
-    <div class="card" id="secPieCard" style="display:none;margin-top:18px;padding:18px 20px">
-      <div class="card-title" style="font-size:17px;margin-bottom:2px">Holdings split</div>
-      <div class="card-sub" style="margin-bottom:14px">Sector share of the stocks you hold — hover a slice for the count and tickers</div>
-      <div class="pie-wrap"><svg id="secPieSvg" viewBox="0 0 42 42"></svg><div class="pie-legend" id="secPieLegend"></div></div>
-    </div>
-
     <footer>
       US market · multiple portfolios & watchlists · a symbol can belong to several lists. Lists are saved in this browser.<br>
       Signal score is a 0–100 cross-sectional rank — trend 30% · momentum 20% · volume 20% · rel. strength 20% · risk 10% — a scanning aid, not advice.
@@ -712,6 +750,14 @@
       <h3>Settings</h3>
       <div class="mbody">
         <div class="set-grid">
+          <div class="set-sec" style="grid-column:1 / -1">
+            <h4>Appearance</h4>
+            <div class="set-row"><label>Theme</label><span class="themeseg" id="themeSeg"></span></div>
+          </div>
+          <div class="set-sec" style="grid-column:1 / -1">
+            <h4>Lists</h4>
+            <div class="set-row"><label>Portfolios, watchlists &amp; indexes</label><button class="btn btn-ghost" id="setManageLists" style="margin-left:auto">⚙ Manage lists</button></div>
+          </div>
           <div class="set-sec" style="grid-column:1 / -1">
             <h4>Data connection</h4>
             <div class="set-row"><label for="dataUrl">JSON URL</label><input type="url" id="dataUrl" style="flex:2.2;background:var(--surface2);border:1px solid var(--hair2);border-radius:8px;color:var(--ink);font-size:12px;padding:7px 9px;outline:0;font-family:'IBM Plex Mono',monospace" placeholder="https://storage.googleapis.com/your-bucket/data.json"></div>
@@ -1127,18 +1173,21 @@ function ensureActive(){
 }
 function renderListChips(){
   ensureActive();
-  $("cntPf").textContent=listsOfType("portfolio").length;
-  $("cntIx").textContent=listsOfType("index").length;
-  $("cntWl").textContent=listsOfType("watchlist").length;
+  /* tab badges count stocks (unique symbols), not lists */
+  const symCount=t=>[...new Set(lists.filter(l=>l.type===t).flatMap(l=>l.symbols))].length;
+  $("cntPf").textContent=symCount("portfolio");
+  $("cntIx").textContent=symCount("index");
+  $("cntWl").textContent=symCount("watchlist");
   const row=$("listsRow");row.innerHTML="";
-  listsOfType(activeType).forEach(l=>{
+  const of=listsOfType(activeType);
+  /* the chip row is only a switcher — hidden with a single list, back with 2+ */
+  row.style.display=of.length>1?"flex":"none";
+  if(of.length>1)of.forEach(l=>{
     const c=document.createElement("button");c.className="lchip"+(l.id===activeListId?" on":"");
     c.innerHTML=`${l.name} <span class="n">${l.symbols.length}</span>`;
     c.onclick=()=>{activeListId=l.id;selected=null;render();};
     row.appendChild(c);
   });
-  const add=document.createElement("button");add.className="lchip-add";add.textContent="⚙ Manage lists";
-  add.onclick=openModal;row.appendChild(add);
 }
 
 /* ⚡ action-required / ◎ re-entry counts per list type (seg buttons) + overall (region pill) */
@@ -1355,15 +1404,15 @@ function renderHero(){
 /* alerts live under the detail card while the table/detail grid shows
    (fills its blank right column); below the chart in the cards overview */
 function dockAlerts(side){
-  const h=$("alertsHead"),l=$("alertList"),p=$("secPieCard");
-  if(side){$("rightCol").appendChild(h);$("rightCol").appendChild(l);if(p)$("rightCol").appendChild(p);}
-  else{const f=document.querySelector("footer");f.before(h);f.before(l);if(p)f.before(p);}
+  const h=$("alertsHead"),l=$("alertList");
+  if(side){$("rightCol").appendChild(h);$("rightCol").appendChild(l);}
+  else{const r=$("ovRail");r.appendChild(h);r.appendChild(l);}
 }
 function applyLayout(rows){
 
   const cards=settings.view!=="table";
   $("viewSeg").querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.view===(cards?"cards":"table")));
-  dockAlerts(!(cards&&!focusMode));
+  dockAdd(cards&&!focusMode);dockPulse(cards&&!focusMode);dockAlerts(!(cards&&!focusMode));renderHeatmap();
   if(cards&&!focusMode){
     $("cardGrid").style.display="block";
     $("cardsEmpty").style.display=rows.length?"none":"block";
@@ -1402,60 +1451,92 @@ function renderTape(){
   const items=[...new Set(lists.filter(l=>l.type==="index").flatMap(l=>l.symbols))]
     .map(bySym).filter(Boolean);
   if(!items.length){el.style.display="none";return;}
-  el.style.display="flex";
+  el.style.display="block";
   el.style.top=document.querySelector(".appbar").offsetHeight+"px";
-  el.innerHTML=items.map(d=>{
+  const seq=items.map(d=>{
     const neg=d.change_pct<0,c=neg?"var(--down)":"var(--up)";
-    return `<span class="ii" data-sym="${d.symbol}">${tapeSpark(d.symbol,neg)}<span class="nm">${d.symbol}</span><span class="vl num">${fmt(d.close)}</span><span class="ch num" style="color:${c}">${neg?"▼":"▲"} ${fmt(Math.abs(d.change_pct))}%</span></span>`;
+    /* 52w sticker: green when within 2% of the 52w high, red when within 2% of the low.
+       round to 1 decimal so a value sitting essentially on the 2.0% line still flags */
+    const ph=pctFromHigh(d),pl=pctFromLow(d);
+    const r1=v=>Math.round(v*10)/10;
+    const badge=(ph!=null&&r1(ph)>=-2)?`<span class="w52 hi" title="Within 2% of its 52-week high">52w</span>`
+      :(pl!=null&&r1(pl)<=2)?`<span class="w52 lo" title="Within 2% of its 52-week low">52w</span>`:"";
+    return `<span class="ii" data-sym="${d.symbol}">${tapeSpark(d.symbol,neg)}<span class="nm">${d.symbol}</span>${badge}<span class="vl num">${fmt(d.close)}</span><span class="ch num" style="color:${c}">${neg?"▼":"▲"} ${fmt(Math.abs(d.change_pct))}%</span></span>`;
   }).join("");
+  /* duplicate the sequence so the marquee loops seamlessly at translateX(-50%);
+     scale duration to item count so speed stays steady regardless of list size */
+  el.innerHTML=`<div class="tape-track" style="--tape-dur:${Math.max(24,items.length*7)}s">${seq}${seq}</div>`;
   el.querySelectorAll(".ii").forEach(x=>x.onclick=()=>{selected=x.dataset.sym;render();});
 }
 /* sector heatmap — avg day move per sector across portfolio holdings */
-function renderHeatmap(){
+/* merged portfolio-sectors donut — slice = share of holdings, shade = size of
+   the sector's move (darkest = biggest drop); hover a slice or legend row for
+   the sector's stocks in a table (Stock · Last · Chg, worst first) */
+function dockPulse(toRail){
+  /* cards overview → ovRail; table/focus → rightCol. dockAlerts runs after and
+     re-appends the alerts, so the donut always lands above Recent Alerts */
   const el=$("sectorPulse");if(!el)return;
+  const tgt=toRail?$("ovRail"):$("rightCol");
+  if(tgt&&el.parentNode!==tgt)tgt.appendChild(el);
+}
+function dockAdd(toRail){
+  /* runs before dockPulse/dockAlerts so the Add ticker card sits at the top of
+     the rail, above the sectors donut, in both views */
+  const el=$("addCard");if(!el)return;
+  const tgt=toRail?$("ovRail"):$("rightCol");
+  if(tgt&&el.parentNode!==tgt)tgt.appendChild(el);
+}
+function sectorTable(sec){
+  const rows=sec.arr.slice().sort((a,b)=>(a.change_pct||0)-(b.change_pct||0));
+  let h=`<div class="hd"><b>${sec.n}</b><span>${sec.cnt} held · avg ${sec.avg>=0?"+":""}${fmt(sec.avg,1)}%</span></div>`;
+  h+=`<table><thead><tr><th>Stock</th><th class="r">Last</th><th class="r">Chg</th></tr></thead><tbody>`;
+  rows.forEach(d=>{const pc=d.change_pct||0,neg=pc<0;
+    h+=`<tr><td>${d.symbol}</td><td class="r num">${fmt(d.close)}</td><td class="r num" style="color:${neg?"var(--down)":"var(--up)"}">${neg?"▼":"▲"} ${fmt(Math.abs(pc),1)}%</td></tr>`;});
+  return h+`</tbody></table>`;
+}
+function renderHeatmap(){
+  const el=$("sectorPulse"),overview=$("overview");if(!el)return;
   const held=[...new Set(lists.filter(l=>l.type==="portfolio").flatMap(l=>l.symbols))]
     .map(bySym).filter(d=>d&&!d.pending);
-  const by={};held.forEach(d=>{const s=d.sector||"Other";(by[s]=by[s]||[]).push(d.change_pct||0);});
-  const secs=Object.entries(by).map(([n,a])=>({n,p:a.reduce((x,y)=>x+y,0)/a.length,h:a.length}))
-    .sort((a,b)=>b.p-a.p);
-  if(!secs.length){el.style.display="none";return;}
+  const by={};held.forEach(d=>{const s=d.sector||"Other";(by[s]=by[s]||[]).push(d);});
+  const secs=Object.entries(by).map(([n,arr])=>({n,arr,cnt:arr.length,
+    avg:arr.reduce((x,y)=>x+(y.change_pct||0),0)/arr.length})).sort((a,b)=>b.cnt-a.cnt);
+  const inRail=el.parentNode&&el.parentNode.id==="ovRail";
+  if(!secs.length){el.style.display="none";if(overview)overview.classList.remove("split");return;}
   el.style.display="block";
-  el.querySelector(".hm").innerHTML=secs.map(x=>{
-    const a=Math.min(.42,Math.abs(x.p)*.16+.08);
-    const bg=x.p>=0?`rgba(61,255,168,${a})`:`rgba(255,100,128,${a})`;
-    return `<div class="tile" style="background:${bg}"><div class="n">${x.n}</div><div class="p num" style="color:${x.p>=0?"var(--up)":"var(--down)"}">${x.p>=0?"+":""}${fmt(x.p,1)}%</div><div class="h">${x.h} held</div></div>`;
-  }).join("");
-}
-/* holdings-by-sector donut — a COUNT of held names per sector (portfolio
-   lists), not a value weighting; lives below Recent Alerts in both layouts */
-const PIE_COLORS=["#8B7CFF","#5CE1FF","#3DFFA8","#FFD166","#FF6480","#7FB0F8","#B78CFF","#FF9E64","#9AA3C7"];
-function renderSectorPie(){
-  const card=$("secPieCard");if(!card)return;
-  const held=[...new Set(lists.filter(l=>l.type==="portfolio").flatMap(l=>l.symbols))];
-  const by={};
-  held.forEach(s=>{const d=bySym(s);const sec=(d&&!d.pending&&d.sector)||"Other";(by[sec]=by[sec]||[]).push(s);});
-  const secs=Object.entries(by).map(([n,syms])=>({n,syms,c:syms.length})).sort((a,b)=>b.c-a.c);
-  const total=secs.reduce((x,y)=>x+y.c,0);
-  if(!total){card.style.display="none";return;}
-  card.style.display="block";
+  if(overview)overview.classList.toggle("split",inRail);
+  const total=secs.reduce((s,x)=>s+x.cnt,0);
+  const maxMag=Math.max(...secs.map(s=>Math.abs(s.avg)))||1;
+  /* shade scale: lightness 68% (smallest move) → 45% (biggest move); red down, green up */
+  const colOf=s=>`hsl(${s.avg<0?348:152},72%,${(68-Math.abs(s.avg)/maxMag*23).toFixed(0)}%)`;
   let cum=0,segs="",rows="";
-  secs.forEach((s,i)=>{
-    const pct=s.c/total*100,col=PIE_COLORS[i%PIE_COLORS.length];
-    const tip=`${s.n}: ${s.c} stock${s.c!==1?"s":""} — ${s.syms.join(", ")}`;
-    segs+=`<circle r="15.9155" cx="21" cy="21" fill="transparent" stroke="${col}" stroke-width="6.5" stroke-dasharray="${pct} ${100-pct}" stroke-dashoffset="${125-cum}"><title>${tip}</title></circle>`;
-    rows+=`<div class="prow" title="${tip}"><span class="dot" style="background:${col}"></span><span class="nm">${s.n}</span><span class="pc num">${fmt(pct,1)}%</span></div>`;
+  secs.forEach(s=>{
+    const pct=s.cnt/total*100,col=colOf(s),neg=s.avg<0;
+    segs+=`<circle data-sec="${s.n}" cx="21" cy="21" r="15.9155" fill="transparent" stroke="${col}" stroke-width="7.5" stroke-dasharray="${pct} ${100-pct}" stroke-dashoffset="${125-cum}"/>`;
+    rows+=`<div class="srow" data-sec="${s.n}"><span class="dot" style="background:${col}"></span><span class="nm">${s.n}</span><span class="sh num">${fmt(pct,1)}%</span><span class="mv num" style="color:${neg?"var(--down)":"var(--up)"}">${neg?"▼":"▲"} ${fmt(Math.abs(s.avg),1)}%</span></div>`;
     cum+=pct;
   });
-  $("secPieSvg").innerHTML=segs;
-  $("secPieLegend").innerHTML=rows;
+  $("spieSvg").innerHTML=segs;$("spieLeg").innerHTML=rows;
+  const wrap=el.querySelector(".spie"),tip=$("spieTip");
+  el.querySelectorAll("[data-sec]").forEach(x=>{
+    const sec=secs.find(z=>z.n===x.dataset.sec);
+    x.addEventListener("mouseenter",()=>{tip.innerHTML=sectorTable(sec);tip.style.display="block";});
+    x.addEventListener("mouseleave",()=>{tip.style.display="none";});
+    x.addEventListener("mousemove",e=>{const r=wrap.getBoundingClientRect();
+      let px=e.clientX-r.left,py=e.clientY-r.top;const tw=tip.offsetWidth||180,th=tip.offsetHeight||140;
+      px=(px+tw+16>r.width)?px-tw-14:px+14;py=(py+th+12>r.height)?Math.max(0,r.height-th):py+12;
+      tip.style.left=Math.max(0,px)+"px";tip.style.top=py+"px";});
+  });
 }
+/* holdings-by-sector split now lives inside the Portfolio sectors donut
+   (renderHeatmap) — the old standalone pie was retired with it */
 function render(){
   if(!payload)return;
   $("mGen").textContent=payload.generated_at==="demo"?"demo data":new Date(payload.generated_at).toLocaleString("en-US");
   $("mTf").textContent=payload.timeframe||"—";
   $("regionCnt").textContent=(payload.symbols||[]).length+" symbols";
   renderListChips();renderTypeBadges();renderAlerts();renderHead();
-  renderTape();renderHeatmap();renderSectorPie();
+  renderTape();
 
   const L=activeList();
   $("cfgTitle").textContent=L?L.name:(TYPE_LABEL[activeType]||"List");
@@ -1992,6 +2073,7 @@ $("setReset").onclick=()=>{
   settings=JSON.parse(JSON.stringify(DEFAULT_SETTINGS));saveSettings();openSettings();render();
 };
 $("setModal").addEventListener("click",e=>{if(e.target.id==="setModal")$("setModal").classList.remove("on");});
+$("setManageLists").onclick=()=>{$("setModal").classList.remove("on");openModal();};
 document.querySelector(".settings").onclick=openSettings;
 
 $("dataUrl").value=DATA_URL;$("syncUrl").value=SYNC_URL;
