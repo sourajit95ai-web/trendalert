@@ -63,9 +63,10 @@
   .idx-tape .ii .vl{font-size:12.5px;font-weight:600}
   .idx-tape .ii .ch{font-size:12px;font-weight:600}
   .idx-tape .ii:hover .nm{color:var(--ink)}
-  .idx-tape .ii .w52{font-size:9px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:5px;line-height:1.55}
-  .idx-tape .ii .w52.hi{background:var(--up-bg);color:var(--up);border:1px solid var(--up-bd)}
-  .idx-tape .ii .w52.lo{background:var(--down-bg);color:var(--down);border:1px solid var(--down-bd)}
+  /* 52w-extreme sticker — shared by the index tape, the daily summary, and the table */
+  .w52{font-size:9px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:5px;line-height:1.55}
+  .w52.hi{background:var(--up-bg);color:var(--up);border:1px solid var(--up-bd)}
+  .w52.lo{background:var(--down-bg);color:var(--down);border:1px solid var(--down-bd)}
   .pbre{display:inline-flex;gap:4px}
   .pbre button{font-size:9px;font-weight:700;letter-spacing:.05em;padding:2px 7px;border-radius:6px;cursor:pointer;background:transparent;border:1px solid var(--hair2);color:var(--faint);font-family:inherit;transition:.12s;line-height:1.4}
   .pbre button.pb.on{background:rgba(233,185,73,.16);border-color:var(--amber);color:var(--amber)}
@@ -219,7 +220,7 @@
   .sym{text-align:left}
   .sym .l1{display:flex;align-items:center;gap:9px;font-weight:700;font-family:'Space Grotesk',sans-serif}
   .sym .sub{display:block;font-weight:400;font-family:'Inter',system-ui,sans-serif;font-size:11px;color:var(--faint);margin-top:2px}
-  .sym .sub .zhi{color:var(--amber)}.sym .sub .zlo{color:#7FB0F8}
+  .sym .l1 .w52{margin-left:-2px}
   .sym .rm{opacity:0;color:var(--faint);font-weight:400;font-size:13px;cursor:pointer;transition:.12s}
   tr:hover .sym .rm{opacity:.7}.sym .rm:hover{color:var(--down)}
   .chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:7px;font-size:12px;font-weight:600}
@@ -651,7 +652,7 @@
     <div class="lists-row" id="listsRow"></div>
 
     <div class="card" id="dailySummary" style="display:none;padding:16px 18px;margin-bottom:14px">
-      <div class="dsum-head"><span class="dsum-title">Today</span><span class="dsum-date num" id="dsumDate">—</span></div>
+      <div class="dsum-head"><span class="dsum-title" id="dsumTitle">Today</span><span class="dsum-date num" id="dsumDate">—</span></div>
       <div class="dsum-cols">
         <div><div class="dsum-lbl">Top up</div><div id="dsumUp"></div></div>
         <div><div class="dsum-lbl">Top down</div><div id="dsumDown"></div></div>
@@ -1584,18 +1585,27 @@ function sumChip(d){
   return `<span class="dsum-ichip" data-sym="${d.symbol}">${d.symbol}${sum52Badge(d)}`
     +`<span class="pc num" style="color:${c}">${neg?'▼':'▲'} ${fmt(Math.abs(pc),1)}%</span></span>`;
 }
-/* daily EOD summary — top 5 up / 5 down equities, 2 up / 2 down indexes, and a
-   breadth line, computed across the union of every user list (deduped) */
+/* the "core" portfolio — the list literally named Core, else the first
+   portfolio; same resolution the one-time Core migration uses */
+const corePortfolio=()=>lists.find(l=>l.type==="portfolio"&&l.name==="Core")
+  ||lists.find(l=>l.type==="portfolio")||null;
+/* daily EOD summary — top 5 up / 5 down among the CORE PORTFOLIO holdings, plus
+   2 up / 2 down indexes (market context, drawn from all index symbols) and a
+   breadth line over the same holdings */
 function renderSummary(){
   const el=$("dailySummary");if(!el)return;
-  const uni=[...new Set(lists.flatMap(l=>l.symbols))].map(bySym)
-    .filter(d=>d&&!d.pending&&d.change_pct!=null);
-  if(uni.length<3){el.style.display="none";return;}
+  const core=corePortfolio();
+  const held=(core?core.symbols:[]).map(bySym)
+    .filter(d=>d&&!d.pending&&d.change_pct!=null
+             &&d.sector!=="Index"&&d.sector!=="Crypto");
+  if(held.length<3){el.style.display="none";return;}   // too few holdings to rank
   el.style.display="block";
+  $("dsumTitle").textContent="Today · "+core.name;
 
   const byChg=(a,b)=>(b.change_pct||0)-(a.change_pct||0);      // descending
-  const eq=uni.filter(d=>d.sector!=="Index"&&d.sector!=="Crypto").sort(byChg);
-  const idx=uni.filter(d=>d.sector==="Index").sort(byChg);
+  const eq=held.slice().sort(byChg);
+  const idx=[...new Set(lists.flatMap(l=>l.symbols))].map(bySym)
+    .filter(d=>d&&!d.pending&&d.change_pct!=null&&d.sector==="Index").sort(byChg);
 
   const up=eq.slice(0,5), upSet=new Set(up.map(d=>d.symbol));
   const down=eq.slice().reverse().filter(d=>!upSet.has(d.symbol)).slice(0,5);
@@ -1609,9 +1619,9 @@ function renderSummary(){
     idxEl.innerHTML=iUp.concat(iDown).map(sumChip).join("");}
   else idxEl.style.display="none";
 
-  const upN=uni.filter(d=>(d.change_pct||0)>0).length;
-  const downN=uni.filter(d=>(d.change_pct||0)<0).length;
-  const ext=uni.filter(d=>sum52Badge(d)).length;
+  const upN=held.filter(d=>(d.change_pct||0)>0).length;
+  const downN=held.filter(d=>(d.change_pct||0)<0).length;
+  const ext=held.filter(d=>sum52Badge(d)).length;
   $("dsumBreadth").textContent=`${upN} up · ${downN} down`
     +(ext?` · ${ext} at 52-week extremes`:"");
 
@@ -1696,15 +1706,15 @@ function render(){
     }
     const dir=d.change_pct>=0?"up":"down",sc=scoreOf(d),scol=scoreColor(sc);
     const t3=trendOf(d),tl={bull:"Bullish",bear:"Bearish",mixed:"Mixed"}[t3];
-    const p52=pos52(d),ph=pctFromHigh(d),zn=zoneOf(d);
+    const p52=pos52(d),ph=pctFromHigh(d);
     const c52=p52!=null?`<span class="r52"><span class="track"></span><span class="mk" style="left:${p52}%"></span></span><span class="r52v">${fmt(ph,1)}%</span>`:"—";
     const inL=listsForSymbol(d.symbol);
-    /* lists + zone hint live under the symbol — frees the Lists/Zone columns */
-    const zsub=zn==="high"?' · <span class="zhi">near 52w high</span>':zn==="low"?' · <span class="zlo">near 52w low</span>':"";
-    const sub=(inL.map(l=>l.name).join(" · ")||"—")+zsub;
+    /* at-52w-high/low sticker sits beside the ticker (same 2% rule as the tape);
+       the sub-line is just the lists the symbol belongs to */
+    const sub=inL.map(l=>l.name).join(" · ")||"—";
     const tr=document.createElement("tr");if(d.symbol===selected)tr.className="sel";
     tr.innerHTML=`
-      <td class="sym"><span class="l1">${d.symbol}${pbreHTML(d.symbol)}<span class="rm" data-rm="${d.symbol}" title="Remove from ${L?L.name:''}">✕</span></span><span class="sub">${sub}</span></td>
+      <td class="sym"><span class="l1">${d.symbol}${sum52Badge(d)}${pbreHTML(d.symbol)}<span class="rm" data-rm="${d.symbol}" title="Remove from ${L?L.name:''}">✕</span></span><span class="sub">${sub}</span></td>
       <td class="td-score"><span class="score-cell"><span class="score-val" style="color:${scol}">${fmt(sc,0)}</span></span></td>
       <td class="num">${fmt(d.close)}</td>
       <td><span class="chip ${dir}">${d.change_pct>=0?"▲":"▼"} ${fmt(Math.abs(d.change_pct))}%</span></td>
