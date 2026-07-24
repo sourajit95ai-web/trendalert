@@ -105,41 +105,50 @@ def render_chart_png(s):
     matplotlib.use("Agg")                   # headless; imported lazily so the pure
     import matplotlib.pyplot as plt          # logic (and tests) need no matplotlib
 
-    movers = sorted(s["up"] + s["down"], key=lambda m: m[1], reverse=True)
-    syms = [m[0] for m in movers]
-    vals = [m[1] for m in movers]
-    cols = [UP if v >= 0 else DOWN for v in vals]
-    n = len(movers)
-
-    fig, ax = plt.subplots(figsize=(7.2, 0.46 * n + 1.9), dpi=140)
-    ys = list(range(n))
-    ax.barh(ys, vals, color=cols, height=0.62, zorder=3)
-    ax.set_yticks(ys)
-    ax.set_yticklabels(syms, fontsize=11)
-    ax.invert_yaxis()
-    ax.axvline(0, color="#333", lw=0.8, zorder=2)
-
-    mx = max((abs(v) for v in vals), default=1) or 1
-    for y, v in zip(ys, vals):
-        ax.text(v + (mx * 0.02 if v >= 0 else -mx * 0.02), y, f"{v:+.1f}%",
-                va="center", ha="left" if v >= 0 else "right",
-                fontsize=9.5, fontweight="bold", color=UP if v >= 0 else DOWN)
-    ax.set_xlim(-mx * 1.28, mx * 1.28)
-
-    ax.set_title(f"TrendAlert · {s['core_name']} — {s['label']}",
-                 fontsize=13, fontweight="bold", loc="left", pad=12)
-    idx_txt = "   ·   ".join(f"{sym} {v:+.1f}" for sym, v, _ in s["idx"])
-    fig.text(0.015, 0.015, idx_txt + "\n" + s["breadth"], fontsize=8.5, color="#555")
-
-    ax.grid(axis="x", color="#ececec", lw=0.6, zorder=0)
-    for sp in ("top", "right", "left"):
-        ax.spines[sp].set_visible(False)
     from matplotlib.ticker import FuncFormatter
-    ax.xaxis.set_major_formatter(FuncFormatter(lambda t, _: f"{t:+.0f}%" if t else "0"))
-    ax.tick_params(length=0)
-    ax.tick_params(axis="x", colors="#999", labelsize=8)
 
-    fig.tight_layout(rect=(0, 0.07, 1, 1))
+    movers = sorted(s["up"] + s["down"], key=lambda m: m[1], reverse=True)
+    idx = sorted(s["idx"], key=lambda m: m[1], reverse=True)
+    nm, ni = len(movers), max(len(idx), 1)
+    # shared scale across both panels so index bars read as "moved less"
+    mx = max((abs(m[1]) for m in movers + idx), default=1) or 1
+
+    fig, (ax_m, ax_i) = plt.subplots(
+        2, 1, sharex=True, dpi=140, figsize=(7.2, 0.42 * (nm + ni) + 2.4),
+        gridspec_kw={"height_ratios": [nm, ni], "hspace": 0.34})
+
+    def draw(ax, rows):
+        vals = [r[1] for r in rows]
+        cols = [UP if v >= 0 else DOWN for v in vals]
+        ys = list(range(len(rows)))
+        ax.barh(ys, vals, color=cols, height=0.6, zorder=3)
+        ax.set_yticks(ys)
+        ax.set_yticklabels([r[0] for r in rows], fontsize=10.5)
+        ax.invert_yaxis()
+        ax.axvline(0, color="#333", lw=0.8, zorder=2)
+        for y, v in zip(ys, vals):
+            ax.text(v + (mx * 0.02 if v >= 0 else -mx * 0.02), y, f"{v:+.1f}%",
+                    va="center", ha="left" if v >= 0 else "right",
+                    fontsize=9, fontweight="bold", color=UP if v >= 0 else DOWN)
+        ax.grid(axis="x", color="#ececec", lw=0.6, zorder=0)
+        for sp in ("top", "right", "left"):
+            ax.spines[sp].set_visible(False)
+        ax.tick_params(length=0)
+
+    draw(ax_m, movers)
+    draw(ax_i, idx)
+    ax_m.set_xlim(-mx * 1.28, mx * 1.28)          # shared via sharex
+
+    ax_m.set_title(f"TrendAlert · {s['core_name']} — {s['label']}",
+                   fontsize=13, fontweight="bold", loc="left", pad=12)
+    ax_i.set_title("INDEXES", loc="left", fontsize=8.5, color="#999",
+                   fontweight="bold", pad=6)
+    ax_m.tick_params(labelbottom=False)
+    ax_i.xaxis.set_major_formatter(FuncFormatter(lambda t, _: f"{t:+.0f}%" if t else "0"))
+    ax_i.tick_params(axis="x", colors="#999", labelsize=8)
+
+    fig.text(0.015, 0.015, s["breadth"], fontsize=8.5, color="#555")
+    fig.subplots_adjust(top=0.92, bottom=0.08, left=0.13, right=0.97)
     buf = io.BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight", facecolor="white")
     plt.close(fig)
