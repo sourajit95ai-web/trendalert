@@ -1585,16 +1585,17 @@ function sumRow(d){
 }
 function sumChip(d){
   const pc=d.change_pct||0,neg=pc<0,c=neg?'var(--down)':'var(--up)';
-  return `<span class="dsum-ichip" data-sym="${d.symbol}">${d.symbol}${sum52Badge(d)}`
+  const disp=d.symbol.replace(/\/USD$/,"");           // BTC/USD -> BTC
+  return `<span class="dsum-ichip" data-sym="${d.symbol}">${disp}${sum52Badge(d)}`
     +`<span class="pc num" style="color:${c}">${neg?'▼':'▲'} ${fmt(Math.abs(pc),1)}%</span></span>`;
 }
 /* the "core" portfolio — the list literally named Core, else the first
    portfolio; same resolution the one-time Core migration uses */
 const corePortfolio=()=>lists.find(l=>l.type==="portfolio"&&l.name==="Core")
   ||lists.find(l=>l.type==="portfolio")||null;
-/* daily EOD summary — top 5 up / 5 down among the CORE PORTFOLIO holdings, plus
-   2 up / 2 down indexes (market context, drawn from all index symbols) and a
-   breadth line over the same holdings */
+/* daily EOD summary — top 5 up / 5 down among the CORE PORTFOLIO holdings, an
+   index box that always pins QQQ / SPGI / BTC then adds the best + worst of the
+   remaining index symbols, and a breadth line over the same holdings */
 function renderSummary(){
   const el=$("dailySummary");if(!el)return;
   const core=corePortfolio();
@@ -1607,19 +1608,25 @@ function renderSummary(){
 
   const byChg=(a,b)=>(b.change_pct||0)-(a.change_pct||0);      // descending
   const eq=held.slice().sort(byChg);
-  const idx=[...new Set(lists.flatMap(l=>l.symbols))].map(bySym)
-    .filter(d=>d&&!d.pending&&d.change_pct!=null&&d.sector==="Index").sort(byChg);
+  // index box: always pin QQQ / SPGI / BTC, then append the single best + worst
+  // of the remaining index symbols (ordered pinned-first)
+  const PINNED_IDX=["QQQ","SPGI","BTC/USD"];
+  const pinned=PINNED_IDX.map(bySym).filter(d=>d&&!d.pending&&d.change_pct!=null);
+  const pinnedSet=new Set(pinned.map(d=>d.symbol));
+  const pool=[...new Set(lists.flatMap(l=>l.symbols))].map(bySym)
+    .filter(d=>d&&!d.pending&&d.change_pct!=null&&d.sector==="Index"&&!pinnedSet.has(d.symbol))
+    .sort(byChg);
+  const extras=pool.length?(pool.length>1?[pool[0],pool[pool.length-1]]:[pool[0]]):[];
+  const idxChips=pinned.concat(extras);
 
   const up=eq.slice(0,5), upSet=new Set(up.map(d=>d.symbol));
   const down=eq.slice().reverse().filter(d=>!upSet.has(d.symbol)).slice(0,5);
-  const iUp=idx.slice(0,2), iUpSet=new Set(iUp.map(d=>d.symbol));
-  const iDown=idx.slice().reverse().filter(d=>!iUpSet.has(d.symbol)).slice(0,2);
 
   $("dsumUp").innerHTML=up.map(sumRow).join("")||'<div class="dsum-breadth">—</div>';
   $("dsumDown").innerHTML=down.map(sumRow).join("")||'<div class="dsum-breadth">—</div>';
   const idxEl=$("dsumIdx");
-  if(iUp.length||iDown.length){idxEl.style.display="flex";
-    idxEl.innerHTML=iUp.concat(iDown).map(sumChip).join("");}
+  if(idxChips.length){idxEl.style.display="flex";
+    idxEl.innerHTML=idxChips.map(sumChip).join("");}
   else idxEl.style.display="none";
 
   const upN=held.filter(d=>(d.change_pct||0)>0).length;
