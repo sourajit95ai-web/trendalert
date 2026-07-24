@@ -161,7 +161,10 @@
 
   .trend-toggles{display:flex;gap:8px;margin-bottom:16px}
   .card-headrow{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
-  .card-headrow .trend-toggles{margin-bottom:0}
+  /* keep the toggles' 16px bottom gap so a wrapped header on narrow screens
+     doesn't collide with the sector row; zero it only when they sit inline
+     beside the title on wide screens */
+  @media(min-width:721px){.card-headrow .trend-toggles{margin-bottom:0}}
   .tg{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;height:40px;padding:0 16px;border-radius:12px;background:transparent;border:1px solid var(--hair2);cursor:pointer;transition:.15s}
   .tg svg{width:16px;height:16px}
   .tg.up.on{color:var(--up);border-color:var(--up);background:var(--up-bg);box-shadow:inset 0 0 0 1px var(--up)}
