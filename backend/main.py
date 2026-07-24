@@ -56,6 +56,7 @@ SECTORS = {
     "NBIS": "Technology", "AVGO": "Technology", "ISRG": "Healthcare",
     "PLTR": "Technology", "RKLB": "Industrial", "IONQ": "Technology",
     "NVO": "Healthcare",
+    "CRSP": "Healthcare", "NU": "Finance",   # UI-added extras — label so they don't read "Other"
     "SPY": "Index", "QQQ": "Index", "SOXX": "Index", "IWM": "Index",
     "IAUM": "Index", "IJR": "Index", "SPGI": "Finance", "IHAK": "Index",
     "IGV": "Index", "VOO": "Index",

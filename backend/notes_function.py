@@ -61,7 +61,9 @@ def _read(kind):
 
 
 def _write(kind, data):
-    _blob(kind).upload_from_string(
+    blob = _blob(kind)
+    blob.cache_control = "no-cache, max-age=0"   # keep public reads fresh (matches data.json)
+    blob.upload_from_string(
         json.dumps(data, ensure_ascii=False), content_type="application/json"
     )
 
