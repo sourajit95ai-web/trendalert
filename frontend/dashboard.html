@@ -1007,7 +1007,7 @@ const DATA_KEY="trendalert_data_url";
 const DEFAULT_DATA_URL="https://storage.googleapis.com/trendalert-data-rattle/data.json";
 let DATA_URL=(function(){try{return localStorage.getItem(DATA_KEY)||DEFAULT_DATA_URL;}catch(e){return DEFAULT_DATA_URL;}})();
 let payload=null,selected=null;
-let sortKey="score",sortDir=-1,q="",trendF="all",sector="all";
+let sortKey="change_pct",sortDir=-1,q="",trendF="all",sector="all";  // default: biggest 1-day gainers first
 const trendToggles={bull:true,bear:true};
 
 const COLS=[
