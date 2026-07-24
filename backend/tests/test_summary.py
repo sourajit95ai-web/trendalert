@@ -71,3 +71,27 @@ def test_summary_text_has_all_sections():
     txt = summary_text(compute_summary(RECORDS, CORE, "Jul 23 · close"))
     assert "TOP UP" in txt and "TOP DOWN" in txt and "INDEX" in txt
     assert "QQQ" in txt and "4 up · 3 down" in txt
+
+
+def test_action_and_reentry_selection():
+    recs = [
+        rec("HELD", "Technology", 1.0, close=110),                 # tracked position -> action
+        rec("HIGH", "Technology", 2.0, close=99, hi=100, lo=40),   # 1% from high -> action
+        rec("LOWZ", "Finance", -1.0, close=44, hi=100, lo=40),     # 10% off low -> re-entry
+        rec("MIDR", "Consumer", 0.5, close=70, hi=100, lo=40),     # mid -> neither
+        rec("AAA", "Technology", 3.0), rec("BBB", "Finance", -2.0),
+    ]
+    core = ["HELD", "HIGH", "LOWZ", "MIDR", "AAA", "BBB"]
+    s = compute_summary(recs, core, "L",
+                        positions={"HELD": {"entry": 100.0, "booked": False}},
+                        hz=2.0, lz=10.0, gain_pct=20.0)
+    act = {a[0] for a in s["action"]}
+    re = {r[0] for r in s["reentry"]}
+    assert act == {"HELD", "HIGH"}          # position + near-high
+    assert re == {"LOWZ"}                    # near-low only
+    assert "MIDR" not in act and "MIDR" not in re
+    # reason text carries the rationale
+    assert "from 52w high" in dict(s["action"])["HIGH"]
+    assert "off low" in dict(s["reentry"])["LOWZ"]
+    txt = summary_text(s)
+    assert "ACTION HIGH" in txt and "RE-ENTRY LOWZ" in txt
