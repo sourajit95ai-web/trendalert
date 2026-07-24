@@ -40,10 +40,13 @@ OBJECTS = {"notes": "notes.json", "positions": "positions.json",
            "pbre": "pbre.json"}
 _SYM_RE = re.compile(r"^[A-Z0-9./-]{1,16}$")
 
-_client = storage.Client()
+_client = None
 
 
 def _blob(kind):
+    global _client
+    if _client is None:            # lazy so importing the module needs no creds
+        _client = storage.Client()
     return _client.bucket(BUCKET).blob(OBJECTS[kind])
 
 
@@ -61,6 +64,28 @@ def _write(kind, data):
     _blob(kind).upload_from_string(
         json.dumps(data, ensure_ascii=False), content_type="application/json"
     )
+
+
+def merge_universe(existing, incoming, cap=250):
+    """Order-preserving union of two symbol lists, sanitized and capped.
+
+    ADDITIVE by design: `incoming` (whatever the currently-loaded browser has
+    in localStorage) can only ADD symbols, never remove them. A second device,
+    a fresh/cleared session, or an automated load whose list lacks a UI-added
+    ticker can therefore no longer wipe it from the pipeline's fetch universe.
+    Stale symbols are harmless — the pipeline caps extras (MAX_EXTRA_*) and the
+    dashboard only shows symbols that are actually in a list."""
+    out, seen = [], set()
+    src = (existing if isinstance(existing, list) else []) \
+        + (incoming if isinstance(incoming, list) else [])
+    for s in src:
+        if len(out) >= cap:
+            break
+        s = str(s).strip().upper()[:16]
+        if s and _SYM_RE.match(s) and s not in seen:
+            seen.add(s)
+            out.append(s)
+    return out
 
 
 # CORS: locked to the dashboard's serving origin.
@@ -106,12 +131,9 @@ def notes(request):
             syms = payload.get("data")
             if not isinstance(syms, list):
                 return (json.dumps({"error": "data[] required"}), 400, _JSON)
-            clean, seen = [], set()
-            for s in syms[:200]:
-                s = str(s).strip().upper()[:16]
-                if s and _SYM_RE.match(s) and s not in seen:
-                    seen.add(s)
-                    clean.append(s)
+            # union with the stored universe so a browser that lacks a UI-added
+            # ticker can never delete it — the fetch list only grows
+            clean = merge_universe(_read("universe"), syms)
             _write("universe", clean)
             return (json.dumps({"ok": True, "count": len(clean)}), 200, _JSON)
 
