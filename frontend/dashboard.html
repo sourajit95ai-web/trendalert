@@ -981,6 +981,15 @@ function defaultLists(){
   if(idx){INDEX_SYMBOLS.forEach(s=>{if(!idx.symbols.includes(s))idx.symbols.push(s);});saveLists();}
   try{localStorage.setItem(FLAG,"1");}catch(e){}
 })();
+/* migration (one-time): ensure SPY is tracked in the Index list (now pinned in
+   the daily-summary index box) */
+(function(){
+  const FLAG="trendalert_spy_index";
+  try{if(localStorage.getItem(FLAG))return;}catch(e){}
+  const idx=lists.find(l=>l.type==="index");
+  if(idx&&!idx.symbols.includes("SPY")){idx.symbols.push("SPY");saveLists();}
+  try{localStorage.setItem(FLAG,"1");}catch(e){}
+})();
 function uid(){return Math.random().toString(36).slice(2,9);}
 function loadLists(){
   try{const r=localStorage.getItem(LS_KEY);if(r)return JSON.parse(r);}catch(e){}
@@ -1610,7 +1619,7 @@ function renderSummary(){
   const eq=held.slice().sort(byChg);
   // index box: always pin QQQ / SPGI / BTC, then append the single best + worst
   // of the remaining index symbols (ordered pinned-first)
-  const PINNED_IDX=["QQQ","SPGI","BTC/USD"];
+  const PINNED_IDX=["QQQ","SPY","BTC/USD"];
   const pinned=PINNED_IDX.map(bySym).filter(d=>d&&!d.pending&&d.change_pct!=null);
   const pinnedSet=new Set(pinned.map(d=>d.symbol));
   const pool=[...new Set(lists.flatMap(l=>l.symbols))].map(bySym)
