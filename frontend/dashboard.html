@@ -998,6 +998,7 @@ function loadLists(){
 function saveLists(){
   try{localStorage.setItem(LS_KEY,JSON.stringify(lists));}catch(e){}
   try{publishUniverse();}catch(e){}  /* SYNC_URL not yet initialised during boot-time saves */
+  try{publishCore();}catch(e){}
 }
 /* push the union of list symbols to the notes function -> universe.json;
    the pipeline merges it into its fetch, so UI-added tickers get data next cycle */
@@ -1010,6 +1011,18 @@ function publishUniverse(){
     fetch(SYNC_URL,{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({kind:"universe",data:syms})}).catch(()=>{});
   },800);
+}
+/* push the Core portfolio symbols -> core.json (union-merged server-side); the
+   ?mode=summary daily-summary alert reads it so it matches the dashboard card */
+let coreT=null;
+function publishCore(){
+  if(!SYNC_URL)return;
+  clearTimeout(coreT);
+  coreT=setTimeout(()=>{
+    const core=corePortfolio();
+    fetch(SYNC_URL,{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({kind:"core",data:core?core.symbols:[]})}).catch(()=>{});
+  },900);
 }
 const TYPE_LABEL={portfolio:"Portfolio",watchlist:"Watchlist",index:"Index"};
 const listsOfType=t=>lists.filter(l=>l.type===t);
@@ -2242,7 +2255,7 @@ setInterval(()=>{if(DATA_URL)load();},300000);
 setInterval(checkStaleness,60000);
 initThemeUI();applyTheme(themeName);
 Promise.all([syncPositions(),syncPbre()]).then(load);
-setTimeout(()=>{try{publishUniverse();}catch(e){}},3000);  /* sync universe.json on load, not only on edits */
+setTimeout(()=>{try{publishUniverse();}catch(e){}try{publishCore();}catch(e){}},3000);  /* sync universe.json + core.json on load, not only on edits */
 </script>
 </body>
 </html>

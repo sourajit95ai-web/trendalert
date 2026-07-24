@@ -162,6 +162,66 @@ def send_telegram_text(body):
     return f"telegram:sent({sent}/{len(chat_ids)})" if not failed else f"telegram:sent({sent}/{len(chat_ids)},failed={failed})"
 
 
+def send_telegram_photo(png_bytes, caption=""):
+    """Send a PNG as a Telegram photo (caption capped at Telegram's 1024)."""
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    chat_ids = [c.strip() for c in os.environ.get("TELEGRAM_CHAT_ID", "").split(",") if c.strip()]
+    if not token or not chat_ids:
+        return "telegram:disabled"
+    import requests
+    sent, failed = 0, 0
+    for chat_id in chat_ids:
+        try:
+            r = requests.post(f"https://api.telegram.org/bot{token}/sendPhoto",
+                              data={"chat_id": chat_id, "caption": caption[:1024]},
+                              files={"photo": ("summary.png", png_bytes, "image/png")},
+                              timeout=30)
+            r.raise_for_status()
+            sent += 1
+        except Exception:
+            failed += 1
+    return f"tg-photo:sent({sent}/{len(chat_ids)})" if not failed else f"tg-photo:sent({sent}/{len(chat_ids)},failed={failed})"
+
+
+def send_email_image(subject, body_text, png_bytes, filename="summary.png"):
+    """Email with the chart inlined via cid + a plain-text alternative."""
+    user = os.environ.get("SMTP_USER", "")
+    if not user:
+        return "email:disabled"
+    host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    port = int(os.environ.get("SMTP_PORT", "587"))
+    pw = os.environ.get("SMTP_PASS", "")
+    to = [a.strip() for a in os.environ.get("ALERT_TO", user).split(",") if a.strip()]
+
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.image import MIMEImage
+    from html import escape
+
+    root = MIMEMultipart("related")
+    root["Subject"] = subject
+    root["From"] = os.environ.get("ALERT_FROM", user)
+    root["To"] = ", ".join(to)
+    alt = MIMEMultipart("alternative")
+    alt.attach(MIMEText(body_text, "plain", "utf-8"))
+    html = ('<div style="font-family:system-ui,-apple-system,sans-serif;max-width:640px">'
+            '<img src="cid:chart" alt="TrendAlert daily summary" '
+            'style="width:100%;border-radius:10px;border:1px solid #eee">'
+            '<pre style="font-size:12px;line-height:1.5;color:#666;white-space:pre-wrap">'
+            + escape(body_text) + '</pre></div>')
+    alt.attach(MIMEText(html, "html", "utf-8"))
+    root.attach(alt)
+    img = MIMEImage(png_bytes, "png")
+    img.add_header("Content-ID", "<chart>")
+    img.add_header("Content-Disposition", "inline", filename=filename)
+    root.attach(img)
+
+    with smtplib.SMTP(host, port, timeout=30) as sm:
+        sm.starttls()
+        sm.login(user, pw)
+        sm.sendmail(root["From"], to, root.as_string())
+    return "email:sent"
+
+
 def _eod_body(lines, asof):
     return (f"TrendAlert EOD — {asof}\n\n" + "\n\n".join(lines) +
             "\n\nSignals are computed on confirmed daily closes. "

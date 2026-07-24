@@ -261,18 +261,22 @@ def _validate(payload, chart):
 # entry point
 # ----------------------------------------------------------------------
 def main(request):
-    # Scheduler side-modes — neither recomputes scores or touches data.json:
+    # Scheduler side-modes — none recompute scores or touch data.json:
     #   ?mode=brief      9:50 ET intraday morning brief
     #   ?mode=bloodbath  8:30 ET pre-open crash alarm (silent on normal days)
+    #   ?mode=summary    pre-market + post-close Core daily summary as a chart
     mode = request.args.get("mode") if request is not None \
         and getattr(request, "args", None) else None
-    if mode in ("brief", "bloodbath"):
+    if mode in ("brief", "bloodbath", "summary"):
         if mode == "brief":
             from morning_brief import run_morning_brief
             res = run_morning_brief(BUCKET, SYMBOLS, SECTORS, _HEADERS)
-        else:
+        elif mode == "bloodbath":
             from bloodbath import run_bloodbath_check
             res = run_bloodbath_check(BUCKET, SYMBOLS, SECTORS, _HEADERS)
+        else:
+            from daily_summary import run_daily_summary
+            res = run_daily_summary(BUCKET)
         return (json.dumps(res), 200 if res.get("ok") else 500,
                 {"Content-Type": "application/json"})
 
