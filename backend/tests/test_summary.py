@@ -73,6 +73,21 @@ def test_summary_text_has_all_sections():
     assert "QQQ" in txt and "4 up · 3 down" in txt
 
 
+def test_r52_context_and_caption_range():
+    recs = list(RECORDS) + [rec("ZZZ", "Technology", 1.0, close=210, hi=214, lo=164)]
+    core = CORE + ["ZZZ"]
+    s = compute_summary(recs, core, "L")
+    # per-symbol 52w context is carried for movers and indexes
+    assert "ZZZ" in s["r52"] and s["r52"]["ZZZ"]["hi"] == 214
+    assert s["r52"]["ZZZ"]["lo"] == 164 and s["r52"]["ZZZ"]["close"] == 210
+    assert "QQQ" in s["r52"]                       # indexes too (pinned)
+    assert "BTC" in s["r52"]                       # BTC/USD -> BTC display key
+    # caption surfaces the 52-week high/low values on the row
+    txt = summary_text(s)
+    assert "52w 164–214" in txt
+    assert "% vs hi)" in txt
+
+
 def test_action_and_reentry_selection():
     recs = [
         rec("HELD", "Technology", 1.0, close=110),                 # tracked position -> action

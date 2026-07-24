@@ -29,6 +29,7 @@ CORE_SYMBOLS = [
 ]
 PINNED_IDX = ["QQQ", "SPY", "BTC/USD"]
 UP, DOWN = "#1C7A56", "#D8433F"
+HI_C, LO_C = "#B45309", "#1D4ED8"             # near 52w high (amber) / low (blue)
 ACT_COL = ("#FDF0D5", "#E0A83E", "#8A5A00")   # action chip: fill, edge, text (amber)
 RE_COL = ("#E6F0FB", "#7FB0F8", "#1E5FA5")    # re-entry chip (blue)
 
@@ -44,6 +45,23 @@ def _pfh(r):
 def _pfl(r):
     lo, c = r.get("low_252"), r.get("close")
     return (c - lo) / lo * 100 if (lo and c and lo > 0) else None
+
+
+def _money(v):
+    """Compact price label: 98,231 / 642 / 50.0 / — for missing."""
+    if v is None:
+        return "—"
+    if v >= 1000:
+        return f"{v:,.0f}"
+    if v >= 100:
+        return f"{v:.0f}"
+    return f"{v:.1f}"
+
+
+def _r52(rec):
+    """52-week context for the range gauge + caption: lo/hi/close and % gaps."""
+    return {"lo": rec.get("low_252"), "hi": rec.get("high_252"),
+            "close": rec.get("close"), "pfh": _pfh(rec), "pfl": _pfl(rec)}
 
 
 def _badge(rec):
@@ -146,12 +164,14 @@ def compute_summary(records, core_syms, label, core_name="Core",
             reentry.append((sym, _reentry_reason(r, lz)))
 
     row = lambda r: (r["symbol"], round(r.get("change_pct") or 0, 1), _badge(r))
+    dsym = lambda r: r["symbol"].replace("/USD", "")
+    r52 = {r["symbol"]: _r52(r) for r in up + down}
+    r52.update({dsym(r): _r52(r) for r in idx})
     return {
         "core_name": core_name, "label": label,
         "up": [row(r) for r in up], "down": [row(r) for r in down],
-        "idx": [(r["symbol"].replace("/USD", ""), round(r.get("change_pct") or 0, 1),
-                 _badge(r)) for r in idx],
-        "action": action, "reentry": reentry,
+        "idx": [(dsym(r), round(r.get("change_pct") or 0, 1), _badge(r)) for r in idx],
+        "action": action, "reentry": reentry, "r52": r52,
         "breadth": f"{up_n} up · {down_n} down"
                    + (f" · {ext} at 52-week extremes" if ext else ""),
     }
@@ -159,17 +179,27 @@ def compute_summary(records, core_syms, label, core_name="Core",
 
 def summary_text(s):
     """Plain-text rendering — Telegram caption + email text fallback."""
+    r52 = s.get("r52", {})
+
+    def rng(sym):
+        m = r52.get(sym)
+        if not m or m.get("lo") is None or m.get("hi") is None:
+            return ""
+        gap = f" ({m['pfh']:+.0f}% vs hi)" if m.get("pfh") is not None else ""
+        return f"  52w {_money(m['lo'])}–{_money(m['hi'])}{gap}"
+
     tag = lambda b: " [52w hi]" if b == "hi" else " [52w lo]" if b == "lo" else ""
     lines = [f"TrendAlert Daily — {s['core_name']} · {s['label']}", "", "TOP UP"]
-    lines += [f"  {sym:<6}{v:+.1f}%{tag(b)}" for sym, v, b in s["up"]]
+    lines += [f"  {sym:<6}{v:+.1f}%{tag(b)}{rng(sym)}" for sym, v, b in s["up"]]
     lines += ["TOP DOWN"]
-    lines += [f"  {sym:<6}{v:+.1f}%{tag(b)}" for sym, v, b in s["down"]]
+    lines += [f"  {sym:<6}{v:+.1f}%{tag(b)}{rng(sym)}" for sym, v, b in s["down"]]
     if s.get("action") or s.get("reentry"):
         lines += [""]
         lines += [f"⚡ ACTION {sym} — {why}" for sym, why in s.get("action", [])]
         lines += [f"◎ RE-ENTRY {sym} — {why}" for sym, why in s.get("reentry", [])]
-    lines += ["", "INDEX  " + "  ".join(f"{sym} {v:+.1f}" for sym, v, _ in s["idx"]),
-              s["breadth"]]
+    lines += ["", "INDEX"]
+    lines += [f"  {sym:<6}{v:+.1f}%{rng(sym)}" for sym, v, _ in s["idx"]]
+    lines += [s["breadth"]]
     return "\n".join(lines)
 
 
@@ -177,58 +207,102 @@ def summary_text(s):
 # render (matplotlib -> PNG bytes)
 # ----------------------------------------------------------------------
 def render_chart_png(s):
+    """Variant A — 1-day move bars (left) beside a 52-week range gauge (right).
+
+    Each gauge is a lo ●———— hi track with the real prices labeled at the ends
+    and a marker where the current close sits; it glows amber within 2% of the
+    52w high (book-profit watch) and blue within 2% of the low. An optional
+    ACTION / RE-ENTRY callout sits full-width on top.
+    """
     import matplotlib
     matplotlib.use("Agg")                   # headless; imported lazily so the pure
     import matplotlib.pyplot as plt          # logic (and tests) need no matplotlib
 
-    from matplotlib.ticker import FuncFormatter
     from matplotlib.gridspec import GridSpec
 
     movers = sorted(s["up"] + s["down"], key=lambda m: m[1], reverse=True)
     idx = sorted(s["idx"], key=lambda m: m[1], reverse=True)
+    meta = s.get("r52", {})
     callout = [("⚡ ACTION", sym, why, ACT_COL) for sym, why in s.get("action", [])] \
         + [("◎ RE-ENTRY", sym, why, RE_COL) for sym, why in s.get("reentry", [])]
-    nm, ni, nc = len(movers), max(len(idx), 1), len(callout)
-    # shared scale across the bar panels so index bars read as "moved less"
+    nc = len(callout)
+
+    # one stacked axis: movers, a labelled spacer, then indexes
+    rows = [("m", m) for m in movers] + [("gap", None)] + [("i", m) for m in idx]
+    n = len(rows)
     mx = max((abs(m[1]) for m in movers + idx), default=1) or 1
 
-    ratios = ([nc * 0.62] if nc else []) + [nm, ni]
-    fig = plt.figure(dpi=140,
-                     figsize=(7.2, 0.42 * (nm + ni) + 0.30 * nc + 2.6))
-    gs = GridSpec(len(ratios), 1, height_ratios=ratios, hspace=0.34)
-    r = 0
-    ax_c = fig.add_subplot(gs[r]) if nc else None
-    r += 1 if nc else 0
-    ax_m = fig.add_subplot(gs[r])
-    ax_i = fig.add_subplot(gs[r + 1], sharex=ax_m)
+    fig = plt.figure(dpi=150, figsize=(9.6, 0.46 * n + 0.34 * nc + 1.6))
+    if nc:
+        gs = GridSpec(2, 2, height_ratios=[0.34 * nc + 0.25, 0.46 * n],
+                      width_ratios=[1.0, 1.32], hspace=0.14, wspace=0.04)
+        ax_c = fig.add_subplot(gs[0, :])
+        axL, axR = fig.add_subplot(gs[1, 0]), fig.add_subplot(gs[1, 1])
+    else:
+        gs = GridSpec(1, 2, width_ratios=[1.0, 1.32], wspace=0.04)
+        ax_c = None
+        axL, axR = fig.add_subplot(gs[0]), fig.add_subplot(gs[1])
 
-    def draw(ax, rows):
-        vals = [x[1] for x in rows]
-        cols = [UP if v >= 0 else DOWN for v in vals]
-        ys = list(range(len(rows)))
-        ax.barh(ys, vals, color=cols, height=0.6, zorder=3)
-        ax.set_yticks(ys)
-        ax.set_yticklabels([x[0] for x in rows], fontsize=10.5)
-        ax.invert_yaxis()
-        ax.axvline(0, color="#333", lw=0.8, zorder=2)
-        for y, v in zip(ys, vals):
-            ax.text(v + (mx * 0.02 if v >= 0 else -mx * 0.02), y, f"{v:+.1f}%",
-                    va="center", ha="left" if v >= 0 else "right",
-                    fontsize=9, fontweight="bold", color=UP if v >= 0 else DOWN)
-        ax.grid(axis="x", color="#ececec", lw=0.6, zorder=0)
-        for sp in ("top", "right", "left"):
-            ax.spines[sp].set_visible(False)
-        ax.tick_params(length=0)
+    ys = [n - 1 - i for i in range(n)]
 
-    draw(ax_m, movers)
-    draw(ax_i, idx)
-    ax_m.set_xlim(-mx * 1.28, mx * 1.28)          # shared via sharex
-    ax_i.set_title("INDEXES", loc="left", fontsize=8.5, color="#999",
-                   fontweight="bold", pad=6)
-    ax_m.tick_params(labelbottom=False)
-    ax_i.xaxis.set_major_formatter(FuncFormatter(lambda t, _: f"{t:+.0f}%" if t else "0"))
-    ax_i.tick_params(axis="x", colors="#999", labelsize=8)
+    # ---- left: 1-day move bars ----
+    for y, (kind, m) in zip(ys, rows):
+        if m is None:
+            axL.text(-mx * 1.35, y, "INDEXES", va="center", ha="left", fontsize=7.5,
+                     color="#bbb", fontweight="bold")
+            continue
+        v = m[1]
+        axL.barh(y, v, color=UP if v >= 0 else DOWN, height=0.6, zorder=3)
+        axL.text(v + (mx * 0.03 if v >= 0 else -mx * 0.03), y, f"{v:+.1f}%",
+                 va="center", ha="left" if v >= 0 else "right", fontsize=8.5,
+                 fontweight="bold", color=UP if v >= 0 else DOWN)
+    axL.axvline(0, color="#333", lw=0.8, zorder=2)
+    axL.set_xlim(-mx * 1.35, mx * 1.35)
+    axL.set_ylim(-0.6, n - 0.4)
+    axL.set_yticks([y for y, (k, m) in zip(ys, rows) if m is not None])
+    axL.set_yticklabels([m[0] for (k, m) in rows if m is not None], fontsize=10)
+    for sp in ("top", "right", "left"):
+        axL.spines[sp].set_visible(False)
+    axL.tick_params(length=0)
+    axL.set_xticks([])
+    axL.set_title("1-day move", loc="left", fontsize=8.5, color="#999",
+                  fontweight="bold", pad=6)
 
+    # ---- right: 52-week range gauges ----
+    axR.set_xlim(0, 1)
+    axR.set_ylim(-0.6, n - 0.4)
+    axR.axis("off")
+    axR.set_title("52-week range", loc="left", fontsize=8.5, color="#999",
+                  fontweight="bold", pad=6)
+    gx0, gx1 = 0.20, 0.82
+    for y, (kind, m) in zip(ys, rows):
+        if m is None:
+            continue
+        mm = meta.get(m[0], {})
+        lo, hi, c = mm.get("lo"), mm.get("hi"), mm.get("close")
+        axR.plot([gx0, gx1], [y, y], color="#dcdcdc", lw=3,
+                 solid_capstyle="round", zorder=1)
+        ph, pl = mm.get("pfh"), mm.get("pfl")
+        frac = (c - lo) / (hi - lo) if (hi and lo and hi > lo and c) else 0.5
+        frac = min(max(frac, 0), 1)
+        xp = gx0 + frac * (gx1 - gx0)
+        near_hi = ph is not None and ph >= -2
+        near_lo = pl is not None and pl <= 2
+        mc = HI_C if near_hi else LO_C if near_lo else "#111"
+        axR.scatter([xp], [y], s=76 if (near_hi or near_lo) else 44, color=mc,
+                    zorder=3, edgecolors="white", linewidths=1.1)
+        axR.text(gx0 - 0.018, y, _money(lo), va="center", ha="right",
+                 fontsize=7.5, color="#888")
+        axR.text(gx1 + 0.018, y, _money(hi), va="center", ha="left",
+                 fontsize=7.5, color="#888")
+        if near_hi:
+            axR.text(xp, y + 0.36, f"{abs(ph):.1f}% to hi", va="bottom",
+                     ha="center", fontsize=7.5, fontweight="bold", color=HI_C)
+        elif near_lo:
+            axR.text(xp, y + 0.36, f"{pl:.1f}% off lo", va="bottom",
+                     ha="center", fontsize=7.5, fontweight="bold", color=LO_C)
+
+    # ---- callout (full-width, on top) ----
     if ax_c is not None:
         ax_c.axis("off")
         ax_c.set_xlim(0, 1)
@@ -238,13 +312,15 @@ def render_chart_png(s):
             ax_c.text(0.004, y, f"{chip}  {sym}", transform=ax_c.transAxes,
                       va="center", ha="left", fontsize=8.5, fontweight="bold",
                       color=tc, bbox=dict(boxstyle="round,pad=0.32", fc=fc, ec=ec, lw=0.9))
-            ax_c.text(0.40, y, why, transform=ax_c.transAxes, va="center",
+            ax_c.text(0.33, y, why, transform=ax_c.transAxes, va="center",
                       ha="left", fontsize=8.5, color="#666")
 
     fig.text(0.015, 0.985, f"TrendAlert · {s['core_name']} — {s['label']}",
              ha="left", va="top", fontsize=13, fontweight="bold")
-    fig.text(0.015, 0.012, s["breadth"], fontsize=8.5, color="#555")
-    fig.subplots_adjust(top=0.90, bottom=0.06, left=0.13, right=0.97)
+    fig.text(0.015, 0.012,
+             s["breadth"] + "    ·    amber = near 52w high · blue = near 52w low",
+             fontsize=8, color="#777")
+    fig.subplots_adjust(top=0.90, bottom=0.05, left=0.075, right=0.985)
     buf = io.BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight", facecolor="white")
     plt.close(fig)
