@@ -90,18 +90,25 @@ def session_label(et):
     return "MARKET CLOSE"
 
 
-def _crosses(alerts):
+def _crosses(alerts, core_syms=None):
     """data.json 'alerts' -> (golden, death) row lists.
 
     Same EMA50/EMA150 events the dashboard's Recent Alerts cards show — read
     straight off the published payload rather than recomputed here.
+
+    detect_cross_alerts runs over the WHOLE universe, so it happily returns
+    names this alert is not otherwise about. Passing core_syms scopes the rows
+    to Core holdings; without it (or with an empty Core) nothing is filtered.
     """
+    core = {str(s).upper() for s in (core_syms or [])}
     gold, death = [], []
     for a in (alerts or []):
         if not isinstance(a, dict):
             continue
         sym = a.get("symbol")
         if not sym:
+            continue
+        if core and str(sym).upper() not in core:
             continue
         row = (sym, a.get("type") or a.get("detail") or "EMA cross")
         d = a.get("dir")
@@ -236,7 +243,7 @@ def compute_summary(records, core_syms, label, core_name="Core",
         elif g == 3:
             reentry.append((sym, _reentry_reason(r, lz)))
 
-    golden, death = _crosses(alerts)
+    golden, death = _crosses(alerts, core_syms)
 
     row = lambda r: (r["symbol"], round(r.get("change_pct") or 0, 1), _badge(r))
     dsym = lambda r: r["symbol"].replace("/USD", "")

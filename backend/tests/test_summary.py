@@ -154,15 +154,35 @@ def test_crosses_split_by_direction():
 
 
 def test_cross_alerts_reach_summary_and_caption():
-    alerts = [{"symbol": "TMO", "dir": "bull",
+    alerts = [{"symbol": "AAA", "dir": "bull",
                "type": "EMA 50 crossed above EMA 150", "detail": "Golden cross"}]
     s = compute_summary(RECORDS, CORE, "Jul 24", alerts=alerts, session="MARKET CLOSE")
-    assert s["golden"] == [("TMO", "EMA 50 crossed above EMA 150")]
+    assert s["golden"] == [("AAA", "EMA 50 crossed above EMA 150")]
     assert s["death"] == []
     txt = summary_text(s)
     assert "▲ GOLDEN CROSS (1)" in txt
-    assert "TMO" in txt and "EMA 50 crossed above EMA 150" in txt
+    assert "AAA" in txt and "EMA 50 crossed above EMA 150" in txt
     assert "DEATH CROSS" not in txt          # empty groups are omitted entirely
+
+
+def test_crosses_are_scoped_to_core():
+    """detect_cross_alerts spans the whole universe; only Core names may show."""
+    alerts = [
+        {"symbol": "AAA", "dir": "bull", "type": "EMA 50 crossed above EMA 150"},
+        {"symbol": "HHH", "dir": "bull", "type": "EMA 50 crossed above EMA 150"},
+        {"symbol": "SPY", "dir": "bear", "type": "EMA 150 crossed below EMA 50"},
+    ]
+    gold, death = _crosses(alerts, CORE)
+    assert gold == [("AAA", "EMA 50 crossed above EMA 150")]   # HHH is not Core
+    assert death == []                                          # nor is the index
+    # case-insensitive on both sides
+    assert _crosses([{"symbol": "aaa", "dir": "bull", "type": "x"}], ["AAA"])[0]
+    # no Core given -> unfiltered, so the helper stays usable on its own
+    assert len(_crosses(alerts)[0]) == 2
+    # a cross on a non-Core name must not leave an empty group behind
+    s = compute_summary(RECORDS, CORE, "L",
+                        alerts=[{"symbol": "HHH", "dir": "bull", "type": "x"}])
+    assert s["golden"] == [] and "GOLDEN CROSS" not in summary_text(s)
 
 
 def test_callout_groups_one_tag_each_and_caps_long_groups():
