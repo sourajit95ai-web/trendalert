@@ -180,3 +180,18 @@ def test_callout_groups_one_tag_each_and_caps_long_groups():
     txt = summary_text(s)
     assert txt.count("◎ RE-ENTRY") == 1
     assert "+3 more" in txt
+
+
+def test_force_flag_bypasses_the_trading_day_gate():
+    """?mode=summary&force=1 must still run on a weekend; schedulers never pass it."""
+    import daily_summary as ds
+    calls = {}
+    orig_trading, orig_read = ds.is_trading_day, ds._read_json
+    ds.is_trading_day = lambda d: False              # pretend it's a weekend
+    ds._read_json = lambda b, name, default=None: {} if name == "data.json" else default
+    try:
+        assert ds.run_daily_summary("b")["summary"] == "skipped(non-trading-day)"
+        # forced: gate passed, so it proceeds far enough to complain about the data
+        assert ds.run_daily_summary("b", force=True)["summary"] == "error(no-data.json)"
+    finally:
+        ds.is_trading_day, ds._read_json = orig_trading, orig_read

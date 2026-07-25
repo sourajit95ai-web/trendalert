@@ -462,11 +462,16 @@ def load_core(bucket):
     return CORE_SYMBOLS
 
 
-def run_daily_summary(bucket):
-    """Never raises. -> dict for the HTTP response."""
+def run_daily_summary(bucket, force=False):
+    """Never raises. -> dict for the HTTP response.
+
+    force=True (?mode=summary&force=1) bypasses the trading-day gate so the
+    alert can be fired by hand outside market hours to eyeball the real
+    Telegram/email output. Schedulers never pass it.
+    """
     try:
         et = _eastern_now()
-        if not is_trading_day(et.date()):
+        if not is_trading_day(et.date()) and not force:
             return {"ok": True, "summary": "skipped(non-trading-day)"}
 
         data = _read_json(bucket, "data.json", {}) or {}

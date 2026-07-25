@@ -276,7 +276,9 @@ def main(request):
             res = run_bloodbath_check(BUCKET, SYMBOLS, SECTORS, _HEADERS)
         else:
             from daily_summary import run_daily_summary
-            res = run_daily_summary(BUCKET)
+            # &force=1 -> ignore the trading-day gate (manual off-hours check)
+            force = str(request.args.get("force", "")).lower() in ("1", "true", "yes")
+            res = run_daily_summary(BUCKET, force=force)
         return (json.dumps(res), 200 if res.get("ok") else 500,
                 {"Content-Type": "application/json"})
 
