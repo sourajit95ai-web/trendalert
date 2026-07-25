@@ -90,17 +90,30 @@ def session_label(et):
     return "MARKET CLOSE"
 
 
-def _crosses(alerts, core_syms=None):
+def _cross_scope(records, core_syms):
+    """Symbols a cross may name: Core holdings + the benchmark tape.
+
+    detect_cross_alerts runs over the WHOLE universe, so unscoped it returns
+    names the alert says nothing else about. Indexes are kept deliberately — a
+    cross on SPY/QQQ matters whether or not it was a top mover that day, and
+    the chart already has an INDEXES row for them.
+    """
+    scope = {str(s).upper() for s in (core_syms or [])}
+    scope |= {str(r["symbol"]).upper() for r in records
+              if r.get("symbol") and r.get("sector") == "Index"}
+    scope |= {s.upper() for s in PINNED_IDX}        # QQQ/SPY/BTC-USD are always shown
+    return scope
+
+
+def _crosses(alerts, allowed=None):
     """data.json 'alerts' -> (golden, death) row lists.
 
     Same EMA50/EMA150 events the dashboard's Recent Alerts cards show — read
-    straight off the published payload rather than recomputed here.
-
-    detect_cross_alerts runs over the WHOLE universe, so it happily returns
-    names this alert is not otherwise about. Passing core_syms scopes the rows
-    to Core holdings; without it (or with an empty Core) nothing is filtered.
+    straight off the published payload rather than recomputed here. `allowed`
+    limits which symbols may appear (see _cross_scope); omitted, nothing is
+    filtered so the helper stays usable on its own.
     """
-    core = {str(s).upper() for s in (core_syms or [])}
+    scope = {str(s).upper() for s in (allowed or [])}
     gold, death = [], []
     for a in (alerts or []):
         if not isinstance(a, dict):
@@ -108,9 +121,11 @@ def _crosses(alerts, core_syms=None):
         sym = a.get("symbol")
         if not sym:
             continue
-        if core and str(sym).upper() not in core:
+        if scope and str(sym).upper() not in scope:
             continue
-        row = (sym, a.get("type") or a.get("detail") or "EMA cross")
+        # match the chart's labels: BTC/USD rides the tape as plain BTC
+        row = (str(sym).replace("/USD", ""),
+               a.get("type") or a.get("detail") or "EMA cross")
         d = a.get("dir")
         if d == "bull":
             gold.append(row)
@@ -243,7 +258,7 @@ def compute_summary(records, core_syms, label, core_name="Core",
         elif g == 3:
             reentry.append((sym, _reentry_reason(r, lz)))
 
-    golden, death = _crosses(alerts, core_syms)
+    golden, death = _crosses(alerts, _cross_scope(records, core_syms))
 
     row = lambda r: (r["symbol"], round(r.get("change_pct") or 0, 1), _badge(r))
     dsym = lambda r: r["symbol"].replace("/USD", "")

@@ -7,7 +7,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from daily_summary import (compute_summary, summary_text, _badge, _crosses,
-                           _callout_groups, session_label, MAX_ROWS)
+                           _cross_scope, _callout_groups, session_label, MAX_ROWS)
 
 
 def rec(sym, sec, chg, close=100.0, hi=None, lo=None):
@@ -165,24 +165,37 @@ def test_cross_alerts_reach_summary_and_caption():
     assert "DEATH CROSS" not in txt          # empty groups are omitted entirely
 
 
-def test_crosses_are_scoped_to_core():
-    """detect_cross_alerts spans the whole universe; only Core names may show."""
+def test_cross_scope_is_core_plus_the_index_tape():
+    scope = _cross_scope(RECORDS, CORE)
+    assert {"AAA", "GGG"} <= scope                  # Core holdings
+    assert {"SPY", "QQQ", "SOXX", "IGV", "IWM"} <= scope   # every Index-sector name
+    assert "BTC/USD" in scope                       # pinned even though sector=Crypto
+    assert "HHH" not in scope                       # non-Core equity stays out
+
+
+def test_crosses_are_scoped_but_keep_indexes():
+    """Whole-universe crosses are filtered to Core + indexes, not Core alone."""
     alerts = [
         {"symbol": "AAA", "dir": "bull", "type": "EMA 50 crossed above EMA 150"},
         {"symbol": "HHH", "dir": "bull", "type": "EMA 50 crossed above EMA 150"},
         {"symbol": "SPY", "dir": "bear", "type": "EMA 150 crossed below EMA 50"},
     ]
-    gold, death = _crosses(alerts, CORE)
-    assert gold == [("AAA", "EMA 50 crossed above EMA 150")]   # HHH is not Core
-    assert death == []                                          # nor is the index
-    # case-insensitive on both sides
+    s = compute_summary(RECORDS, CORE, "L", alerts=alerts)
+    assert s["golden"] == [("AAA", "EMA 50 crossed above EMA 150")]   # HHH dropped
+    assert s["death"] == [("SPY", "EMA 150 crossed below EMA 50")]    # index KEPT
+    txt = summary_text(s)
+    assert "▼ DEATH CROSS (1)" in txt and "SPY" in txt
+    assert "HHH" not in txt
+    # case-insensitive; BTC/USD is labelled BTC to match the chart
     assert _crosses([{"symbol": "aaa", "dir": "bull", "type": "x"}], ["AAA"])[0]
-    # no Core given -> unfiltered, so the helper stays usable on its own
+    assert _crosses([{"symbol": "BTC/USD", "dir": "bull", "type": "x"}],
+                    ["BTC/USD"])[0] == [("BTC", "x")]
+    # no scope given -> unfiltered, so the helper stays usable on its own
     assert len(_crosses(alerts)[0]) == 2
-    # a cross on a non-Core name must not leave an empty group behind
-    s = compute_summary(RECORDS, CORE, "L",
-                        alerts=[{"symbol": "HHH", "dir": "bull", "type": "x"}])
-    assert s["golden"] == [] and "GOLDEN CROSS" not in summary_text(s)
+    # a cross on an out-of-scope name must not leave an empty group behind
+    s2 = compute_summary(RECORDS, CORE, "L",
+                         alerts=[{"symbol": "HHH", "dir": "bull", "type": "x"}])
+    assert s2["golden"] == [] and "GOLDEN CROSS" not in summary_text(s2)
 
 
 def test_callout_groups_one_tag_each_and_caps_long_groups():
