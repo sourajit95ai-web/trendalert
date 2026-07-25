@@ -6,7 +6,8 @@ QQQ/SPY/BTC pinned plus best+worst of the rest, breadth, and 52w badges.
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from daily_summary import compute_summary, summary_text, _badge
+from daily_summary import (compute_summary, summary_text, _badge, _crosses,
+                           _callout_groups, session_label, MAX_ROWS)
 
 
 def rec(sym, sec, chg, close=100.0, hi=None, lo=None):
@@ -67,10 +68,14 @@ def test_too_few_holdings_returns_none():
     assert compute_summary([rec("AAA", "Technology", 1)], ["AAA"], "L") is None
 
 
-def test_summary_text_has_all_sections():
-    txt = summary_text(compute_summary(RECORDS, CORE, "Jul 23 · close"))
-    assert "TOP UP" in txt and "TOP DOWN" in txt and "INDEX" in txt
-    assert "QQQ" in txt and "4 up · 3 down" in txt
+def test_summary_text_drops_the_chart_transcript():
+    """Caption carries signals only — movers/index/52w live in the PNG."""
+    txt = summary_text(compute_summary(RECORDS, CORE, "Jul 23", session="MARKET CLOSE"))
+    for gone in ("TOP UP", "TOP DOWN", "INDEX", "52w"):
+        assert gone not in txt
+    assert txt.startswith("TrendAlert Daily · Market Close")
+    # nothing actionable in this fixture -> says so rather than going silent
+    assert "No action, re-entry or cross signals today." in txt
 
 
 def test_r52_context_and_caption_range():
@@ -82,10 +87,9 @@ def test_r52_context_and_caption_range():
     assert s["r52"]["ZZZ"]["lo"] == 164 and s["r52"]["ZZZ"]["close"] == 210
     assert "QQQ" in s["r52"]                       # indexes too (pinned)
     assert "BTC" in s["r52"]                       # BTC/USD -> BTC display key
-    # caption surfaces the 52-week high/low values on the row
-    txt = summary_text(s)
-    assert "52w 164–214" in txt
-    assert "% vs hi)" in txt
+    # the gauge needs a resolvable position for every rendered row
+    for sym, m in s["r52"].items():
+        assert set(m) == {"lo", "hi", "close", "pfh", "pfl"}
 
 
 def test_action_and_reentry_selection():
@@ -109,4 +113,70 @@ def test_action_and_reentry_selection():
     assert "from 52w high" in dict(s["action"])["HIGH"]
     assert "off low" in dict(s["reentry"])["LOWZ"]
     txt = summary_text(s)
-    assert "ACTION HIGH" in txt and "RE-ENTRY LOWZ" in txt
+    assert "⚡ ACTION (2)" in txt and "◎ RE-ENTRY (1)" in txt
+    assert "HIGH" in txt and "LOWZ" in txt
+
+
+# ----------------------------------------------------------------------
+# session badge / cross alerts / grouped callout
+# ----------------------------------------------------------------------
+class _ET:
+    def __init__(self, h, m=0):
+        self.hour, self.minute = h, m
+
+
+def test_session_label_covers_the_scheduled_runs():
+    assert session_label(_ET(8, 35)) == "PRE-MARKET"       # trendalert-summary-premkt
+    assert session_label(_ET(16, 50)) == "MARKET CLOSE"    # trendalert-summary-close
+    assert session_label(_ET(9, 15)) == "30 MIN TO OPEN"
+    assert session_label(_ET(11, 0)) == "MORNING SESSION"
+    assert session_label(_ET(13, 30)) == "MIDDAY"
+    assert session_label(_ET(15, 30)) == "POWER HOUR"
+    assert session_label(_ET(9, 30)) == "MORNING SESSION"  # boundary: open is not pre
+    assert session_label(_ET(16, 0)) == "MARKET CLOSE"     # boundary: 16:00 is close
+
+
+def test_crosses_split_by_direction():
+    gold, death = _crosses([
+        {"symbol": "TMO", "dir": "bull", "type": "EMA 50 crossed above EMA 150",
+         "detail": "Golden cross"},
+        {"symbol": "XYZ", "dir": "bear", "type": "EMA 150 crossed below EMA 50",
+         "detail": "Death cross"},
+    ])
+    assert gold == [("TMO", "EMA 50 crossed above EMA 150")]
+    assert death == [("XYZ", "EMA 150 crossed below EMA 50")]
+    # junk in the payload must not break the alert
+    assert _crosses(None) == ([], [])
+    assert _crosses(["nope", {}, {"dir": "bull"}]) == ([], [])
+    # missing dir -> inferred from the wording
+    g, d = _crosses([{"symbol": "A", "type": "EMA 50 crossed above EMA 150"}])
+    assert g and not d
+
+
+def test_cross_alerts_reach_summary_and_caption():
+    alerts = [{"symbol": "TMO", "dir": "bull",
+               "type": "EMA 50 crossed above EMA 150", "detail": "Golden cross"}]
+    s = compute_summary(RECORDS, CORE, "Jul 24", alerts=alerts, session="MARKET CLOSE")
+    assert s["golden"] == [("TMO", "EMA 50 crossed above EMA 150")]
+    assert s["death"] == []
+    txt = summary_text(s)
+    assert "▲ GOLDEN CROSS (1)" in txt
+    assert "TMO" in txt and "EMA 50 crossed above EMA 150" in txt
+    assert "DEATH CROSS" not in txt          # empty groups are omitted entirely
+
+
+def test_callout_groups_one_tag_each_and_caps_long_groups():
+    many = [(f"S{i}", f"reason {i}") for i in range(MAX_ROWS + 3)]
+    s = compute_summary(RECORDS, CORE, "L", alerts=None)
+    s["reentry"] = many
+    groups = _callout_groups(s)
+    assert len(groups) == 1                          # one entry per group, not per row
+    tag, shown, _col, total = groups[0]
+    assert tag == "◎ RE-ENTRY"
+    assert total == MAX_ROWS + 3                     # header reports the true total
+    assert len(shown) == MAX_ROWS + 1                # capped rows + the overflow line
+    assert shown[-1] == ("", "+3 more")
+    # the caption reads off the same grouping, so the two cannot drift
+    txt = summary_text(s)
+    assert txt.count("◎ RE-ENTRY") == 1
+    assert "+3 more" in txt

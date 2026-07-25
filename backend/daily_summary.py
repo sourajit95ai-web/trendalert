@@ -30,8 +30,13 @@ CORE_SYMBOLS = [
 PINNED_IDX = ["QQQ", "SPY", "BTC/USD"]
 UP, DOWN = "#1C7A56", "#D8433F"
 HI_C, LO_C = "#B45309", "#1D4ED8"             # near 52w high (amber) / low (blue)
-ACT_COL = ("#FDF0D5", "#E0A83E", "#8A5A00")   # action chip: fill, edge, text (amber)
-RE_COL = ("#E6F0FB", "#7FB0F8", "#1E5FA5")    # re-entry chip (blue)
+MONO = "DejaVu Sans Mono"                     # matplotlib-bundled; no font install
+# callout panel palettes: (strong, edge, fill)
+ACT_COL = ("#8A5A00", "#E0A83E", "#FDF3E0")   # action (amber)
+RE_COL = ("#1E5FA5", "#7FB0F8", "#EAF2FD")    # re-entry (blue)
+GOLD_COL = ("#146B4A", "#4FB286", "#E7F5EE")  # golden cross (green)
+DEATH_COL = ("#A32B27", "#E8827E", "#FDECEB")  # death cross (red)
+MAX_ROWS = 6                                  # per panel, so the PNG can't run away
 
 
 # ----------------------------------------------------------------------
@@ -62,6 +67,73 @@ def _r52(rec):
     """52-week context for the range gauge + caption: lo/hi/close and % gaps."""
     return {"lo": rec.get("low_252"), "hi": rec.get("high_252"),
             "close": rec.get("close"), "pfh": _pfh(rec), "pfl": _pfl(rec)}
+
+
+def session_label(et):
+    """Eastern wall-clock -> which run this is, stamped in the heading badge.
+
+    Lets the same alert say what it is at a glance: the 08:35 job reads
+    PRE-MARKET, the 16:50 job MARKET CLOSE. DST is already handled upstream
+    by trading_calendar._eastern_now.
+    """
+    hm = et.hour * 60 + et.minute
+    if hm < 9 * 60:
+        return "PRE-MARKET"
+    if hm < 9 * 60 + 30:
+        return "30 MIN TO OPEN"
+    if hm < 12 * 60:
+        return "MORNING SESSION"
+    if hm < 15 * 60:
+        return "MIDDAY"
+    if hm < 16 * 60:
+        return "POWER HOUR"
+    return "MARKET CLOSE"
+
+
+def _crosses(alerts):
+    """data.json 'alerts' -> (golden, death) row lists.
+
+    Same EMA50/EMA150 events the dashboard's Recent Alerts cards show — read
+    straight off the published payload rather than recomputed here.
+    """
+    gold, death = [], []
+    for a in (alerts or []):
+        if not isinstance(a, dict):
+            continue
+        sym = a.get("symbol")
+        if not sym:
+            continue
+        row = (sym, a.get("type") or a.get("detail") or "EMA cross")
+        d = a.get("dir")
+        if d == "bull":
+            gold.append(row)
+        elif d == "bear":
+            death.append(row)
+        else:                                  # no dir — infer from the wording
+            (gold if "above" in row[1].lower() else death).append(row)
+    return gold, death
+
+
+def _callout_groups(s):
+    """Ordered [(tag, shown_rows, colors, total)] — ONE tag per group.
+
+    Shared by the chart panels and the caption so the two can never drift.
+    Long groups are capped at MAX_ROWS with a '+N more' row; the header count
+    always reports the true total.
+    """
+    out = []
+    for tag, rows, col in (("⚡ ACTION", s.get("action"), ACT_COL),
+                           ("◎ RE-ENTRY", s.get("reentry"), RE_COL),
+                           ("▲ GOLDEN CROSS", s.get("golden"), GOLD_COL),
+                           ("▼ DEATH CROSS", s.get("death"), DEATH_COL)):
+        rows = list(rows or [])
+        if not rows:
+            continue
+        shown = rows[:MAX_ROWS]
+        if len(rows) > MAX_ROWS:
+            shown = shown + [("", f"+{len(rows) - MAX_ROWS} more")]
+        out.append((tag, shown, col, len(rows)))
+    return out
 
 
 def _badge(rec):
@@ -120,7 +192,8 @@ def _reentry_reason(rec, lz):
 
 
 def compute_summary(records, core_syms, label, core_name="Core",
-                    positions=None, hz=2.0, lz=10.0, gain_pct=20.0):
+                    positions=None, hz=2.0, lz=10.0, gain_pct=20.0,
+                    alerts=None, session=""):
     """-> summary dict, or None when there are too few holdings to rank."""
     by = {r.get("symbol"): r for r in records if r.get("symbol")}
     positions = positions or {}
@@ -163,124 +236,176 @@ def compute_summary(records, core_syms, label, core_name="Core",
         elif g == 3:
             reentry.append((sym, _reentry_reason(r, lz)))
 
+    golden, death = _crosses(alerts)
+
     row = lambda r: (r["symbol"], round(r.get("change_pct") or 0, 1), _badge(r))
     dsym = lambda r: r["symbol"].replace("/USD", "")
     r52 = {r["symbol"]: _r52(r) for r in up + down}
     r52.update({dsym(r): _r52(r) for r in idx})
     return {
-        "core_name": core_name, "label": label,
+        "core_name": core_name, "label": label, "session": session,
         "up": [row(r) for r in up], "down": [row(r) for r in down],
         "idx": [(dsym(r), round(r.get("change_pct") or 0, 1), _badge(r)) for r in idx],
         "action": action, "reentry": reentry, "r52": r52,
+        "golden": golden, "death": death,
         "breadth": f"{up_n} up · {down_n} down"
                    + (f" · {ext} at 52-week extremes" if ext else ""),
     }
 
 
 def summary_text(s):
-    """Plain-text rendering — Telegram caption + email text fallback."""
-    r52 = s.get("r52", {})
+    """Telegram caption + email text fallback.
 
-    def rng(sym):
-        m = r52.get(sym)
-        if not m or m.get("lo") is None or m.get("hi") is None:
-            return ""
-        gap = f" ({m['pfh']:+.0f}% vs hi)" if m.get("pfh") is not None else ""
-        return f"  52w {_money(m['lo'])}–{_money(m['hi'])}{gap}"
-
-    tag = lambda b: " [52w hi]" if b == "hi" else " [52w lo]" if b == "lo" else ""
-    lines = [f"TrendAlert Daily — {s['core_name']} · {s['label']}", "", "TOP UP"]
-    lines += [f"  {sym:<6}{v:+.1f}%{tag(b)}{rng(sym)}" for sym, v, b in s["up"]]
-    lines += ["TOP DOWN"]
-    lines += [f"  {sym:<6}{v:+.1f}%{tag(b)}{rng(sym)}" for sym, v, b in s["down"]]
-    if s.get("action") or s.get("reentry"):
-        lines += [""]
-        lines += [f"⚡ ACTION {sym} — {why}" for sym, why in s.get("action", [])]
-        lines += [f"◎ RE-ENTRY {sym} — {why}" for sym, why in s.get("reentry", [])]
-    lines += ["", "INDEX"]
-    lines += [f"  {sym:<6}{v:+.1f}%{rng(sym)}" for sym, v, _ in s["idx"]]
-    lines += [s["breadth"]]
+    Deliberately NOT a transcript of the chart: the movers / index / 52-week
+    numbers are already legible in the PNG, so the text carries only what needs
+    reading and reasoning about — the grouped action, re-entry and cross
+    signals, under one header per group.
+    """
+    head = (s.get("session") or "").title()
+    lines = [f"TrendAlert Daily · {head}" if head else "TrendAlert Daily",
+             f"{s['core_name']} · {s['label']}"]
+    for tag, rows, _col, total in _callout_groups(s):
+        lines += ["", f"{tag} ({total})"]
+        lines += [f"  {sym:<5} {why}" if sym else f"  {why}" for sym, why in rows]
+    if len(lines) == 2:
+        lines += ["", "No action, re-entry or cross signals today."]
     return "\n".join(lines)
 
 
 # ----------------------------------------------------------------------
 # render (matplotlib -> PNG bytes)
 # ----------------------------------------------------------------------
+PANEL_PAD = 1.55        # header + breathing room, in row-height units
+
+
+def _callout_height(groups):
+    """Callout block size in 'line units' — panels grow with their row count."""
+    return sum(len(rows) + PANEL_PAD for _t, rows, _c, _n in groups) \
+        + 0.45 * max(len(groups) - 1, 0)
+
+
+def _draw_callout(ax, groups, L, plt, FancyBboxPatch):
+    """Tinted panel per group: colored left edge, ONE header, then the rows."""
+    ax.axis("off")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, L)
+    top = L
+    for tag, rows, (strong, edge, fill), total in groups:
+        h = len(rows) + PANEL_PAD
+        ax.add_patch(FancyBboxPatch(
+            (0.006, top - h + 0.18), 0.988, h - 0.36,
+            boxstyle="round,pad=0,rounding_size=0.012", mutation_aspect=0.06,
+            fc=fill, ec=edge, lw=1.1, zorder=1, clip_on=False))
+        ax.add_patch(plt.Rectangle((0.006, top - h + 0.18), 0.007, h - 0.36,
+                                   fc=strong, ec="none", zorder=2, clip_on=False))
+        ax.text(0.032, top - 0.82, f"{tag}   ({total})", va="center", ha="left",
+                fontsize=9.5, fontweight="bold", color=strong, zorder=3)
+        for i, (sym, why) in enumerate(rows):
+            ry = top - PANEL_PAD - i - 0.5
+            ax.text(0.05, ry, sym, va="center", ha="left", fontsize=9.5,
+                    fontweight="bold", color="#111", family=MONO, zorder=3)
+            ax.text(0.135, ry, why, va="center", ha="left", fontsize=9.5,
+                    color="#1f1f1f", zorder=3)
+        top -= h + 0.45
+
+
 def render_chart_png(s):
-    """Variant A — 1-day move bars (left) beside a 52-week range gauge (right).
+    """1-day move bars (left) beside a 52-week range gauge (right).
 
     Each gauge is a lo ●———— hi track with the real prices labeled at the ends
     and a marker where the current close sits; it glows amber within 2% of the
-    52w high (book-profit watch) and blue within 2% of the low. An optional
-    ACTION / RE-ENTRY callout sits full-width on top.
+    52w high (book-profit watch) and blue within 2% of the low. Zebra banding
+    ties the two columns together, values ride in solid chips, and numbers are
+    monospaced so the columns align. Above the chart, one tinted panel per
+    signal group (action / re-entry / golden cross / death cross) — a single
+    header each, never a tag repeated per row. The session badge (PRE-MARKET,
+    MARKET CLOSE, …) sits top-right so the run is identifiable at a glance.
     """
     import matplotlib
     matplotlib.use("Agg")                   # headless; imported lazily so the pure
     import matplotlib.pyplot as plt          # logic (and tests) need no matplotlib
 
     from matplotlib.gridspec import GridSpec
+    from matplotlib.patches import FancyBboxPatch
 
     movers = sorted(s["up"] + s["down"], key=lambda m: m[1], reverse=True)
     idx = sorted(s["idx"], key=lambda m: m[1], reverse=True)
     meta = s.get("r52", {})
-    callout = [("⚡ ACTION", sym, why, ACT_COL) for sym, why in s.get("action", [])] \
-        + [("◎ RE-ENTRY", sym, why, RE_COL) for sym, why in s.get("reentry", [])]
-    nc = len(callout)
+    groups = _callout_groups(s)
+    L = _callout_height(groups)
+    ch = 0.30 * L + 0.30
 
     # one stacked axis: movers, a labelled spacer, then indexes
     rows = [("m", m) for m in movers] + [("gap", None)] + [("i", m) for m in idx]
     n = len(rows)
     mx = max((abs(m[1]) for m in movers + idx), default=1) or 1
 
-    fig = plt.figure(dpi=150, figsize=(9.6, 0.46 * n + 0.34 * nc + 1.6))
-    if nc:
-        gs = GridSpec(2, 2, height_ratios=[0.34 * nc + 0.25, 0.46 * n],
-                      width_ratios=[1.0, 1.32], hspace=0.14, wspace=0.04)
+    fig = plt.figure(dpi=150, figsize=(9.8, 0.5 * n + ch + 1.75))
+    if groups:
+        gs = GridSpec(2, 2, height_ratios=[ch, 0.5 * n],
+                      width_ratios=[1.0, 1.32], hspace=0.15, wspace=0.03)
         ax_c = fig.add_subplot(gs[0, :])
         axL, axR = fig.add_subplot(gs[1, 0]), fig.add_subplot(gs[1, 1])
     else:
-        gs = GridSpec(1, 2, width_ratios=[1.0, 1.32], wspace=0.04)
+        gs = GridSpec(1, 2, width_ratios=[1.0, 1.32], wspace=0.03)
         ax_c = None
         axL, axR = fig.add_subplot(gs[0]), fig.add_subplot(gs[1])
 
     ys = [n - 1 - i for i in range(n)]
 
+    # zebra banding, drawn under both columns so rows read straight across
+    for ax in (axL, axR):
+        ax.set_ylim(-0.6, n - 0.4)
+        for j, (y, (kind, m)) in enumerate(zip(ys, rows)):
+            if m is not None and j % 2 == 0:
+                ax.axhspan(y - 0.5, y + 0.5, color="#f2f3f5", zorder=0)
+
     # ---- left: 1-day move bars ----
     for y, (kind, m) in zip(ys, rows):
         if m is None:
-            axL.text(-mx * 1.35, y, "INDEXES", va="center", ha="left", fontsize=7.5,
-                     color="#bbb", fontweight="bold")
+            axL.text(-mx * 1.35, y, "INDEXES", va="center", ha="left", fontsize=8.5,
+                     color="#fff", fontweight="bold",
+                     bbox=dict(boxstyle="round,pad=0.3", fc="#333", ec="none"))
             continue
         v = m[1]
-        axL.barh(y, v, color=UP if v >= 0 else DOWN, height=0.6, zorder=3)
+        axL.barh(y, v, color=UP if v >= 0 else DOWN, height=0.5, zorder=3)
         axL.text(v + (mx * 0.03 if v >= 0 else -mx * 0.03), y, f"{v:+.1f}%",
-                 va="center", ha="left" if v >= 0 else "right", fontsize=8.5,
-                 fontweight="bold", color=UP if v >= 0 else DOWN)
-    axL.axvline(0, color="#333", lw=0.8, zorder=2)
-    axL.set_xlim(-mx * 1.35, mx * 1.35)
-    axL.set_ylim(-0.6, n - 0.4)
+                 va="center", ha="left" if v >= 0 else "right", fontsize=9,
+                 fontweight="bold", color="white", family=MONO,
+                 bbox=dict(boxstyle="round,pad=0.22",
+                           fc=UP if v >= 0 else DOWN, ec="none"))
+    axL.axvline(0, color="#222", lw=1.1, zorder=2)
+    axL.set_xlim(-mx * 1.4, mx * 1.4)
     axL.set_yticks([y for y, (k, m) in zip(ys, rows) if m is not None])
-    axL.set_yticklabels([m[0] for (k, m) in rows if m is not None], fontsize=10)
+    axL.set_yticklabels([m[0] for (k, m) in rows if m is not None], fontsize=11.5,
+                        fontweight="bold", color="#111")
     for sp in ("top", "right", "left"):
         axL.spines[sp].set_visible(False)
     axL.tick_params(length=0)
     axL.set_xticks([])
-    axL.set_title("1-day move", loc="left", fontsize=8.5, color="#999",
-                  fontweight="bold", pad=6)
+    axL.set_title("1-DAY MOVE", loc="left", fontsize=9.5, color="#333",
+                  fontweight="bold", pad=8)
 
     # ---- right: 52-week range gauges ----
     axR.set_xlim(0, 1)
-    axR.set_ylim(-0.6, n - 0.4)
-    axR.axis("off")
-    axR.set_title("52-week range", loc="left", fontsize=8.5, color="#999",
-                  fontweight="bold", pad=6)
-    gx0, gx1 = 0.20, 0.82
+    axR.set_title("52-WEEK RANGE", loc="left", fontsize=9.5, color="#333",
+                  fontweight="bold", pad=8)
+    for sp in axR.spines.values():
+        sp.set_visible(False)
+    # column divider as this axis's own spine — can't bleed into the callout
+    axR.spines["left"].set_visible(True)
+    axR.spines["left"].set_color("#d5d7db")
+    axR.spines["left"].set_linewidth(1.0)
+    axR.tick_params(length=0)
+    axR.set_xticks([])
+    axR.set_yticks([])
+    gx0, gx1 = 0.24, 0.80
     for y, (kind, m) in zip(ys, rows):
         if m is None:
             continue
         mm = meta.get(m[0], {})
         lo, hi, c = mm.get("lo"), mm.get("hi"), mm.get("close")
-        axR.plot([gx0, gx1], [y, y], color="#dcdcdc", lw=3,
+        axR.plot([gx0, gx1], [y, y], color="#b9bcc2", lw=4.5,
                  solid_capstyle="round", zorder=1)
         ph, pl = mm.get("pfh"), mm.get("pfl")
         frac = (c - lo) / (hi - lo) if (hi and lo and hi > lo and c) else 0.5
@@ -289,38 +414,37 @@ def render_chart_png(s):
         near_hi = ph is not None and ph >= -2
         near_lo = pl is not None and pl <= 2
         mc = HI_C if near_hi else LO_C if near_lo else "#111"
-        axR.scatter([xp], [y], s=76 if (near_hi or near_lo) else 44, color=mc,
-                    zorder=3, edgecolors="white", linewidths=1.1)
-        axR.text(gx0 - 0.018, y, _money(lo), va="center", ha="right",
-                 fontsize=7.5, color="#888")
-        axR.text(gx1 + 0.018, y, _money(hi), va="center", ha="left",
-                 fontsize=7.5, color="#888")
+        axR.scatter([xp], [y], s=100 if (near_hi or near_lo) else 60, color=mc,
+                    zorder=3, edgecolors="white", linewidths=1.5)
+        axR.text(gx0 - 0.02, y, _money(lo), va="center", ha="right",
+                 fontsize=8.5, color="#333", family=MONO)
+        axR.text(gx1 + 0.02, y, _money(hi), va="center", ha="left",
+                 fontsize=8.5, color="#333", family=MONO)
         if near_hi:
-            axR.text(xp, y + 0.36, f"{abs(ph):.1f}% to hi", va="bottom",
-                     ha="center", fontsize=7.5, fontweight="bold", color=HI_C)
+            axR.text(xp, y + 0.34, f"{abs(ph):.1f}% to hi", va="bottom",
+                     ha="center", fontsize=8, fontweight="bold", color=HI_C)
         elif near_lo:
-            axR.text(xp, y + 0.36, f"{pl:.1f}% off lo", va="bottom",
-                     ha="center", fontsize=7.5, fontweight="bold", color=LO_C)
+            axR.text(xp, y + 0.34, f"{pl:.1f}% off lo", va="bottom",
+                     ha="center", fontsize=8, fontweight="bold", color=LO_C)
 
-    # ---- callout (full-width, on top) ----
+    # ---- grouped signal panels, full-width on top ----
     if ax_c is not None:
-        ax_c.axis("off")
-        ax_c.set_xlim(0, 1)
-        ax_c.set_ylim(0, 1)
-        for i, (chip, sym, why, (fc, ec, tc)) in enumerate(callout):
-            y = 1 - (i + 0.5) / nc
-            ax_c.text(0.004, y, f"{chip}  {sym}", transform=ax_c.transAxes,
-                      va="center", ha="left", fontsize=8.5, fontweight="bold",
-                      color=tc, bbox=dict(boxstyle="round,pad=0.32", fc=fc, ec=ec, lw=0.9))
-            ax_c.text(0.33, y, why, transform=ax_c.transAxes, va="center",
-                      ha="left", fontsize=8.5, color="#666")
+        _draw_callout(ax_c, groups, L, plt, FancyBboxPatch)
 
-    fig.text(0.015, 0.985, f"TrendAlert · {s['core_name']} — {s['label']}",
-             ha="left", va="top", fontsize=13, fontweight="bold")
+    fig.text(0.015, 0.988, "TrendAlert Daily", ha="left", va="top",
+             fontsize=15, fontweight="bold", color="#0d0d0d")
+    if s.get("session"):
+        fig.text(0.985, 0.984, s["session"], ha="right", va="top", fontsize=9.5,
+                 fontweight="bold", color="white",
+                 bbox=dict(boxstyle="round,pad=0.42", fc="#111", ec="none"))
+    fig.text(0.015, 0.949, f"{s['core_name']} · {s['label']}", ha="left", va="top",
+             fontsize=9.5, color="#555", fontweight="bold")
+    fig.add_artist(plt.Line2D([0.015, 0.985], [0.934, 0.934], color=UP, lw=2.5,
+                              transform=fig.transFigure))
     fig.text(0.015, 0.012,
              s["breadth"] + "    ·    amber = near 52w high · blue = near 52w low",
-             fontsize=8, color="#777")
-    fig.subplots_adjust(top=0.90, bottom=0.05, left=0.075, right=0.985)
+             fontsize=8.5, color="#333")
+    fig.subplots_adjust(top=0.915, bottom=0.05, left=0.08, right=0.985)
     buf = io.BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight", facecolor="white")
     plt.close(fig)
@@ -351,7 +475,8 @@ def run_daily_summary(bucket):
 
         raw = data.get("expected_last_trading_day") \
             or (str(data.get("generated_at", ""))[:10] or None)
-        label = f"{raw} · close" if raw else et.strftime("%b %d") + " · close"
+        label = raw or et.strftime("%b %d")
+        session = session_label(et)
 
         positions = _read_json(bucket, "positions.json", {}) or {}
         if isinstance(positions, dict) and "positions" in positions:
@@ -361,17 +486,18 @@ def run_daily_summary(bucket):
 
         s = compute_summary(records, load_core(bucket), label, positions=positions,
                             hz=f("highZonePct", 2.0), lz=f("lowZonePct", 10.0),
-                            gain_pct=f("gainPct", 20.0))
+                            gain_pct=f("gainPct", 20.0),
+                            alerts=data.get("alerts"), session=session)
         if s is None:
             return {"ok": True, "summary": "skipped(too-few-core-holdings)"}
 
         png = render_chart_png(s)
         caption = summary_text(s)
+        subject = f"TrendAlert Daily {raw or ''} — {session.title()}".strip()
 
         statuses = []
         for send in (lambda: send_telegram_photo(png, caption),
-                     lambda: send_email_image(
-                         f"TrendAlert Daily {raw or ''}".strip(), caption, png)):
+                     lambda: send_email_image(subject, caption, png)):
             try:
                 statuses.append(send())
             except Exception as e:
