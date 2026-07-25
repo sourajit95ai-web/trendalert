@@ -275,38 +275,39 @@ def summary_text(s):
 # ----------------------------------------------------------------------
 # render (matplotlib -> PNG bytes)
 # ----------------------------------------------------------------------
-PANEL_PAD = 1.55        # header + breathing room, in row-height units
+HEADER_PAD = 1.25       # group header + its rule, in row-height units
+GROUP_GAP = 0.4         # blank space between groups
 
 
 def _callout_height(groups):
-    """Callout block size in 'line units' — panels grow with their row count."""
-    return sum(len(rows) + PANEL_PAD for _t, rows, _c, _n in groups) \
-        + 0.45 * max(len(groups) - 1, 0)
+    """Callout block size in 'line units' — groups grow with their row count."""
+    return sum(len(rows) + HEADER_PAD for _t, rows, _c, _n in groups) \
+        + GROUP_GAP * max(len(groups) - 1, 0)
 
 
-def _draw_callout(ax, groups, L, plt, FancyBboxPatch):
-    """Tinted panel per group: colored left edge, ONE header, then the rows."""
+def _draw_callout(ax, groups, L):
+    """ONE colored header per group, a rule under it, then the rows.
+
+    Deliberately unboxed: the section headers echo the chart's own
+    1-DAY MOVE / 52-WEEK RANGE labels, and a group with one row takes exactly
+    one row of space instead of a panel's worth.
+    """
     ax.axis("off")
     ax.set_xlim(0, 1)
     ax.set_ylim(0, L)
     top = L
-    for tag, rows, (strong, edge, fill), total in groups:
-        h = len(rows) + PANEL_PAD
-        ax.add_patch(FancyBboxPatch(
-            (0.006, top - h + 0.18), 0.988, h - 0.36,
-            boxstyle="round,pad=0,rounding_size=0.012", mutation_aspect=0.06,
-            fc=fill, ec=edge, lw=1.1, zorder=1, clip_on=False))
-        ax.add_patch(plt.Rectangle((0.006, top - h + 0.18), 0.007, h - 0.36,
-                                   fc=strong, ec="none", zorder=2, clip_on=False))
-        ax.text(0.032, top - 0.82, f"{tag}   ({total})", va="center", ha="left",
-                fontsize=9.5, fontweight="bold", color=strong, zorder=3)
+    for tag, rows, (strong, edge, _fill), total in groups:
+        hy = top - 0.6
+        ax.text(0.006, hy, f"{tag}  ({total})", va="center", ha="left",
+                fontsize=9.5, fontweight="bold", color=strong)
+        ax.plot([0.006, 0.994], [hy - 0.42, hy - 0.42], color=edge, lw=1.4)
         for i, (sym, why) in enumerate(rows):
-            ry = top - PANEL_PAD - i - 0.5
-            ax.text(0.05, ry, sym, va="center", ha="left", fontsize=9.5,
-                    fontweight="bold", color="#111", family=MONO, zorder=3)
-            ax.text(0.135, ry, why, va="center", ha="left", fontsize=9.5,
-                    color="#1f1f1f", zorder=3)
-        top -= h + 0.45
+            ry = top - HEADER_PAD - i - 0.5
+            ax.text(0.022, ry, sym, va="center", ha="left", fontsize=9.5,
+                    fontweight="bold", color="#111", family=MONO)
+            ax.text(0.11, ry, why, va="center", ha="left", fontsize=9.5,
+                    color="#1f1f1f")
+        top -= len(rows) + HEADER_PAD + GROUP_GAP
 
 
 def render_chart_png(s):
@@ -316,17 +317,17 @@ def render_chart_png(s):
     and a marker where the current close sits; it glows amber within 2% of the
     52w high (book-profit watch) and blue within 2% of the low. Zebra banding
     ties the two columns together, values ride in solid chips, and numbers are
-    monospaced so the columns align. Above the chart, one tinted panel per
-    signal group (action / re-entry / golden cross / death cross) — a single
-    header each, never a tag repeated per row. The session badge (PRE-MARKET,
-    MARKET CLOSE, …) sits top-right so the run is identifiable at a glance.
+    monospaced so the columns align. Above the chart, each signal group
+    (action / re-entry / golden cross / death cross) gets ONE colored header
+    with a rule under it and its rows beneath — never a tag repeated per row.
+    The session badge (PRE-MARKET, MARKET CLOSE, …) sits top-right so the run
+    is identifiable at a glance.
     """
     import matplotlib
     matplotlib.use("Agg")                   # headless; imported lazily so the pure
     import matplotlib.pyplot as plt          # logic (and tests) need no matplotlib
 
     from matplotlib.gridspec import GridSpec
-    from matplotlib.patches import FancyBboxPatch
 
     movers = sorted(s["up"] + s["down"], key=lambda m: m[1], reverse=True)
     idx = sorted(s["idx"], key=lambda m: m[1], reverse=True)
@@ -429,7 +430,7 @@ def render_chart_png(s):
 
     # ---- grouped signal panels, full-width on top ----
     if ax_c is not None:
-        _draw_callout(ax_c, groups, L, plt, FancyBboxPatch)
+        _draw_callout(ax_c, groups, L)
 
     fig.text(0.015, 0.988, "TrendAlert Daily", ha="left", va="top",
              fontsize=15, fontweight="bold", color="#0d0d0d")
