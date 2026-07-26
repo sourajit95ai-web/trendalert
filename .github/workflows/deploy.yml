@@ -109,8 +109,11 @@ jobs:
       # never overwrite dashboard.html -- promoting it is a deliberate rename,
       # not a deploy flag. It is also ~730KB uncompressed against v1's ~155KB,
       # and no-cache means every load pays that, so v2 uploads with -Z
-      # (Content-Encoding: gzip, ~290KB on the wire; GCS transcodes for any
-      # client that somehow does not accept gzip).
+      # (Content-Encoding: gzip, 293KB on the wire). Note -Z also stamps
+      # no-transform onto Cache-Control, which disables GCS decompressive
+      # transcoding -- the object is only ever served gzipped. Every browser
+      # sends Accept-Encoding: gzip, so this is fine, but a raw client that
+      # does not will get bytes it has to inflate itself.
       - name: Publish dashboard
         run: |
           if [ "${{ inputs.variant }}" = "v2" ]; then
