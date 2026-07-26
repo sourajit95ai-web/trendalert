@@ -123,6 +123,7 @@ jobs:
           else
             DEST="gs://${{ secrets.GCS_BUCKET }}/dev/$NAME"
           fi
-          gsutil $GZIP -h "Cache-Control:no-cache" -h "Content-Type:text/html" \
-            cp "$SRC" "$DEST"
+          # -h is a top-level gsutil flag; -Z belongs to the cp subcommand
+          gsutil -h "Cache-Control:no-cache" -h "Content-Type:text/html" \
+            cp $GZIP "$SRC" "$DEST"
           echo "Published $SRC to $DEST"
