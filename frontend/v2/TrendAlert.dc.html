@@ -1,0 +1,1837 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="vendor/react.js"></script>
+<script src="vendor/react-dom.js"></script>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="vendor/inter.css">
+<link rel="stylesheet" href="_ds/nocturne-0d765830-c2c1-4081-b960-bfbdc8312cb5/styles.css">
+<link rel="stylesheet" href="theme.css">
+<script src="_ds/nocturne-0d765830-c2c1-4081-b960-bfbdc8312cb5/_ds_bundle.js"></script>
+<script src="vendor/lightweight-charts.js"></script>
+<script src="trendalert-core.js"></script>
+<style>
+  body { margin: 0; background: var(--color-bg); }
+  a { color: var(--color-accent); text-decoration: none; }
+  a:hover { color: var(--color-accent-300); }
+  input, select, button, textarea { font-family: inherit; }
+  input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  ::selection { background: var(--color-accent-800); }
+  .ta-hit:hover { border-color: var(--color-accent); color: var(--color-text); }
+  .ta-row:hover { background: color-mix(in srgb, var(--color-accent-900) 30%, transparent); }
+  .ta-scroll::-webkit-scrollbar { width: 9px; height: 9px; }
+  .ta-scroll::-webkit-scrollbar-thumb { background: var(--ta-scrollbar); border-radius: 5px; }
+  .ta-scroll::-webkit-scrollbar-track { background: transparent; }
+  </style>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#161826"/><g fill="none" stroke="#9184d9" stroke-width="3.2" stroke-linecap="round"><path d="M30 66 L42 54 L52 60 L70 36"/></g><circle cx="70" cy="36" r="3.4" fill="#9184d9"/><path d="M30 74 H70" stroke="#3f424d" stroke-width="2" stroke-linecap="round"/></svg></template>
+<style>
+  @media (max-width: 760px) {
+    .ta-triage { grid-template-columns: 1fr !important; gap: 12px !important; }
+    .ta-triage .ta-triage-act { flex-direction: row !important; flex-wrap: wrap; }
+    .ta-triage .ta-triage-act > button { flex: 1 1 auto; }
+  }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:var(--color-bg); color:var(--color-text); font-family:var(--font-body); -webkit-font-smoothing:antialiased; --ta-padX:{{ tw.padX }}; --ta-rowY:{{ tw.rowY }}; --ta-sectionY:{{ tw.sectionY }}; --ta-restGap:{{ tw.restGap }}">
+
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:20px; padding:20px var(--ta-padX); flex-wrap:wrap">
+    <div style="display:flex; align-items:baseline; gap:14px; flex-wrap:wrap">
+      <span style="font-family:var(--font-heading); font-size:17px; font-weight:500; letter-spacing:-0.01em">TrendAlert</span>
+      <span style="font-size:12.5px; color:var(--color-neutral-600)">{{ meta.scope }}</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap">
+      <span style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--color-neutral-400)"><span style="width:6px; height:6px; border-radius:50%; background:{{ meta.statusInk }}"></span>{{ meta.statusText }}</span>
+      <sc-if value="{{ meta.staleText }}">
+        <span style="font-size:12px; color:{{ meta.staleInk }}; border:1px solid {{ meta.staleBorder }}; border-radius:999px; padding:3px 10px">{{ meta.staleText }}</span>
+      </sc-if>
+      <button type="button" class="ta-hit" onClick="{{ openSettings }}" style="font-size:13px; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:7px 14px; cursor:pointer">Settings</button>
+    </div>
+  </div>
+  <div style="height:1px; background:linear-gradient(to right, transparent, var(--color-divider) 48px calc(100% - 48px), transparent)"></div>
+
+  <div class="ta-scroll" style="display:flex; gap:30px; padding:13px var(--ta-padX); font-variant-numeric:tabular-nums; font-size:12.5px; color:var(--color-neutral-500); overflow-x:auto; align-items:center">
+    <sc-for list="{{ ledger }}" as="q" hint-placeholder-count="5">
+      <button type="button" onClick="{{ q.onClick }}" style="display:flex; align-items:baseline; gap:7px; background:transparent; border:0; padding:0; cursor:pointer; font-size:12.5px; color:var(--color-neutral-500); white-space:nowrap">
+        <span>{{ q.name }}</span><span style="color:var(--color-text)">{{ q.close }}</span><span style="color:{{ q.ink }}">{{ q.chg }}</span>
+      </button>
+    </sc-for>
+    <span style="margin-left:auto; color:var(--color-neutral-600); white-space:nowrap">{{ breadthText }}</span>
+  </div>
+  <div style="height:1px; background:linear-gradient(to right, transparent, var(--color-divider) 48px calc(100% - 48px), transparent)"></div>
+
+  <div style="padding:clamp(26px,5vw,46px) var(--ta-padX) 0; display:flex; align-items:flex-end; justify-content:space-between; gap:28px; flex-wrap:wrap">
+    <div style="display:flex; flex-direction:column; gap:12px; min-width:0">
+      <h1 style="font-family:var(--font-heading); font-weight:500; font-size:clamp(23px,3.4vw,32px); line-height:1.15; letter-spacing:-0.02em; margin:0">{{ headline }}</h1>
+      <p style="font-size:14.5px; line-height:1.6; color:var(--color-neutral-500); margin:0; max-width:70ch">{{ subline }}</p>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap">
+      <button type="button" class="ta-hit" onClick="{{ toggleAdd }}" style="font-size:13px; color:var(--color-accent); background:transparent; border:1px solid var(--color-accent); border-radius:8px; padding:8px 16px; cursor:pointer">Add ticker</button>
+      <button type="button" class="ta-hit" onClick="{{ openLists }}" style="font-size:13px; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:8px 16px; cursor:pointer">Manage lists</button>
+    </div>
+  </div>
+
+  <sc-if value="{{ addOpen }}">
+    <div style="padding:22px var(--ta-padX) 0">
+      <div style="display:flex; gap:10px; align-items:center; max-width:520px; flex-wrap:wrap">
+        <input type="text" value="{{ addDraft }}" onChange="{{ onAddDraft }}" onKeyDown="{{ onAddKey }}" placeholder="e.g. AAPL" maxLength="10" style="flex:1; min-width:170px; font-size:14px; letter-spacing:0.04em; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:10px 13px; outline:0" />
+        <button type="button" class="ta-hit" onClick="{{ submitAdd }}" style="font-size:13px; color:var(--color-accent); background:transparent; border:1px solid var(--color-accent); border-radius:8px; padding:10px 18px; cursor:pointer">Choose list</button>
+      </div>
+      <sc-if value="{{ addNote }}">
+        <p style="font-size:12.5px; line-height:1.6; color:var(--color-neutral-500); margin:10px 0 0; max-width:70ch">{{ addNote }}</p>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <div style="padding:26px var(--ta-padX) 0; display:flex; align-items:center; gap:22px; flex-wrap:wrap">
+    <div style="display:flex; gap:18px; flex-wrap:wrap">
+      <sc-for list="{{ typeTabs }}" as="t" hint-placeholder-count="3">
+        <button type="button" onClick="{{ t.onClick }}" style="display:flex; align-items:baseline; gap:7px; font-size:14px; color:{{ t.ink }}; background:transparent; border:0; border-bottom:1px solid {{ t.underline }}; padding:6px 2px; cursor:pointer">
+          {{ t.label }}<span style="font-size:11.5px; font-variant-numeric:tabular-nums; color:var(--color-neutral-600)">{{ t.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+    <sc-if value="{{ showListChips }}">
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <sc-for list="{{ listChips }}" as="c" hint-placeholder-count="2">
+          <button type="button" onClick="{{ c.onClick }}" style="display:flex; align-items:baseline; gap:7px; font-size:12.5px; color:{{ c.ink }}; background:{{ c.bg }}; border:1px solid {{ c.bd }}; border-radius:999px; padding:5px 13px; cursor:pointer">
+            {{ c.name }}<span style="font-size:11px; font-variant-numeric:tabular-nums; color:var(--color-neutral-600)">{{ c.count }}</span>
+          </button>
+        </sc-for>
+      </div>
+    </sc-if>
+  </div>
+
+  <sc-if value="{{ hasAction }}">
+    <div style="padding:var(--ta-sectionY) var(--ta-padX) 0; display:flex; flex-direction:column">
+      <div style="display:flex; align-items:center; gap:14px; padding-bottom:14px">
+        <span style="width:32px; height:1px; background:oklch(0.82 0.105 80)"></span>
+        <span style="font-size:12px; letter-spacing:0.1em; text-transform:uppercase; color:oklch(0.82 0.105 80)">Action required</span>
+        <span style="font-size:12px; color:var(--color-neutral-600); font-variant-numeric:tabular-nums">{{ actionCount }}</span>
+      </div>
+      <sc-for list="{{ actionRows }}" as="r" hint-placeholder-count="2">
+        <div class="ta-row ta-triage" style="display:grid; grid-template-columns:74px minmax(0,1fr) 232px; gap:14px 30px; align-items:start; padding:var(--ta-rowY) {{ r.rowPadR }} var(--ta-rowY) {{ r.rowPadL }}; border-top:1px solid var(--color-neutral-900); background:{{ r.rowBg }}; box-shadow:{{ r.rowBar }}; border-radius:{{ r.rowRadius }}">
+          <button type="button" onClick="{{ r.onSelect }}" style="display:flex; flex-direction:column; gap:4px; align-items:flex-start; background:transparent; border:0; padding:0; cursor:pointer">
+            <span style="font-family:var(--font-heading); font-size:34px; font-weight:500; line-height:1; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; color:{{ r.scoreInk }}">{{ r.score }}</span>
+            <span style="font-size:10.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--color-neutral-600)">Score</span>
+          </button>
+          <div style="display:flex; flex-direction:column; gap:9px; min-width:0">
+            <div style="display:flex; align-items:baseline; gap:11px; flex-wrap:wrap">
+              <button type="button" onClick="{{ r.onSelect }}" style="font-family:var(--font-heading); font-size:20px; font-weight:500; letter-spacing:-0.01em; color:var(--color-text); background:transparent; border:0; padding:0; cursor:pointer">{{ r.symbol }}</button>
+              <span style="font-size:13px; color:var(--color-neutral-600)">{{ r.sector }}</span>
+              <span style="font-size:14.5px; font-variant-numeric:tabular-nums">{{ r.close }}</span>
+              <span style="font-size:13.5px; font-variant-numeric:tabular-nums; color:{{ r.chgInk }}">{{ r.chg }}</span>
+              <sc-if value="{{ r.tag }}">
+                <span style="font-size:11px; letter-spacing:0.05em; text-transform:uppercase; color:{{ r.tagInk }}; border:1px solid {{ r.tagBorder }}; border-radius:999px; padding:2px 9px">{{ r.tag }}</span>
+              </sc-if>
+            </div>
+            <p style="font-size:14.5px; line-height:1.65; margin:0; color:var(--color-neutral-300); max-width:64ch">{{ r.why }}</p>
+            <sc-if value="{{ r.action }}">
+              <p style="font-size:13.5px; line-height:1.6; margin:0; color:{{ r.actionInk }}">{{ r.action }}</p>
+            </sc-if>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+              <button type="button" onClick="{{ r.onPb }}" style="font-size:10.5px; font-weight:500; letter-spacing:0.06em; color:{{ r.pbInk }}; background:transparent; border:1px solid {{ r.pbBorder }}; border-radius:6px; padding:3px 9px; cursor:pointer">PB</button>
+              <button type="button" onClick="{{ r.onRe }}" style="font-size:10.5px; font-weight:500; letter-spacing:0.06em; color:{{ r.reInk }}; background:transparent; border:1px solid {{ r.reBorder }}; border-radius:6px; padding:3px 9px; cursor:pointer">RE</button>
+              <span style="font-size:12px; color:var(--color-neutral-600)">{{ r.membership }}</span>
+            </div>
+          </div>
+          <div class="ta-triage-act" style="display:flex; flex-direction:column; gap:8px">
+            <sc-if value="{{ r.cta }}">
+              <button type="button" class="ta-hit" onClick="{{ r.onSelect }}" style="font-size:13px; font-weight:500; color:var(--color-accent); background:transparent; border:1px solid var(--color-accent); border-radius:8px; padding:9px 14px; cursor:pointer">{{ r.cta }}</button>
+            </sc-if>
+            <div style="display:flex; gap:8px">
+              <button type="button" class="ta-hit" onClick="{{ r.onChart }}" style="flex:1; font-size:12.5px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:8px 10px; cursor:pointer">Chart</button>
+              <button type="button" class="ta-hit" onClick="{{ r.onSelect }}" style="flex:1; font-size:12.5px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:8px 10px; cursor:pointer">Detail</button>
+            </div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ hasReentry }}">
+    <div style="padding:var(--ta-sectionY) var(--ta-padX) 0; display:flex; flex-direction:column">
+      <div style="display:flex; align-items:center; gap:14px; padding-bottom:14px">
+        <span style="width:32px; height:1px; background:var(--color-accent)"></span>
+        <span style="font-size:12px; letter-spacing:0.1em; text-transform:uppercase; color:var(--color-accent)">Re-entry watch</span>
+        <span style="font-size:12px; color:var(--color-neutral-600); font-variant-numeric:tabular-nums">{{ reentryCount }}</span>
+      </div>
+      <sc-for list="{{ reentryRows }}" as="r" hint-placeholder-count="2">
+        <div class="ta-row ta-triage" style="display:grid; grid-template-columns:74px minmax(0,1fr) 232px; gap:14px 30px; align-items:start; padding:var(--ta-rowY) {{ r.rowPadR }} var(--ta-rowY) {{ r.rowPadL }}; border-top:1px solid var(--color-neutral-900); background:{{ r.rowBg }}; box-shadow:{{ r.rowBar }}; border-radius:{{ r.rowRadius }}">
+          <button type="button" onClick="{{ r.onSelect }}" style="display:flex; flex-direction:column; gap:4px; align-items:flex-start; background:transparent; border:0; padding:0; cursor:pointer">
+            <span style="font-family:var(--font-heading); font-size:34px; font-weight:500; line-height:1; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; color:{{ r.scoreInk }}">{{ r.score }}</span>
+            <span style="font-size:10.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--color-neutral-600)">Score</span>
+          </button>
+          <div style="display:flex; flex-direction:column; gap:9px; min-width:0">
+            <div style="display:flex; align-items:baseline; gap:11px; flex-wrap:wrap">
+              <button type="button" onClick="{{ r.onSelect }}" style="font-family:var(--font-heading); font-size:20px; font-weight:500; letter-spacing:-0.01em; color:var(--color-text); background:transparent; border:0; padding:0; cursor:pointer">{{ r.symbol }}</button>
+              <span style="font-size:13px; color:var(--color-neutral-600)">{{ r.sector }}</span>
+              <span style="font-size:14.5px; font-variant-numeric:tabular-nums">{{ r.close }}</span>
+              <span style="font-size:13.5px; font-variant-numeric:tabular-nums; color:{{ r.chgInk }}">{{ r.chg }}</span>
+              <sc-if value="{{ r.tag }}">
+                <span style="font-size:11px; letter-spacing:0.05em; text-transform:uppercase; color:{{ r.tagInk }}; border:1px solid {{ r.tagBorder }}; border-radius:999px; padding:2px 9px">{{ r.tag }}</span>
+              </sc-if>
+            </div>
+            <p style="font-size:14.5px; line-height:1.65; margin:0; color:var(--color-neutral-300); max-width:64ch">{{ r.why }}</p>
+            <sc-if value="{{ r.action }}">
+              <p style="font-size:13.5px; line-height:1.6; margin:0; color:{{ r.actionInk }}">{{ r.action }}</p>
+            </sc-if>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+              <button type="button" onClick="{{ r.onPb }}" style="font-size:10.5px; font-weight:500; letter-spacing:0.06em; color:{{ r.pbInk }}; background:transparent; border:1px solid {{ r.pbBorder }}; border-radius:6px; padding:3px 9px; cursor:pointer">PB</button>
+              <button type="button" onClick="{{ r.onRe }}" style="font-size:10.5px; font-weight:500; letter-spacing:0.06em; color:{{ r.reInk }}; background:transparent; border:1px solid {{ r.reBorder }}; border-radius:6px; padding:3px 9px; cursor:pointer">RE</button>
+              <span style="font-size:12px; color:var(--color-neutral-600)">{{ r.membership }}</span>
+            </div>
+          </div>
+          <div class="ta-triage-act" style="display:flex; flex-direction:column; gap:8px">
+            <sc-if value="{{ r.cta }}">
+              <button type="button" class="ta-hit" onClick="{{ r.onSelect }}" style="font-size:13px; font-weight:500; color:var(--color-accent); background:transparent; border:1px solid var(--color-accent); border-radius:8px; padding:9px 14px; cursor:pointer">{{ r.cta }}</button>
+            </sc-if>
+            <div style="display:flex; gap:8px">
+              <button type="button" class="ta-hit" onClick="{{ r.onChart }}" style="flex:1; font-size:12.5px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:8px 10px; cursor:pointer">Chart</button>
+              <button type="button" class="ta-hit" onClick="{{ r.onSelect }}" style="flex:1; font-size:12.5px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:8px 10px; cursor:pointer">Detail</button>
+            </div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ hasPending }}">
+    <div style="padding:var(--ta-sectionY) var(--ta-padX) 0; display:flex; flex-direction:column">
+      <div style="display:flex; align-items:center; gap:14px; padding-bottom:14px">
+        <span style="width:32px; height:1px; background:var(--color-neutral-600)"></span>
+        <span style="font-size:12px; letter-spacing:0.1em; text-transform:uppercase; color:var(--color-neutral-400)">Awaiting data</span>
+        <span style="font-size:12px; color:var(--color-neutral-600); font-variant-numeric:tabular-nums">{{ pendingCount }}</span>
+      </div>
+      <sc-for list="{{ pendingRows }}" as="r" hint-placeholder-count="1">
+        <div style="display:flex; align-items:baseline; gap:14px; padding:16px 0; border-top:1px solid var(--color-neutral-900); flex-wrap:wrap">
+          <span style="font-family:var(--font-heading); font-size:16px; font-weight:500">{{ r.symbol }}</span>
+          <p style="font-size:13.5px; line-height:1.6; margin:0; color:var(--color-neutral-500); flex:1; min-width:200px">Newly added — data arrives on the next pipeline run (midday and after the close).</p>
+          <button type="button" class="ta-hit" onClick="{{ r.onRemove }}" style="font-size:12.5px; color:var(--color-neutral-500); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:6px 12px; cursor:pointer">Remove</button>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <div style="padding:44px var(--ta-padX) 0">
+    <div style="height:1px; background:linear-gradient(to right, transparent, var(--color-divider) 48px calc(100% - 48px), transparent)"></div>
+  </div>
+
+  <div style="padding:32px var(--ta-padX) 0; display:flex; align-items:flex-end; justify-content:space-between; gap:22px; flex-wrap:wrap">
+    <div style="display:flex; flex-direction:column; gap:8px">
+      <h2 style="font-family:var(--font-heading); font-weight:500; font-size:20px; letter-spacing:-0.01em; margin:0">{{ restTitle }}</h2>
+      <p style="font-size:14px; color:var(--color-neutral-500); margin:0">{{ restSub }}</p>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+      <input type="text" value="{{ q }}" onChange="{{ onSearch }}" placeholder="Search symbol" style="font-size:13px; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:8px 12px; outline:0; width:150px" />
+      <select value="{{ trendF }}" onChange="{{ onTrendFilter }}" style="font-size:13px; color:var(--color-text); background:var(--color-bg); border:1px solid var(--color-neutral-800); border-radius:8px; padding:8px 10px; outline:0">
+        <option value="all">All trends</option>
+        <option value="bull">Bullish only</option>
+        <option value="bear">Bearish only</option>
+        <option value="mixed">Mixed only</option>
+      </select>
+      <div style="display:flex; border:1px solid var(--color-neutral-800); border-radius:8px; overflow:hidden">
+        <button type="button" onClick="{{ setCards }}" style="font-size:12.5px; color:{{ cardsInk }}; background:{{ cardsBg }}; border:0; padding:8px 14px; cursor:pointer">Cards</button>
+        <button type="button" onClick="{{ setTable }}" style="font-size:12.5px; color:{{ tableInk }}; background:{{ tableBg }}; border:0; border-left:1px solid var(--color-neutral-800); padding:8px 14px; cursor:pointer">Table</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="ta-scroll" style="padding:14px var(--ta-padX) 0; display:flex; gap:20px; flex-wrap:wrap; align-items:center">
+    <sc-for list="{{ sectorChips }}" as="s" hint-placeholder-count="9">
+      <button type="button" onClick="{{ s.onClick }}" style="font-size:13.5px; color:{{ s.ink }}; background:transparent; border:0; border-bottom:1px solid {{ s.underline }}; padding:6px 2px; cursor:pointer; white-space:nowrap">{{ s.label }}</button>
+    </sc-for>
+    <span style="margin-left:auto; display:flex; gap:14px">
+      <button type="button" onClick="{{ toggleBull }}" style="font-size:13px; color:{{ bullInk }}; background:transparent; border:0; padding:6px 2px; cursor:pointer">{{ bullLabel }}</button>
+      <button type="button" onClick="{{ toggleBear }}" style="font-size:13px; color:{{ bearInk }}; background:transparent; border:0; padding:6px 2px; cursor:pointer">{{ bearLabel }}</button>
+    </span>
+  </div>
+
+  <sc-if value="{{ isCards }}">
+    <div style="padding:22px var(--ta-padX) 0">
+      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax({{ tw.cardMin }}, 1fr)); gap:var(--ta-restGap); background:var(--color-neutral-900); border:1px solid var(--color-neutral-900)">
+        <sc-for list="{{ restCards }}" as="c" hint-placeholder-count="8">
+          <button type="button" onClick="{{ c.onSelect }}" class="ta-row" style="background:var(--color-bg); padding:var(--ta-rowY) 20px; display:flex; flex-direction:column; gap:11px; border:0; text-align:left; cursor:pointer; font-family:var(--font-body)">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; width:100%">
+              <span style="font-family:var(--font-heading); font-size:16px; font-weight:500; color:var(--color-text)">{{ c.symbol }}</span>
+              <span style="font-family:var(--font-heading); font-size:18px; font-weight:500; font-variant-numeric:tabular-nums; color:{{ c.scoreInk }}">{{ c.score }}</span>
+            </div>
+            <div style="display:flex; align-items:baseline; gap:10px; font-size:13px; font-variant-numeric:tabular-nums">
+              <span style="color:var(--color-text)">{{ c.close }}</span><span style="color:{{ c.chgInk }}">{{ c.chg }}</span>
+            </div>
+            <p style="font-size:12.5px; line-height:1.55; color:var(--color-neutral-500); margin:0">{{ c.why }}</p>
+          </button>
+        </sc-for>
+      </div>
+      <sc-if value="{{ showMore }}">
+        <button type="button" class="ta-hit" onClick="{{ onShowMore }}" style="margin-top:18px; font-size:13px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:9px 16px; cursor:pointer">{{ showMoreLabel }}</button>
+      </sc-if>
+      <sc-if value="{{ restEmpty }}">
+        <p style="font-size:14px; line-height:1.7; color:var(--color-neutral-500); margin:26px 0 0; max-width:60ch">{{ restEmptyText }}</p>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isTable }}">
+    <div class="ta-scroll" style="padding:22px var(--ta-padX) 0; overflow-x:auto">
+      <div style="min-width:760px">
+        <div style="display:grid; grid-template-columns:minmax(0,1.7fr) 60px 92px 84px 100px 88px 74px; gap:12px; padding:11px 0; border-bottom:1px solid var(--color-neutral-800)">
+          <sc-for list="{{ tableCols }}" as="h" hint-placeholder-count="6">
+            <button type="button" onClick="{{ h.onClick }}" style="font-size:11px; letter-spacing:0.05em; text-transform:uppercase; color:{{ h.ink }}; background:transparent; border:0; padding:0; cursor:pointer; text-align:{{ h.align }}">{{ h.label }}</button>
+          </sc-for>
+          <span style="font-size:11px; letter-spacing:0.05em; text-transform:uppercase; color:var(--color-neutral-600); text-align:right">Marks</span>
+        </div>
+        <sc-for list="{{ tableRows }}" as="r" hint-placeholder-count="8">
+          <div class="ta-row" style="display:grid; grid-template-columns:minmax(0,1.7fr) 60px 92px 84px 100px 88px 74px; gap:12px; padding:13px 0; align-items:center; border-bottom:1px solid var(--color-neutral-900)">
+            <button type="button" onClick="{{ r.onSelect }}" style="display:flex; flex-direction:column; gap:2px; min-width:0; align-items:flex-start; background:transparent; border:0; padding:0; cursor:pointer; text-align:left">
+              <span style="font-family:var(--font-heading); font-size:14.5px; font-weight:500; color:var(--color-text)">{{ r.symbol }}</span>
+              <span style="font-size:11.5px; color:var(--color-neutral-600)">{{ r.sub }}</span>
+            </button>
+            <span style="text-align:right; font-size:14px; font-variant-numeric:tabular-nums; color:{{ r.scoreInk }}">{{ r.score }}</span>
+            <span style="text-align:right; font-size:13.5px; font-variant-numeric:tabular-nums">{{ r.close }}</span>
+            <span style="text-align:right; font-size:13.5px; font-variant-numeric:tabular-nums; color:{{ r.chgInk }}">{{ r.chg }}</span>
+            <span style="text-align:right; font-size:13px; font-variant-numeric:tabular-nums; color:{{ r.offInk }}">{{ r.off }}</span>
+            <span style="text-align:right; font-size:12.5px; color:var(--color-neutral-400)">{{ r.trend }}</span>
+            <span style="display:flex; gap:6px; justify-content:flex-end">
+              <button type="button" onClick="{{ r.onPb }}" style="font-size:10px; font-weight:500; letter-spacing:0.06em; color:{{ r.pbInk }}; background:transparent; border:1px solid {{ r.pbBorder }}; border-radius:5px; padding:2px 6px; cursor:pointer">PB</button>
+              <button type="button" onClick="{{ r.onRe }}" style="font-size:10px; font-weight:500; letter-spacing:0.06em; color:{{ r.reInk }}; background:transparent; border:1px solid {{ r.reBorder }}; border-radius:5px; padding:2px 6px; cursor:pointer">RE</button>
+            </span>
+          </div>
+        </sc-for>
+        <sc-if value="{{ restEmpty }}">
+          <p style="font-size:14px; line-height:1.7; color:var(--color-neutral-500); margin:26px 0 0; max-width:60ch">{{ restEmptyText }}</p>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <div style="padding:48px var(--ta-padX) 0; display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:40px; align-items:start">
+    <div style="display:flex; flex-direction:column; gap:16px; min-width:0">
+      <div style="display:flex; align-items:center; gap:14px">
+        <span style="width:32px; height:1px; background:var(--color-neutral-600)"></span>
+        <span style="font-size:12px; letter-spacing:0.1em; text-transform:uppercase; color:var(--color-neutral-400)">Recent alerts</span>
+      </div>
+      <div style="display:flex; flex-direction:column">
+        <sc-for list="{{ alerts }}" as="a" hint-placeholder-count="3">
+          <button type="button" onClick="{{ a.onClick }}" class="ta-row" style="display:grid; grid-template-columns:72px minmax(0,1fr) 92px; gap:16px; align-items:baseline; padding:14px 0; border-bottom:1px solid var(--color-neutral-900); background:transparent; border-left:0; border-right:0; border-top:0; cursor:pointer; text-align:left; font-family:var(--font-body)">
+            <span style="font-family:var(--font-heading); font-size:15px; font-weight:500; color:var(--color-text)">{{ a.symbol }}</span>
+            <span style="font-size:14px; color:var(--color-neutral-300)">{{ a.text }}</span>
+            <span style="font-size:12.5px; color:{{ a.ink }}; text-align:right">{{ a.dir }}</span>
+          </button>
+        </sc-for>
+        <sc-if value="{{ noAlerts }}">
+          <p style="font-size:13.5px; color:var(--color-neutral-500); margin:6px 0 0">No recent cross events.</p>
+        </sc-if>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:16px; min-width:0">
+      <div style="display:flex; align-items:center; gap:14px">
+        <span style="width:32px; height:1px; background:var(--color-neutral-600)"></span>
+        <span style="font-size:12px; letter-spacing:0.1em; text-transform:uppercase; color:var(--color-neutral-400)">Portfolio sectors</span>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:10px">
+        <sc-for list="{{ sectorMix }}" as="s" hint-placeholder-count="5">
+          <div style="display:flex; align-items:center; gap:12px" title="{{ s.hover }}">
+            <span style="flex:1; min-width:0; font-size:13px; color:var(--color-neutral-300); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ s.name }}</span>
+            <span style="width:84px; height:4px; border-radius:2px; background:var(--color-neutral-900); overflow:hidden"><span style="display:block; width:{{ s.width }}; height:100%; background:{{ s.barColor }}"></span></span>
+            <span style="width:38px; text-align:right; font-size:12.5px; font-variant-numeric:tabular-nums; color:var(--color-neutral-400)">{{ s.pctLabel }}</span>
+            <span style="width:54px; text-align:right; font-size:12.5px; font-variant-numeric:tabular-nums; color:{{ s.moveInk }}">{{ s.moveLabel }}</span>
+          </div>
+        </sc-for>
+        <sc-if value="{{ noSectors }}">
+          <p style="font-size:13.5px; color:var(--color-neutral-500); margin:0">No portfolio holdings with data yet.</p>
+        </sc-if>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:16px; min-width:0">
+      <div style="display:flex; align-items:center; gap:14px">
+        <span style="width:32px; height:1px; background:var(--color-neutral-600)"></span>
+        <span style="font-size:12px; letter-spacing:0.1em; text-transform:uppercase; color:var(--color-neutral-400)">{{ summaryTitle }}</span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 20px">
+        <div style="display:flex; flex-direction:column; gap:5px">
+          <span style="font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-600)">Top up</span>
+          <sc-for list="{{ summaryUp }}" as="s" hint-placeholder-count="4">
+            <button type="button" onClick="{{ s.onClick }}" style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; font-size:12.5px; background:transparent; border:0; padding:2px 0; cursor:pointer; color:var(--color-neutral-300); font-family:var(--font-body)">
+              <span>{{ s.symbol }}</span><span style="font-variant-numeric:tabular-nums; color:{{ s.ink }}">{{ s.chg }}</span>
+            </button>
+          </sc-for>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:5px">
+          <span style="font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-600)">Top down</span>
+          <sc-for list="{{ summaryDown }}" as="s" hint-placeholder-count="4">
+            <button type="button" onClick="{{ s.onClick }}" style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; font-size:12.5px; background:transparent; border:0; padding:2px 0; cursor:pointer; color:var(--color-neutral-300); font-family:var(--font-body)">
+              <span>{{ s.symbol }}</span><span style="font-variant-numeric:tabular-nums; color:{{ s.ink }}">{{ s.chg }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+      <p style="font-size:12.5px; color:var(--color-neutral-500); margin:0">{{ summaryBreadth }}</p>
+    </div>
+  </div>
+
+  <p style="padding:52px var(--ta-padX) 40px; margin:0; font-size:12px; line-height:1.75; color:var(--color-neutral-600); max-width:104ch">US market · multiple portfolios, watchlists and indexes — a symbol can belong to several lists, and lists are saved in this browser. Signal score is a 0–100 cross-sectional rank (trend 30% · momentum 20% · volume 20% · relative strength 20% · risk 10%): a scanning aid, not advice.</p>
+
+  <sc-if value="{{ drawerOpen }}">
+    <div style="position:fixed; inset:0; z-index:40; display:flex; justify-content:flex-end">
+      <button type="button" onClick="{{ closeDrawer }}" aria-label="Close panel" style="position:absolute; inset:0; background:rgba(10,11,20,0.66); border:0; cursor:pointer"></button>
+      <div class="ta-scroll" style="position:relative; width:min(680px, 100%); height:100%; overflow-y:auto; background:var(--color-bg); box-shadow:var(--shadow-lg)">
+        <div style="position:sticky; top:0; z-index:2; background:var(--color-bg); padding:20px 28px 0">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:16px">
+            <div style="display:flex; gap:18px">
+              <button type="button" onClick="{{ showDetailTab }}" style="font-size:13.5px; color:{{ detailTabInk }}; background:transparent; border:0; border-bottom:1px solid {{ detailTabLine }}; padding:5px 2px; cursor:pointer">Detail</button>
+              <button type="button" onClick="{{ showChartTab }}" style="font-size:13.5px; color:{{ chartTabInk }}; background:transparent; border:0; border-bottom:1px solid {{ chartTabLine }}; padding:5px 2px; cursor:pointer">Chart</button>
+            </div>
+            <button type="button" class="ta-hit" onClick="{{ closeDrawer }}" style="font-size:12.5px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:7px 13px; cursor:pointer">Close</button>
+          </div>
+          <div style="height:1px; margin-top:16px; background:var(--color-neutral-900)"></div>
+        </div>
+
+        <div style="padding:24px 28px 8px; display:flex; flex-direction:column; gap:6px">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px">
+            <span style="font-family:var(--font-heading); font-size:24px; font-weight:500; letter-spacing:-0.015em">{{ d.symbol }}</span>
+            <span style="font-size:12.5px; color:var(--color-neutral-600)">{{ d.sector }}</span>
+          </div>
+          <span style="font-family:var(--font-heading); font-size:38px; font-weight:500; line-height:1.05; letter-spacing:-0.025em; font-variant-numeric:tabular-nums">{{ d.price }}</span>
+          <span style="font-size:13.5px; font-variant-numeric:tabular-nums; color:{{ d.chgInk }}">{{ d.chg }}</span>
+        </div>
+
+        <sc-if value="{{ isDetailTab }}">
+          <div style="padding:20px 28px 40px; display:flex; flex-direction:column; gap:26px">
+
+            <div style="display:flex; flex-direction:column; gap:10px">
+              <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">In lists</span>
+              <div style="display:flex; gap:7px; flex-wrap:wrap">
+                <sc-for list="{{ d.lists }}" as="l" hint-placeholder-count="3">
+                  <button type="button" onClick="{{ l.onClick }}" style="font-size:11.5px; color:{{ l.ink }}; background:transparent; border:1px {{ l.style }} {{ l.bd }}; border-radius:999px; padding:4px 11px; cursor:pointer">{{ l.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+
+            <sc-if value="{{ d.verdict }}">
+              <div style="padding:16px 18px; border:1px solid {{ d.verdictBorder }}; border-radius:10px; display:flex; flex-direction:column; gap:10px">
+                <span style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:{{ d.verdictInk }}">{{ d.verdictTitle }}</span>
+                <p style="font-size:14px; line-height:1.6; margin:0; color:var(--color-neutral-300)">{{ d.verdict }}</p>
+              </div>
+            </sc-if>
+
+            <div style="display:flex; flex-direction:column; gap:12px">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px">
+                <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">Signal score</span>
+                <span style="font-family:var(--font-heading); font-size:26px; font-weight:500; font-variant-numeric:tabular-nums; color:{{ d.scoreInk }}">{{ d.score }}</span>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:7px">
+                <sc-for list="{{ d.components }}" as="c" hint-placeholder-count="5">
+                  <div style="display:flex; align-items:center; gap:12px">
+                    <span style="width:96px; font-size:12px; color:var(--color-neutral-500)">{{ c.label }}</span>
+                    <span style="flex:1; height:3px; background:var(--color-neutral-900)"><span style="display:block; width:{{ c.width }}; height:100%; background:{{ c.ink }}"></span></span>
+                    <span style="width:26px; text-align:right; font-size:12px; font-variant-numeric:tabular-nums; color:var(--color-neutral-400)">{{ c.value }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <p style="font-size:12.5px; color:var(--color-neutral-500); margin:0">{{ d.scoreNote }}</p>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:12px">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px">
+                <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">52-week range</span>
+                <span style="font-size:12px; color:{{ d.zoneInk }}">{{ d.zoneLabel }}</span>
+              </div>
+              <div style="position:relative; height:3px; background:var(--color-neutral-900)">
+                <span style="position:absolute; left:0; top:0; bottom:0; width:{{ d.pos52 }}; background:linear-gradient(to right, var(--color-accent-800), var(--color-accent))"></span>
+                <span style="position:absolute; left:{{ d.pos52 }}; top:-4px; width:2px; height:11px; background:var(--color-text)"></span>
+              </div>
+              <div style="display:flex; justify-content:space-between; font-size:11.5px; font-variant-numeric:tabular-nums; color:var(--color-neutral-600)"><span>{{ d.low52 }}</span><span>{{ d.high52 }}</span></div>
+              <div style="display:flex; flex-direction:column">
+                <sc-for list="{{ d.stats }}" as="s" hint-placeholder-count="6">
+                  <div style="display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid var(--color-neutral-900); font-size:13px">
+                    <span style="color:var(--color-neutral-500)">{{ s.label }}</span>
+                    <span style="font-variant-numeric:tabular-nums; color:{{ s.ink }}">{{ s.value }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:12px">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px">
+                <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">Signals &amp; levels</span>
+                <span style="font-size:12px; color:{{ d.sigInk }}">{{ d.sigLabel }}</span>
+              </div>
+              <div style="display:flex; gap:7px; flex-wrap:wrap">
+                <sc-for list="{{ d.chips }}" as="c" hint-placeholder-count="5">
+                  <span style="font-size:11.5px; color:{{ c.ink }}; border:1px solid {{ c.border }}; border-radius:999px; padding:4px 11px">{{ c.text }}</span>
+                </sc-for>
+              </div>
+              <div style="display:flex; flex-direction:column; margin-top:4px">
+                <sc-for list="{{ d.ladder }}" as="l" hint-placeholder-count="6">
+                  <div style="display:grid; grid-template-columns:minmax(0,1fr) 90px 64px; gap:12px; align-items:center; padding:8px 10px; border-bottom:1px solid var(--color-neutral-900); background:{{ l.bg }}; border-radius:{{ l.radius }}">
+                    <span style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:{{ l.nameInk }}">{{ l.name }}<sc-if value="{{ l.tag }}"><span style="font-size:9.5px; letter-spacing:0.06em; text-transform:uppercase; color:{{ l.tagInk }}; border:1px solid {{ l.tagInk }}; border-radius:4px; padding:1px 5px">{{ l.tag }}</span></sc-if></span>
+                    <span style="text-align:right; font-size:13px; font-variant-numeric:tabular-nums; color:{{ l.valueInk }}">{{ l.value }}</span>
+                    <span style="text-align:right; font-size:12px; font-variant-numeric:tabular-nums; color:var(--color-neutral-600)">{{ l.dist }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:12px">
+              <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">Position</span>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                <input type="text" value="{{ entryPrice }}" onChange="{{ onEntryPrice }}" placeholder="Entry price" style="width:120px; font-size:13px; font-variant-numeric:tabular-nums; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:9px 11px; outline:0" />
+                <input type="text" value="{{ entryDate }}" onChange="{{ onEntryDate }}" placeholder="YYYY-MM-DD" style="width:140px; font-size:13px; font-variant-numeric:tabular-nums; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:9px 11px; outline:0" />
+                <button type="button" class="ta-hit" onClick="{{ saveEntry }}" style="font-size:12.5px; color:var(--color-accent); background:transparent; border:1px solid var(--color-accent); border-radius:8px; padding:9px 14px; cursor:pointer">Save entry</button>
+                <sc-if value="{{ hasPosition }}">
+                  <button type="button" class="ta-hit" onClick="{{ toggleBooked }}" style="font-size:12.5px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:9px 14px; cursor:pointer">{{ bookedLabel }}</button>
+                </sc-if>
+                <sc-if value="{{ hasPosition }}">
+                  <button type="button" class="ta-hit" onClick="{{ clearEntry }}" style="font-size:12.5px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:9px 14px; cursor:pointer">Clear</button>
+                </sc-if>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center">
+                <button type="button" onClick="{{ dPb }}" style="font-size:11px; font-weight:500; letter-spacing:0.06em; color:{{ dPbInk }}; background:transparent; border:1px solid {{ dPbBorder }}; border-radius:6px; padding:4px 10px; cursor:pointer">PB · profit booked</button>
+                <button type="button" onClick="{{ dRe }}" style="font-size:11px; font-weight:500; letter-spacing:0.06em; color:{{ dReInk }}; background:transparent; border:1px solid {{ dReBorder }}; border-radius:6px; padding:4px 10px; cursor:pointer">RE · re-entered</button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isChartTab }}">
+          <div style="padding:18px 28px 40px; display:flex; flex-direction:column; gap:16px">
+            <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap">
+              <p style="font-size:12px; line-height:1.6; font-variant-numeric:tabular-nums; color:var(--color-neutral-500); margin:0; flex:1; min-width:220px">{{ chartRead }}</p>
+              <div style="display:flex; border:1px solid var(--color-neutral-800); border-radius:8px; overflow:hidden">
+                <sc-for list="{{ spans }}" as="s" hint-placeholder-count="5">
+                  <button type="button" onClick="{{ s.onClick }}" style="font-size:12px; color:{{ s.ink }}; background:{{ s.bg }}; border:0; border-left:1px solid var(--color-neutral-900); padding:6px 11px; cursor:pointer">{{ s.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:2px">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding-bottom:4px">
+                <span style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--color-neutral-500)">Price</span>
+                <span style="font-size:11.5px; font-variant-numeric:tabular-nums; color:var(--color-neutral-600)">{{ paneNotePrice }}</span>
+              </div>
+              <div ref="{{ priceRef }}" style="width:100%; height:360px"></div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:2px; padding-top:6px; border-top:1px solid var(--color-neutral-900)">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:8px 0 4px">
+                <span style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--color-neutral-500)">RSI</span>
+                <span style="font-size:11.5px; font-variant-numeric:tabular-nums; color:var(--color-neutral-600)">{{ paneNoteRsi }}</span>
+              </div>
+              <div ref="{{ rsiRef }}" style="width:100%; height:170px"></div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:2px; padding-top:6px; border-top:1px solid var(--color-neutral-900)">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:8px 0 4px">
+                <span style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--color-neutral-500)">MACD</span>
+                <span style="font-size:11.5px; font-variant-numeric:tabular-nums; color:var(--color-neutral-600)">{{ paneNoteMacd }}</span>
+              </div>
+              <div ref="{{ macdRef }}" style="width:100%; height:170px"></div>
+            </div>
+
+            <div style="display:flex; flex-wrap:wrap; gap:8px">
+              <sc-for list="{{ eyes }}" as="e" hint-placeholder-count="9">
+                <button type="button" onClick="{{ e.onClick }}" style="display:flex; align-items:center; gap:8px; font-size:12px; color:{{ e.ink }}; background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:6px 11px; cursor:pointer">
+                  <span style="width:12px; height:2px; border-radius:1px; background:{{ e.swatch }}"></span>{{ e.label }}
+                </button>
+              </sc-for>
+            </div>
+
+            <button type="button" onClick="{{ toggleChartCfg }}" style="align-self:flex-start; font-size:12.5px; color:var(--color-neutral-400); background:transparent; border:0; border-bottom:1px solid var(--color-neutral-800); padding:4px 2px; cursor:pointer">{{ chartCfgLabel }}</button>
+
+            <sc-if value="{{ chartCfgOpen }}">
+              <div style="display:flex; flex-direction:column; gap:12px; padding-top:4px">
+                <sc-for list="{{ cfgRows }}" as="c" hint-placeholder-count="6">
+                  <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+                    <span style="width:96px; font-size:12.5px; color:var(--color-neutral-500)">{{ c.label }}</span>
+                    <sc-if value="{{ c.hasColor }}">
+                      <input type="color" value="{{ c.color }}" onChange="{{ c.onColor }}" style="width:26px; height:24px; background:none; border:1px solid var(--color-neutral-800); border-radius:6px; padding:1px; cursor:pointer" />
+                    </sc-if>
+                    <sc-if value="{{ c.hasColor2 }}">
+                      <input type="color" value="{{ c.color2 }}" onChange="{{ c.onColor2 }}" style="width:26px; height:24px; background:none; border:1px solid var(--color-neutral-800); border-radius:6px; padding:1px; cursor:pointer" />
+                    </sc-if>
+                    <sc-for list="{{ c.numbers }}" as="n" hint-placeholder-count="1">
+                      <span style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--color-neutral-600)">
+                        {{ n.label }}
+                        <input type="number" value="{{ n.value }}" onChange="{{ n.onChange }}" style="width:58px; font-size:12px; font-variant-numeric:tabular-nums; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:6px; padding:5px 7px; outline:0" />
+                      </span>
+                    </sc-for>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ settingsOpen }}">
+    <div style="position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; padding:24px">
+      <button type="button" onClick="{{ closeSettings }}" aria-label="Close settings" style="position:absolute; inset:0; background:rgba(10,11,20,0.7); border:0; cursor:pointer"></button>
+      <div class="ta-scroll" style="position:relative; width:min(620px, 100%); max-height:88vh; overflow-y:auto; background:var(--color-bg); border-radius:14px; box-shadow:var(--shadow-lg)">
+        <div style="padding:22px 26px 0; display:flex; align-items:baseline; justify-content:space-between; gap:16px">
+          <h3 style="font-family:var(--font-heading); font-weight:500; font-size:19px; letter-spacing:-0.01em; margin:0">Settings</h3>
+          <span style="font-size:12px; color:var(--color-neutral-600)">saved in this browser</span>
+        </div>
+
+        <div style="padding:22px 26px 0; display:flex; flex-direction:column; gap:26px">
+          <div style="display:flex; flex-direction:column; gap:10px">
+            <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">Data connection</span>
+            <label style="display:flex; align-items:center; gap:12px; font-size:13px; color:var(--color-neutral-400)">
+              <span style="width:86px">JSON URL</span>
+              <input type="url" value="{{ form.dataUrl }}" onChange="{{ onFormDataUrl }}" style="flex:1; min-width:0; font-size:12px; font-variant-numeric:tabular-nums; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:8px 10px; outline:0" />
+            </label>
+            <label style="display:flex; align-items:center; gap:12px; font-size:13px; color:var(--color-neutral-400)">
+              <span style="width:86px">Sync API</span>
+              <input type="url" value="{{ form.syncUrl }}" onChange="{{ onFormSyncUrl }}" style="flex:1; min-width:0; font-size:12px; font-variant-numeric:tabular-nums; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:8px 10px; outline:0" />
+            </label>
+            <div style="display:flex; justify-content:flex-end">
+              <button type="button" class="ta-hit" onClick="{{ reconnect }}" style="font-size:12.5px; color:var(--color-accent); background:transparent; border:1px solid var(--color-accent); border-radius:8px; padding:8px 14px; cursor:pointer">Reconnect &amp; load</button>
+            </div>
+            <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">Pre-filled with the TrendAlert production bucket and Sync API. Edit only if the bucket or notes function moves.</p>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:12px">
+            <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">Appearance</span>
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+              <span style="width:120px; font-size:13px; color:var(--color-neutral-400)">Theme</span>
+              <div style="display:flex; border:1px solid var(--color-neutral-800); border-radius:8px; overflow:hidden">
+                <button type="button" onClick="{{ setDark }}" style="font-size:12.5px; color:{{ darkInk }}; background:{{ darkBg }}; border:0; padding:7px 13px; cursor:pointer">Dark</button>
+                <button type="button" onClick="{{ setLight }}" style="font-size:12.5px; color:{{ lightInk }}; background:{{ lightBg }}; border:0; border-left:1px solid var(--color-neutral-800); padding:7px 13px; cursor:pointer">Light</button>
+              </div>
+            </div>
+            <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">Applies immediately and is remembered per browser — it is a device preference, so it is not synced with the settings above.</p>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:12px">
+            <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">Strategy</span>
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+              <span style="width:120px; font-size:13px; color:var(--color-neutral-400)">Holding horizon</span>
+              <div style="display:flex; border:1px solid var(--color-neutral-800); border-radius:8px; overflow:hidden">
+                <button type="button" onClick="{{ setLong }}" style="font-size:12.5px; color:{{ longInk }}; background:{{ longBg }}; border:0; padding:7px 13px; cursor:pointer">Long-term</button>
+                <button type="button" onClick="{{ setSwing }}" style="font-size:12.5px; color:{{ swingInk }}; background:{{ swingBg }}; border:0; border-left:1px solid var(--color-neutral-800); padding:7px 13px; cursor:pointer">Swing</button>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+              <span style="width:120px; font-size:13px; color:var(--color-neutral-400)">Re-entry signal</span>
+              <div style="display:flex; border:1px solid var(--color-neutral-800); border-radius:8px; overflow:hidden">
+                <button type="button" onClick="{{ setBase }}" style="font-size:12.5px; color:{{ baseInk }}; background:{{ baseBg }}; border:0; padding:7px 13px; cursor:pointer">Base confirmed</button>
+                <button type="button" onClick="{{ setNearLow }}" style="font-size:12.5px; color:{{ nearLowInk }}; background:{{ nearLowBg }}; border:0; border-left:1px solid var(--color-neutral-800); padding:7px 13px; cursor:pointer">Near 52w low</button>
+              </div>
+            </div>
+            <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">Horizon presets pre-fill the fields below (long-term +20% · 2% zone · 6M chart; swing +10% · 3% zone · 3M chart) — edit freely before saving. "Base confirmed" gates basing on the five-check detector; "near 52w low" flags anything in the basing zone and carries falling-knife risk.</p>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:10px">
+            <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">Booking rule</span>
+            <sc-for list="{{ ruleFields }}" as="f" hint-placeholder-count="3">
+              <label style="display:flex; align-items:center; gap:12px; font-size:13px; color:var(--color-neutral-400)">
+                <span style="flex:1">{{ f.label }}</span>
+                <input type="number" value="{{ f.value }}" onChange="{{ f.onChange }}" min="{{ f.min }}" max="{{ f.max }}" step="{{ f.step }}" style="width:76px; font-size:13px; font-variant-numeric:tabular-nums; text-align:right; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:7px 9px; outline:0" />
+                <span style="width:120px; font-size:11.5px; color:var(--color-neutral-600)">{{ f.unit }}</span>
+              </label>
+            </sc-for>
+            <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">Trigger: gain ≥ profit trigger AND price within the near-high zone → book ⅓. The remainder trails a close below EMA50.</p>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:10px">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px">
+              <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">Score weights</span>
+              <span style="font-size:12.5px; font-variant-numeric:tabular-nums; color:{{ weightSumInk }}">{{ weightSum }}</span>
+            </div>
+            <sc-for list="{{ weightFields }}" as="f" hint-placeholder-count="5">
+              <label style="display:flex; align-items:center; gap:12px; font-size:13px; color:var(--color-neutral-400)">
+                <span style="flex:1">{{ f.label }}</span>
+                <input type="number" value="{{ f.value }}" onChange="{{ f.onChange }}" min="0" max="100" step="5" style="width:76px; font-size:13px; font-variant-numeric:tabular-nums; text-align:right; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:7px 9px; outline:0" />
+                <span style="width:120px; font-size:11.5px; color:var(--color-neutral-600)">%</span>
+              </label>
+            </sc-for>
+            <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">Weights apply to the client-side score immediately. To change the published score, mirror them in scoring.py WEIGHTS.</p>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:10px">
+            <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">Lists</span>
+            <div>
+              <button type="button" class="ta-hit" onClick="{{ openListsFromSettings }}" style="font-size:12.5px; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:8px 14px; cursor:pointer">Manage portfolios, watchlists &amp; indexes</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="position:sticky; bottom:0; margin-top:26px; padding:16px 26px; background:var(--color-bg); border-top:1px solid var(--color-neutral-900); display:flex; justify-content:flex-end; gap:10px">
+          <button type="button" class="ta-hit" onClick="{{ resetSettings }}" style="font-size:13px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:9px 16px; cursor:pointer">Reset defaults</button>
+          <button type="button" class="ta-hit" onClick="{{ saveSettingsForm }}" style="font-size:13px; color:var(--color-accent); background:transparent; border:1px solid var(--color-accent); border-radius:8px; padding:9px 18px; cursor:pointer">Done</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ addModalOpen }}">
+    <div style="position:fixed; inset:0; z-index:55; display:flex; align-items:center; justify-content:center; padding:24px">
+      <button type="button" onClick="{{ closeAddModal }}" aria-label="Cancel" style="position:absolute; inset:0; background:rgba(10,11,20,0.7); border:0; cursor:pointer"></button>
+      <div style="position:relative; width:min(420px, 100%); background:var(--color-bg); border-radius:14px; box-shadow:var(--shadow-lg); padding:22px 26px">
+        <h3 style="font-family:var(--font-heading); font-weight:500; font-size:18px; letter-spacing:-0.01em; margin:0 0 6px">Add {{ addSym }}</h3>
+        <p style="font-size:13px; color:var(--color-neutral-500); margin:0 0 16px">Choose which list to add it to.</p>
+        <div style="display:flex; flex-direction:column">
+          <sc-for list="{{ addChoices }}" as="c" hint-placeholder-count="3">
+            <button type="button" onClick="{{ c.onClick }}" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 0; border:0; border-bottom:1px solid var(--color-neutral-900); background:transparent; cursor:{{ c.cursor }}; opacity:{{ c.opacity }}; text-align:left; font-family:var(--font-body)">
+              <span style="display:flex; align-items:center; gap:10px; font-size:14px; color:{{ c.ink }}"><span style="width:9px; height:9px; border-radius:50%; border:1px solid {{ c.dotBorder }}; background:{{ c.dot }}"></span>{{ c.name }}</span>
+              <span style="font-size:11.5px; color:var(--color-neutral-600)">{{ c.type }}</span>
+            </button>
+          </sc-for>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px">
+          <button type="button" class="ta-hit" onClick="{{ closeAddModal }}" style="font-size:13px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:9px 16px; cursor:pointer">Cancel</button>
+          <button type="button" class="ta-hit" onClick="{{ confirmAdd }}" style="font-size:13px; color:var(--color-accent); background:transparent; border:1px solid var(--color-accent); border-radius:8px; padding:9px 18px; cursor:pointer">OK</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ listsOpen }}">
+    <div style="position:fixed; inset:0; z-index:55; display:flex; align-items:center; justify-content:center; padding:24px">
+      <button type="button" onClick="{{ closeListsModal }}" aria-label="Close" style="position:absolute; inset:0; background:rgba(10,11,20,0.7); border:0; cursor:pointer"></button>
+      <div class="ta-scroll" style="position:relative; width:min(480px, 100%); max-height:84vh; overflow-y:auto; background:var(--color-bg); border-radius:14px; box-shadow:var(--shadow-lg); padding:22px 26px">
+        <h3 style="font-family:var(--font-heading); font-weight:500; font-size:18px; letter-spacing:-0.01em; margin:0 0 16px">Manage lists</h3>
+        <div style="display:flex; flex-direction:column">
+          <sc-for list="{{ manageRows }}" as="l" hint-placeholder-count="3">
+            <div style="display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid var(--color-neutral-900)">
+              <span style="flex:1; min-width:0; font-size:14px; color:var(--color-text)">{{ l.name }}</span>
+              <span style="font-size:11.5px; color:var(--color-neutral-600)">{{ l.type }} · {{ l.count }}</span>
+              <button type="button" class="ta-hit" onClick="{{ l.onRename }}" style="font-size:12px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:6px; padding:5px 10px; cursor:pointer">Rename</button>
+              <button type="button" class="ta-hit" onClick="{{ l.onDelete }}" style="font-size:12px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:6px; padding:5px 10px; cursor:pointer">Delete</button>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:18px; flex-wrap:wrap">
+          <input type="text" value="{{ newListName }}" onChange="{{ onNewListName }}" placeholder="New list name" style="flex:1; min-width:140px; font-size:13px; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:9px 11px; outline:0" />
+          <select value="{{ newListType }}" onChange="{{ onNewListType }}" style="font-size:13px; color:var(--color-text); background:var(--color-bg); border:1px solid var(--color-neutral-800); border-radius:8px; padding:9px 10px; outline:0">
+            <option value="portfolio">Portfolio</option>
+            <option value="watchlist">Watchlist</option>
+            <option value="index">Index</option>
+          </select>
+          <button type="button" class="ta-hit" onClick="{{ addList }}" style="font-size:13px; color:var(--color-accent); background:transparent; border:1px solid var(--color-accent); border-radius:8px; padding:9px 16px; cursor:pointer">Add</button>
+        </div>
+        <div style="display:flex; justify-content:flex-end; margin-top:20px">
+          <button type="button" class="ta-hit" onClick="{{ closeListsModal }}" style="font-size:13px; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:9px 18px; cursor:pointer">Done</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ confirmOpen }}">
+    <div style="position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; padding:24px">
+      <button type="button" onClick="{{ closeConfirm }}" aria-label="Cancel" style="position:absolute; inset:0; background:rgba(10,11,20,0.7); border:0; cursor:pointer"></button>
+      <div style="position:relative; width:min(420px, 100%); background:var(--color-bg); border-radius:14px; box-shadow:var(--shadow-lg); padding:22px 26px">
+        <h3 style="font-family:var(--font-heading); font-weight:500; font-size:18px; letter-spacing:-0.01em; margin:0 0 8px">{{ confirmTitle }}</h3>
+        <p style="font-size:14px; line-height:1.6; color:var(--color-neutral-400); margin:0">{{ confirmMsg }}</p>
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:22px">
+          <button type="button" class="ta-hit" onClick="{{ closeConfirm }}" style="font-size:13px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:9px 16px; cursor:pointer">Cancel</button>
+          <button type="button" class="ta-hit" onClick="{{ applyConfirm }}" style="font-size:13px; color:var(--color-accent); background:transparent; border:1px solid var(--color-accent); border-radius:8px; padding:9px 18px; cursor:pointer">OK</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ toast }}">
+    <div style="position:fixed; left:50%; bottom:28px; transform:translateX(-50%); z-index:70; max-width:90vw; background:var(--color-surface); border:1px solid var(--color-neutral-700); border-radius:10px; padding:12px 18px; font-size:13px; color:var(--color-text); box-shadow:var(--shadow-md)">{{ toast }}</div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;pace&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;spacious&quot;,&quot;considered&quot;,&quot;terminal&quot;],&quot;default&quot;:&quot;considered&quot;,&quot;tsType&quot;:&quot;'spacious' | 'considered' | 'terminal'&quot;,&quot;section&quot;:&quot;Feel&quot;,&quot;label&quot;:&quot;Pace&quot;},&quot;emphasis&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;quiet&quot;,&quot;marked&quot;,&quot;banded&quot;],&quot;default&quot;:&quot;marked&quot;,&quot;tsType&quot;:&quot;'quiet' | 'marked' | 'banded'&quot;,&quot;section&quot;:&quot;Feel&quot;,&quot;label&quot;:&quot;Triage emphasis&quot;},&quot;voice&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;analyst&quot;,&quot;shorthand&quot;],&quot;default&quot;:&quot;analyst&quot;,&quot;tsType&quot;:&quot;'analyst' | 'shorthand'&quot;,&quot;section&quot;:&quot;Feel&quot;,&quot;label&quot;:&quot;Voice&quot;}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    const T = window.TA;
+    const lists = T.loadLists();
+    if (T.migrateLists(lists)) T.saveLists(lists);
+    this.state = {
+      payload: null, mode: "demo", statusText: "Loading…",
+      lists, activeType: "portfolio", activeListId: null, selected: null,
+      q: "", trendF: "all", sector: "all", sortKey: "change_pct", sortDir: -1,
+      trendToggles: { bull: true, bear: true },
+      settings: T.loadSettings(), positions: T.loadPositions(), pbre: T.loadPbre(),
+      dataUrl: T.lsGet(T.keys.DATA_KEY) || T.DEFAULT_DATA_URL,
+      syncUrl: T.lsGet(T.keys.SYNC_KEY) || T.DEFAULT_SYNC_URL,
+      chCfg: T.loadCh(T.keys.CH_KEY, T.DEFAULT_CHCFG),
+      /* _vis_v2: a new key rather than a migration flag — the old "_vis" set is simply
+         abandoned, so the new default can't desync from a guard that already fired */
+      vis: T.loadCh(T.keys.CH_KEY + "_vis_v2", T.DEFAULT_VIS),
+      chartStore: null,
+      restLimit: 8, addOpen: false, addDraft: "", addNote: "",
+      drawer: null, drawerTab: "detail", pane: "price", chartCfgOpen: false, chartRead: "",
+      settingsOpen: false, addModalOpen: false, addSym: "", addTarget: null,
+      listsOpen: false, newListName: "", newListType: "portfolio",
+      confirm: null, toast: "", form: null,
+      entryPrice: "", entryDate: "",
+      theme: T.loadTheme(),
+    };
+    const v = this.state.vis;
+    if (v.candles == null) v.candles = false;
+    if (T.EMA_KEYS.filter(k => v[k]).length > 2) T.EMA_KEYS.forEach(k => { v[k] = (k === "ema50" || k === "ema150"); });
+    this.emaOrder = T.EMA_KEYS.filter(k => v[k]);
+    if (!T.SPANS.includes(this.state.chCfg.span)) this.state.chCfg.span = "6M";
+    this.priceRef = React.createRef();
+    this.rsiRef = React.createRef();
+    this.macdRef = React.createRef();
+    this.charts = null;
+  }
+
+  /* ---------------- boot ---------------- */
+  componentDidMount() {
+    const T = window.TA;
+    this.applyTheme(this.state.theme);
+    Promise.all([T.pull(this.state.syncUrl, "positions"), T.pull(this.state.syncUrl, "pbre")]).then(([pos, pb]) => {
+      const patch = {};
+      if (pos) { patch.positions = pos; T.savePositions(pos); }
+      if (pb) { patch.pbre = pb; T.savePbre(pb); }
+      if (Object.keys(patch).length) this.setState(patch);
+      this.load();
+    });
+    this.tData = setInterval(() => { if (this.state.dataUrl) this.load(); }, 300000);
+    this.tStale = setInterval(() => this.forceUpdate(), 60000);
+    setTimeout(() => this.publish(), 3000);
+  }
+  componentWillUnmount() {
+    clearInterval(this.tData); clearInterval(this.tStale); clearTimeout(this.toastT);
+    this.teardownCharts();
+  }
+  componentDidUpdate() {
+    if (this.state.drawer && this.state.drawerTab === "chart") this.syncCharts();
+    else if (this.charts) this.teardownCharts();
+  }
+
+  /* ---------------- theme ----------------
+     Everything except the charts is driven by CSS custom properties, so setting
+     the attribute is the whole repaint. The charts draw to canvas and cannot
+     see those properties, so they are torn down and let componentDidUpdate
+     rebuild them against the new TA.chartTheme. */
+  applyTheme(t) {
+    window.TA.themeName = t;
+    document.documentElement.dataset.theme = t;
+  }
+  setTheme(t) {
+    if (t === this.state.theme) return;
+    const T = window.TA;
+    this.applyTheme(t);
+    T.saveTheme(t);
+    this.teardownCharts();
+    this.setState({ theme: t });
+  }
+
+  async load() {
+    const T = window.TA;
+    const url = this.state.dataUrl;
+    if (!url) {
+      this.setState({ payload: T.demoData(this.state.lists), mode: "demo", statusText: "Demo data" });
+      this.loadChart();
+      return;
+    }
+    try {
+      const r = await fetch(url + (url.includes("?") ? "&" : "?") + "t=" + Date.now());
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const payload = await r.json();
+      this.setState({ payload, mode: "live", statusText: "Live" });
+    } catch (e) {
+      this.setState({ payload: T.demoData(this.state.lists), mode: "error", statusText: "Fetch failed — demo data" });
+    }
+    this.loadChart();
+  }
+  async loadChart() {
+    const url = (this.state.dataUrl || "").replace(/data\.json(\?.*)?$/, "chart.json");
+    if (!url || url === this.state.dataUrl) { this.setState({ chartStore: null }); return; }
+    try {
+      const r = await fetch(url + (url.includes("?") ? "&" : "?") + "t=" + Date.now());
+      this.setState({ chartStore: r.ok ? await r.json() : null });
+    } catch (e) { this.setState({ chartStore: null }); }
+  }
+  publish() {
+    const T = window.TA, { syncUrl, lists } = this.state;
+    T.post(syncUrl, "universe", [...new Set(lists.flatMap(l => l.symbols))]);
+    const core = T.corePortfolio(lists);
+    T.post(syncUrl, "core", core ? core.symbols : []);
+  }
+  saveLists(lists) {
+    const T = window.TA;
+    T.saveLists(lists);
+    this.setState({ lists }, () => this.publish());
+  }
+  flash(msg) {
+    clearTimeout(this.toastT);
+    this.setState({ toast: msg });
+    this.toastT = setTimeout(() => this.setState({ toast: "" }), 4500);
+  }
+
+  /* ---------------- helpers ---------------- */
+  bySym(s) { const p = this.state.payload; return p ? (p.symbols || []).find(d => d.symbol === s) : null; }
+  listsOfType(t) { return this.state.lists.filter(l => l.type === t); }
+  activeList() {
+    const of = this.listsOfType(this.state.activeType);
+    return of.find(l => l.id === this.state.activeListId) || of[0] || null;
+  }
+  rows() {
+    const T = window.TA, s = this.state;
+    if (!s.payload) return [];
+    return T.activeRows(this.activeList(), s.payload, {
+      sector: s.sector, q: s.q, trendF: s.trendF, trendToggles: s.trendToggles,
+      sortKey: s.sortKey, sortDir: s.sortDir, settings: s.settings,
+    });
+  }
+  select(sym, tab) {
+    this.setState(st => {
+      const p = st.positions[sym];
+      return {
+        selected: sym, drawer: true, drawerTab: tab || "detail", chartRead: "",
+        entryPrice: p ? String(p.entry) : "", entryDate: p && p.date ? p.date : "",
+      };
+    });
+  }
+
+  /* ---------------- PB / RE ---------------- */
+  askPbre(sym, k) {
+    const st = this.state.pbre[sym] || {}, marking = !st[k];
+    this.setState({
+      confirm: {
+        sym, k, marking,
+        title: (k === "pb" ? "Profit booking" : "Re-entry") + " — " + sym,
+        msg: k === "pb"
+          ? (marking ? `Have you booked profit on ${sym}? OK highlights PB.` : `Remove the PB (profit booked) mark on ${sym}?`)
+          : (marking ? `Have you re-entered ${sym}? OK highlights RE.` : `Remove the RE (re-entered) mark on ${sym}?`),
+      }
+    });
+  }
+  applyPbre() {
+    const T = window.TA, c = this.state.confirm;
+    if (!c) return;
+    const pbre = { ...this.state.pbre };
+    pbre[c.sym] = { ...(pbre[c.sym] || {}) };
+    pbre[c.sym][c.k] = c.marking ? 1 : 0;
+    let msg = "";
+    if (pbre[c.sym].pb && pbre[c.sym].re) { delete pbre[c.sym]; msg = `${c.sym}: profit booked → re-entered — cycle complete, PB/RE reset.`; }
+    else if (!pbre[c.sym].pb && !pbre[c.sym].re) delete pbre[c.sym];
+    T.savePbre(pbre);
+    T.post(this.state.syncUrl, "pbre", pbre);
+    this.setState({ pbre, confirm: null });
+    if (msg) this.flash(msg);
+  }
+
+  /* ---------------- positions ---------------- */
+  savePositions(positions) {
+    const T = window.TA;
+    T.savePositions(positions);
+    T.post(this.state.syncUrl, "positions", positions);
+    this.setState({ positions });
+  }
+  saveEntry() {
+    const sym = this.state.selected;
+    const entry = parseFloat(String(this.state.entryPrice).replace(/[^0-9.\-]/g, ""));
+    if (!sym || !entry || isNaN(entry)) { this.flash("Enter a numeric entry price."); return; }
+    const positions = { ...this.state.positions };
+    const prev = positions[sym] || {};
+    positions[sym] = { ...prev, entry, date: this.state.entryDate || new Date().toISOString().slice(0, 10) };
+    this.savePositions(positions);
+    this.flash(`${sym} entry saved at $${window.TA.fmt(entry)}.`);
+  }
+  clearEntry() {
+    const sym = this.state.selected;
+    const positions = { ...this.state.positions };
+    delete positions[sym];
+    this.savePositions(positions);
+    this.setState({ entryPrice: "", entryDate: "" });
+  }
+  toggleBooked() {
+    const sym = this.state.selected;
+    const positions = { ...this.state.positions };
+    if (!positions[sym]) return;
+    positions[sym] = { ...positions[sym], booked: !positions[sym].booked };
+    this.savePositions(positions);
+  }
+
+  /* ---------------- lists ---------------- */
+  toggleMembership(sym, listId) {
+    const lists = this.state.lists.map(l => {
+      if (l.id !== listId) return l;
+      const has = l.symbols.includes(sym);
+      return { ...l, symbols: has ? l.symbols.filter(s => s !== sym) : l.symbols.concat(sym) };
+    });
+    this.saveLists(lists);
+  }
+  removeSymbol(sym) {
+    const L = this.activeList();
+    if (!L) return;
+    const lists = this.state.lists.map(l => l.id === L.id ? { ...l, symbols: l.symbols.filter(s => s !== sym) } : l);
+    this.saveLists(lists);
+  }
+  submitAdd() {
+    const v = String(this.state.addDraft || "").trim().toUpperCase();
+    if (!v) return;
+    if (!this.state.lists.length) { this.setState({ addNote: "Create a list first (Manage lists)." }); return; }
+    const act = this.activeList();
+    const first = this.state.lists.find(l => !l.symbols.includes(v));
+    const target = (act && !act.symbols.includes(v)) ? act.id : (first ? first.id : null);
+    this.setState({ addModalOpen: true, addSym: v, addTarget: target });
+  }
+  confirmAdd() {
+    const { addSym, addTarget } = this.state;
+    if (!addTarget) { this.setState({ addModalOpen: false }); return; }
+    const target = this.state.lists.find(l => l.id === addTarget);
+    const lists = this.state.lists.map(l => l.id === addTarget && !l.symbols.includes(addSym)
+      ? { ...l, symbols: l.symbols.concat(addSym) } : l);
+    this.saveLists(lists);
+    this.setState({
+      addModalOpen: false, addDraft: "", selected: addSym,
+      addNote: this.bySym(addSym) ? "" : `Added ${addSym} to "${target ? target.name : ""}" — shown as awaiting data until the next pipeline run (midday and after the close, ET).`,
+    });
+  }
+
+  /* ---------------- settings form ---------------- */
+  openSettings() {
+    const s = this.state.settings;
+    this.setState({
+      settingsOpen: true,
+      form: {
+        dataUrl: this.state.dataUrl, syncUrl: this.state.syncUrl,
+        horizon: s.horizon || "long", reEntryMode: s.reEntryMode || "base",
+        gainPct: s.gainPct, highZonePct: s.highZonePct, lowZonePct: s.lowZonePct,
+        trend: s.weights.trend, momentum: s.weights.momentum, participation: s.weights.participation,
+        relStrength: s.weights.relStrength, risk: s.weights.risk,
+      }
+    });
+  }
+  setForm(k, v) { this.setState(st => ({ form: { ...st.form, [k]: v } })); }
+  weightTotal() {
+    const f = this.state.form;
+    if (!f) return 100;
+    return ["trend", "momentum", "participation", "relStrength", "risk"].reduce((a, k) => a + (+f[k] || 0), 0);
+  }
+  saveSettingsForm() {
+    const T = window.TA, f = this.state.form;
+    const total = this.weightTotal();
+    if (total !== 100) { this.flash("Score weights must sum to 100 (currently " + total + ")."); return; }
+    const settings = {
+      ...this.state.settings,
+      gainPct: Math.max(5, Math.min(200, +f.gainPct || 20)),
+      highZonePct: Math.max(0.5, Math.min(10, +f.highZonePct || 2)),
+      lowZonePct: Math.max(2, Math.min(30, +f.lowZonePct || 10)),
+      horizon: f.horizon, reEntryMode: f.reEntryMode,
+      weights: {
+        trend: +f.trend, momentum: +f.momentum, participation: +f.participation,
+        relStrength: +f.relStrength, risk: +f.risk
+      },
+    };
+    const horizonChanged = this.state.settings.horizon !== f.horizon;
+    const chCfg = { ...this.state.chCfg };
+    if (horizonChanged) { chCfg.span = T.HORIZON_PRESETS[f.horizon].span; T.saveCh(chCfg, this.state.vis); }
+    T.saveSettings(settings);
+    T.post(this.state.syncUrl, "settings", settings);
+    const urlChanged = f.dataUrl !== this.state.dataUrl || f.syncUrl !== this.state.syncUrl;
+    T.lsSet(T.keys.DATA_KEY, f.dataUrl); T.lsSet(T.keys.SYNC_KEY, f.syncUrl);
+    this.setState({ settings, chCfg, dataUrl: f.dataUrl, syncUrl: f.syncUrl, settingsOpen: false }, () => {
+      if (urlChanged) this.load();
+    });
+  }
+  resetSettings() {
+    const T = window.TA;
+    const settings = JSON.parse(JSON.stringify(T.DEFAULT_SETTINGS));
+    T.saveSettings(settings);
+    this.setState({ settings }, () => this.openSettings());
+  }
+  reconnect() {
+    const T = window.TA, f = this.state.form;
+    T.lsSet(T.keys.DATA_KEY, f.dataUrl); T.lsSet(T.keys.SYNC_KEY, f.syncUrl);
+    this.setState({ dataUrl: f.dataUrl, syncUrl: f.syncUrl }, () => {
+      Promise.all([T.pull(f.syncUrl, "positions"), T.pull(f.syncUrl, "pbre")]).then(([pos, pb]) => {
+        const patch = {};
+        if (pos) { patch.positions = pos; T.savePositions(pos); }
+        if (pb) { patch.pbre = pb; T.savePbre(pb); }
+        if (Object.keys(patch).length) this.setState(patch);
+        this.load();
+      });
+    });
+  }
+
+  /* ---------------- charts ---------------- */
+  barsFor(sym) {
+    const T = window.TA, cs = this.state.chartStore;
+    if (cs && cs[sym] && cs[sym].length) return cs[sym];
+    const d = this.bySym(sym);
+    return T.genBars(sym, d ? d.close : 100);
+  }
+  teardownCharts() {
+    if (!this.charts) return;
+    try { ["price", "rsi", "macd"].forEach(k => this.charts[k] && this.charts[k].remove()); } catch (e) { }
+    this.charts = null;
+  }
+  syncCharts() {
+    const LWC = window.LightweightCharts, T = window.TA;
+    if (!LWC || !this.priceRef.current) return;
+    const CT = T.chartTheme;
+    const opts = (h, showTime) => ({
+      height: h, layout: { background: { color: "transparent" }, textColor: CT.text, fontSize: 11 },
+      grid: { vertLines: { color: CT.grid }, horzLines: { color: CT.grid } },
+      rightPriceScale: { borderColor: CT.border, minimumWidth: 72 },
+      timeScale: { borderColor: CT.border, timeVisible: false, visible: showTime !== false },
+      crosshair: { vertLine: { color: CT.cross, labelBackgroundColor: CT.accent }, horzLine: { color: CT.cross, labelBackgroundColor: CT.accent } },
+    });
+    if (!this.charts) {
+      const price = LWC.createChart(this.priceRef.current, opts(360, false));
+      const rsi = LWC.createChart(this.rsiRef.current, opts(170, false));
+      const macd = LWC.createChart(this.macdRef.current, opts(170, true));
+      const candle = price.addCandlestickSeries({ upColor: CT.up, downColor: CT.down, wickUpColor: CT.up, wickDownColor: CT.down, borderVisible: false });
+      let syncing = false;
+      const link = (src, others) => src.timeScale().subscribeVisibleLogicalRangeChange(r => {
+        if (syncing || !r) return;
+        syncing = true; others.forEach(o => o.timeScale().setVisibleLogicalRange(r)); syncing = false;
+      });
+      link(price, [rsi, macd]); link(rsi, [price, macd]); link(macd, [price, rsi]);
+      [price, rsi, macd].forEach(c => c.subscribeCrosshairMove(p => this.onCross(p)));
+      this.charts = { price, rsi, macd, candle, ema: [], lines: [], rsiSeries: [], macdSeries: [] };
+      this.chartedSym = null;
+    }
+    const sym = this.state.selected;
+    const c = this.charts;
+    [["price", this.priceRef, 360], ["rsi", this.rsiRef, 170], ["macd", this.macdRef, 170]].forEach(([k, ref, h]) => {
+      const w = ref.current ? ref.current.clientWidth : 0;
+      if (w > 0) c[k].applyOptions({ width: w, height: h });
+    });
+    if (sym !== this.chartedSym || this.chartDirty) { this.drawChart(sym); this.chartedSym = sym; this.chartDirty = false; }
+  }
+  drawChart(sym) {
+    const T = window.TA, LWC = window.LightweightCharts, c = this.charts;
+    if (!c || !sym) return;
+    const CT = T.chartTheme, cfg = this.state.chCfg, vis = this.state.vis;
+    const bars = this.barsFor(sym), closes = bars.map(b => b.close);
+    c.candle.setData(bars);
+    const pl = vis.pline !== false;
+    const cc = vis.candles !== false
+      ? { upColor: CT.up, downColor: CT.down, wickUpColor: CT.up, wickDownColor: CT.down }
+      : { upColor: "transparent", downColor: "transparent", wickUpColor: "transparent", wickDownColor: "transparent" };
+    /* the last-price line must carry its own colour — with candles hidden the series
+       colour is transparent, which is why the rule vanished and only the tag showed */
+    c.candle.applyOptions(Object.assign({
+      priceLineVisible: pl, lastValueVisible: pl,
+      priceLineColor: CT.accent, priceLineWidth: 1, priceLineStyle: LWC.LineStyle.Dashed,
+    }, cc));
+
+    c.ema.forEach(s => c.price.removeSeries(s)); c.ema = [];
+    cfg.ema.forEach(e => {
+      if (!vis[e.key]) return;
+      const ev = T.emaArr(closes, e.period);
+      const s = c.price.addLineSeries({ color: e.color, lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
+      s.setData(bars.map((b, i) => ev[i] != null ? { time: b.time, value: +ev[i].toFixed(2) } : null).filter(Boolean));
+      c.ema.push(s);
+    });
+
+    if (vis.cross !== false) {
+      const visE = cfg.ema.filter(e => vis[e.key]).sort((a, b) => a.period - b.period);
+      const mk = [];
+      if (visE.length === 2 && visE[0].period !== visE[1].period) {
+        const eA = T.emaArr(closes, visE[0].period), eB = T.emaArr(closes, visE[1].period);
+        for (let i = 1; i < bars.length; i++) {
+          if (eA[i] == null || eB[i] == null || eA[i - 1] == null || eB[i - 1] == null) continue;
+          if (eA[i - 1] <= eB[i - 1] && eA[i] > eB[i]) mk.push({ time: bars[i].time, position: "belowBar", color: CT.up, shape: "arrowUp", text: visE[0].period + "↑" + visE[1].period });
+          else if (eA[i - 1] >= eB[i - 1] && eA[i] < eB[i]) mk.push({ time: bars[i].time, position: "aboveBar", color: CT.down, shape: "arrowDown", text: visE[0].period + "↓" + visE[1].period });
+        }
+      }
+      c.candle.setMarkers(mk);
+    } else c.candle.setMarkers([]);
+
+    c.lines.forEach(l => { try { c.candle.removePriceLine(l); } catch (e) { } }); c.lines = [];
+    if (vis.sr) {
+      const cs = this.state.chartStore;
+      const stored = cs && cs[sym] && cs[sym].length && cs[sym][cs[sym].length - 1].sr;
+      const lvls = stored || T.autoSR(bars);
+      lvls.forEach(lv => c.lines.push(c.candle.createPriceLine({
+        price: +(+lv.price).toFixed(2), color: CT.sr, lineWidth: 1, lineStyle: LWC.LineStyle.Dotted,
+        axisLabelVisible: true, title: (lv.kind === "support" ? "S " : "R ") + (+lv.price).toFixed(2),
+      })));
+    }
+    if (vis.w52) {
+      const look = bars.slice(-252);
+      let hi = -Infinity, lo = Infinity;
+      for (const b of look) { if (b.high > hi) hi = b.high; if (b.low < lo) lo = b.low; }
+      if (isFinite(hi) && isFinite(lo)) {
+        [[hi, "52W H"], [lo, "52W L"]].forEach(([p, t]) => c.lines.push(c.candle.createPriceLine({
+          price: +p.toFixed(2), color: CT.gold, lineWidth: 1, lineStyle: LWC.LineStyle.Solid, axisLabelVisible: true, title: t,
+        })));
+      }
+    }
+
+    c.rsiSeries.forEach(s => c.rsi.removeSeries(s)); c.rsiSeries = [];
+    if (vis.rsi) {
+      const rv = T.rsiArr(closes, cfg.rsi.period);
+      [[cfg.rsi.ob, 100, CT.obZone], [cfg.rsi.os, 0, CT.osZone]].forEach(([base, val, col]) => {
+        const s = c.rsi.addBaselineSeries({
+          baseValue: { type: "price", price: base },
+          topFillColor1: col, topFillColor2: col, bottomFillColor1: col, bottomFillColor2: col,
+          topLineColor: "rgba(0,0,0,0)", bottomLineColor: "rgba(0,0,0,0)",
+          priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+        });
+        s.setData(bars.map(b => ({ time: b.time, value: val })));
+        c.rsiSeries.push(s);
+      });
+      const line = c.rsi.addLineSeries({ color: cfg.rsi.color, lineWidth: 2, priceFormat: { type: "price", precision: 1, minMove: 0.1 } });
+      line.setData(bars.map((b, i) => rv[i] != null ? { time: b.time, value: +rv[i].toFixed(1) } : { time: b.time }));
+      c.rsiSeries.push(line);
+      [[cfg.rsi.ob, CT.downA], [cfg.rsi.os, CT.upA]].forEach(([val, col]) => {
+        const s = c.rsi.addLineSeries({ color: col, lineWidth: 1, lineStyle: LWC.LineStyle.Dashed, lastValueVisible: false, crosshairMarkerVisible: false });
+        s.setData(bars.map(b => ({ time: b.time, value: val })));
+        c.rsiSeries.push(s);
+      });
+    }
+
+    c.macdSeries.forEach(s => c.macd.removeSeries(s)); c.macdSeries = [];
+    if (vis.macd) {
+      const m = T.macdArr(closes, cfg.macd.fast, cfg.macd.slow, cfg.macd.signal);
+      const hist = c.macd.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false });
+      hist.setData(bars.map((b, i) => m.hist[i] != null ? { time: b.time, value: +m.hist[i].toFixed(4), color: m.hist[i] >= 0 ? CT.histUp : CT.histDown } : { time: b.time }));
+      const line = c.macd.addLineSeries({ color: cfg.macd.macdColor, lineWidth: 2, lastValueVisible: false });
+      line.setData(bars.map((b, i) => m.line[i] != null ? { time: b.time, value: +m.line[i].toFixed(4) } : { time: b.time }));
+      const sig = c.macd.addLineSeries({ color: cfg.macd.signalColor, lineWidth: 2, lastValueVisible: false });
+      sig.setData(bars.map((b, i) => m.signal[i] != null ? { time: b.time, value: +m.signal[i].toFixed(4) } : { time: b.time }));
+      c.macdSeries.push(hist, line, sig);
+    }
+    this.applySpan();
+  }
+  applySpan() {
+    const c = this.charts;
+    if (!c || !this.state.selected) return;
+    const bars = this.barsFor(this.state.selected);
+    if (!bars.length) return;
+    const days = { "1M": 21, "3M": 63, "6M": 126, "1Y": 252, "Max": bars.length }[this.state.chCfg.span];
+    const from = Math.max(0, bars.length - days);
+    c.price.timeScale().setVisibleRange({ from: bars[from].time, to: bars[bars.length - 1].time });
+  }
+  onCross(param) {
+    const T = window.TA, sym = this.state.selected;
+    if (!param.time || !sym) { this.setState({ chartRead: "" }); return; }
+    const bars = this.barsFor(sym);
+    const bar = bars.find(x => x.time === param.time);
+    if (!bar) return;
+    const i = bars.indexOf(bar), closes = bars.map(b => b.close);
+    const r = T.rsiArr(closes, this.state.chCfg.rsi.period);
+    const m = T.macdArr(closes, this.state.chCfg.macd.fast, this.state.chCfg.macd.slow, this.state.chCfg.macd.signal);
+    this.setState({
+      chartRead: `${bar.time} · O ${bar.open} H ${bar.high} L ${bar.low} C ${bar.close} · Vol ${(bar.volume / 1e6).toFixed(2)}M · RSI ${r[i] != null ? r[i].toFixed(1) : "–"} · MACD ${m.line[i] != null ? m.line[i].toFixed(3) : "–"} / ${m.signal[i] != null ? m.signal[i].toFixed(3) : "–"}`
+    });
+  }
+  toggleEye(key) {
+    const T = window.TA;
+    const vis = { ...this.state.vis };
+    if (T.EMA_KEYS.includes(key)) {
+      if (vis[key]) { vis[key] = false; this.emaOrder = this.emaOrder.filter(k => k !== key); }
+      else {
+        vis[key] = true; this.emaOrder.push(key);
+        while (this.emaOrder.length > 2) { const drop = this.emaOrder.shift(); vis[drop] = false; }
+      }
+    } else vis[key] = !vis[key];
+    T.saveCh(this.state.chCfg, vis);
+    this.chartDirty = true;
+    this.setState({ vis });
+  }
+  setCfg(mutate) {
+    const T = window.TA;
+    const chCfg = JSON.parse(JSON.stringify(this.state.chCfg));
+    mutate(chCfg);
+    T.saveCh(chCfg, this.state.vis);
+    this.chartDirty = true;
+    this.setState({ chCfg });
+  }
+
+  /* ---------------- tweaks ---------------- */
+  tweaks() {
+    const pace = this.props.pace ?? "considered";
+    const emphasis = this.props.emphasis ?? "marked";
+    const P = {
+      spacious: { padX: "clamp(24px,6vw,72px)", rowY: "34px", sectionY: "52px", restGap: "1px", cardMin: "268px" },
+      considered: { padX: "clamp(16px,4vw,40px)", rowY: "24px", sectionY: "36px", restGap: "1px", cardMin: "228px" },
+      terminal: { padX: "clamp(12px,2vw,24px)", rowY: "14px", sectionY: "22px", restGap: "1px", cardMin: "186px" },
+    }[pace] || {};
+    return { ...P, pace, emphasis };
+  }
+  /* the loudness of the triage rows — quiet keeps the page flat, marked adds a
+     left rule, banded fills the whole row so severity reads across the room */
+  rowSkin(severity) {
+    const e = this.tweaks().emphasis;
+    const ink = severity === "action" ? "oklch(0.82 0.105 80)" : "var(--color-accent)";
+    if (e === "quiet") return { rowBg: "transparent", rowBar: "none", rowRadius: "0px", rowPadL: "0px", rowPadR: "0px" };
+    if (e === "banded") return {
+      rowBg: severity === "action"
+        ? "color-mix(in srgb, oklch(0.82 0.105 80) 9%, transparent)"
+        : "color-mix(in srgb, var(--color-accent-900) 62%, transparent)",
+      rowBar: "inset 2px 0 0 " + ink, rowRadius: "10px", rowPadL: "18px", rowPadR: "18px",
+    };
+    return { rowBg: "transparent", rowBar: "inset 2px 0 0 " + ink, rowRadius: "0px", rowPadL: "16px", rowPadR: "0px" };
+  }
+  /* voice rewrites the analyst sentence without touching the rule that produced it */
+  say(text, kind) {
+    if ((this.props.voice ?? "analyst") === "analyst" || !text) return text;
+    return text
+      .replace(/Book ⅓ \(33%\) of the position now — trail the remaining ⅔\./, "BOOK ⅓ · TRAIL ⅔")
+      .replace(/Sell the remaining ⅔ \(67%\) — trail stop hit \(close below EMA50\)\./, "EXIT ⅔ · STOP HIT")
+      .replace(/Hold the remaining ⅔ \(67%\) — sell only on a close below EMA50( \(\$[\d,.]+\))?\./, (m, p) => "HOLD ⅔ · STOP" + (p || ""))
+      .replace(/If holding: book ⅓ \(33%\) — exit review zone\./, "BOOK ⅓ · AT HIGH")
+      .replace(/Re-enter with a ⅓ \(33%\) tranche — scale in, never all at once\./, "RE-ENTER ⅓ · SCALE")
+      .replace(/Re-entry size 0% until the base confirms \(([^)]*)\)\./, "NO SIZE · BASE $1")
+      .replace(/Re-entry size 0% — still falling, no base\./, "NO SIZE · NO BASE")
+      .replace(/^Plan: book ⅓ \(33%\) at \+(\d+)% and ≤([\d.]+)% from the high\./, "PLAN ⅓ @ +$1% · ≤$2% HI")
+      .replace(/ — both booking conditions fire\./, " · TRIGGER")
+      .replace(/^\+([\d.]+)% since entry and inside the ([\d.]+)% high zone/, "+$1% · IN $2% HI ZONE")
+      .replace(/^Closed below EMA50 — trail rule says review the remaining ⅔\./, "CLOSE < EMA50 · REVIEW ⅔")
+      .replace(/^⅓ booked; remainder rides until a close below EMA50( \(\$[\d,.]+\))?\./, (m, p) => "⅓ BOOKED · TRAIL" + (p || ""))
+      .replace(/^([\d.]+)% from the 52-week high — exit review zone\./, "$1% OFF HI · REVIEW")
+      .replace(/^(\d+) days off the low — base confirmed — re-entry candidate\./, "$1D OFF LOW · BASE OK")
+      .replace(/^Base forming \(([^)]*)\) — hasn't cleared all checks\. Wait\./, "BASE $1 · WAIT")
+      .replace(/^Near the low, still falling — no base\. The detector says don't\./, "NO BASE · FALLING")
+      .replace(/^In the basing zone — re-entry watch \(near-low rule\)\./, "BASING ZONE · NEAR-LOW RULE")
+      .replace(/^Trend intact, nothing to do — weakest bucket: (\w+) (\d+), the number to watch\./, "TREND OK · WEAK $1 $2")
+      .replace(/^Quietly compounding — nothing to do\./, "NO ACTION")
+      .replace(/^Tracked from \$([\d,.]+) — ([\-\d.]+)% vs the \+(\d+)% trigger\./, "ENTRY $$$1 · $2% / +$3%");
+  }
+
+  /* ---------------- row view models ---------------- */
+  rowVM(d, kind) {
+    const T = window.TA, s = this.state;
+    const score = T.scoreOf(d, s.settings);
+    const tag = T.zoneTag(d, s.settings);
+    const verdict = T.verdictTag(d, s.positions, s.settings);
+    const action = T.action(d, s.positions, s.settings);
+    const mark = s.pbre[d.symbol] || {};
+    const members = s.lists.filter(l => l.symbols.includes(d.symbol)).map(l => l.name).join(" · ");
+    const pos = s.positions[d.symbol];
+    return {
+      symbol: d.symbol, sector: d.sector || "—",
+      score: T.fmt(score, 0), scoreInk: T.scoreColor(score),
+      close: "$" + T.fmt(d.close),
+      chg: (d.change_pct >= 0 ? "+" : "−") + T.fmt(Math.abs(d.change_pct)) + "%",
+      chgInk: T.dirColor(d.change_pct),
+      tag: verdict ? verdict.text + (tag ? " · " + tag.text : "") : (tag ? tag.text : ""),
+      tagInk: verdict ? verdict.ink : (tag ? tag.ink : "var(--color-neutral-400)"),
+      tagBorder: tag ? tag.border : "var(--color-neutral-800)",
+      why: this.say(T.why(d, s.positions, s.settings)),
+      action: action ? this.say(action.text) : "",
+      actionInk: action ? action.ink : "var(--color-neutral-500)",
+      ...this.rowSkin(kind === "reentry" ? "reentry" : "action"),
+      membership: members || "not in any list",
+      pbInk: mark.pb ? "oklch(0.82 0.105 80)" : "var(--color-neutral-600)",
+      pbBorder: mark.pb ? "oklch(0.82 0.105 80)" : "var(--color-neutral-800)",
+      reInk: mark.re ? "var(--color-accent-300)" : "var(--color-neutral-600)",
+      reBorder: mark.re ? "var(--color-accent)" : "var(--color-neutral-800)",
+      /* only offer the primary action when the rule actually sanctions it —
+         a "wait" row gets Chart/Detail only, as in the approved 1a */
+      cta: kind === "reentry"
+        ? ((d.base_status === "confirmed" || s.settings.reEntryMode === "near_low")
+          ? (mark.re ? "Re-entry marked" : "Mark re-entered") : "")
+        : (pos ? (mark.pb ? "Profit booked" : "Mark profit booked") : "Add entry price"),
+      onSelect: () => this.select(d.symbol, "detail"),
+      onChart: () => this.select(d.symbol, "chart"),
+      onPb: () => this.askPbre(d.symbol, "pb"),
+      onRe: () => this.askPbre(d.symbol, "re"),
+    };
+  }
+
+  renderVals() {
+    const T = window.TA, s = this.state;
+    const ink = T.ink;
+    const tw = this.tweaks();
+    const line = (on) => on ? "var(--color-accent)" : "transparent";
+    const tabInk = (on) => on ? "var(--color-text)" : "var(--color-neutral-500)";
+    const segBg = (on) => on ? "var(--color-accent-900)" : "transparent";
+
+    const vals = {
+      tw,
+      /* masthead */
+      meta: {
+        scope: s.payload ? `US market · ${(s.payload.symbols || []).length} symbols · ${s.payload.timeframe || "1Day"}` : "US market",
+        statusText: s.statusText + (s.payload && s.payload.generated_at && s.payload.generated_at !== "demo"
+          ? " · " + new Date(s.payload.generated_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+          : ""),
+        statusInk: s.mode === "live" ? ink.up : s.mode === "error" ? ink.down : ink.warn,
+        staleText: "", staleInk: ink.warn, staleBorder: "color-mix(in srgb, oklch(0.82 0.105 80) 45%, transparent)",
+      },
+      openSettings: () => this.openSettings(),
+      openLists: () => this.setState({ listsOpen: true }),
+      toggleAdd: () => this.setState(st => ({ addOpen: !st.addOpen })),
+      addOpen: s.addOpen, addDraft: s.addDraft, addNote: s.addNote,
+      onAddDraft: (e) => this.setState({ addDraft: e.target.value }),
+      onAddKey: (e) => { if (e.key === "Enter") this.submitAdd(); },
+      submitAdd: () => this.submitAdd(),
+      toast: s.toast,
+    };
+
+    const stale = s.payload ? T.staleness(s.payload, s.dataUrl) : null;
+    if (stale) {
+      vals.meta.staleText = stale.text;
+      vals.meta.staleInk = stale.level === "bad" ? ink.down : ink.warn;
+      vals.meta.staleBorder = stale.level === "bad"
+        ? "color-mix(in srgb, oklch(0.70 0.135 20) 45%, transparent)"
+        : "color-mix(in srgb, oklch(0.82 0.105 80) 45%, transparent)";
+    }
+
+    /* ---- index ledger ---- */
+    const idxSyms = [...new Set(s.lists.filter(l => l.type === "index").flatMap(l => l.symbols))];
+    vals.ledger = idxSyms.map(sym => this.bySym(sym)).filter(Boolean).slice(0, 8).map(d => ({
+      name: d.symbol.replace(/\/USD$/, ""),
+      close: T.fmt(d.close),
+      chg: (d.change_pct >= 0 ? "+" : "−") + T.fmt(Math.abs(d.change_pct)) + "%",
+      ink: T.dirColor(d.change_pct),
+      onClick: () => this.select(d.symbol, "detail"),
+    }));
+
+    /* ---- list navigation ---- */
+    const symCount = (t) => [...new Set(s.lists.filter(l => l.type === t).flatMap(l => l.symbols))].length;
+    vals.typeTabs = ["portfolio", "watchlist", "index"].map(t => ({
+      label: t === "portfolio" ? "Portfolios" : t === "watchlist" ? "Watchlists" : "Indexes",
+      count: symCount(t),
+      ink: tabInk(s.activeType === t), underline: line(s.activeType === t),
+      onClick: () => this.setState({ activeType: t, activeListId: null, restLimit: 8 }),
+    }));
+    const of = this.listsOfType(s.activeType);
+    const active = this.activeList();
+    vals.showListChips = of.length > 1;
+    vals.listChips = of.map(l => ({
+      name: l.name, count: l.symbols.length,
+      ink: active && l.id === active.id ? "var(--color-text)" : "var(--color-neutral-500)",
+      bg: active && l.id === active.id ? "color-mix(in srgb, var(--color-accent-900) 60%, transparent)" : "transparent",
+      bd: active && l.id === active.id ? "var(--color-accent-700)" : "var(--color-neutral-800)",
+      onClick: () => this.setState({ activeListId: l.id, restLimit: 8 }),
+    }));
+
+    /* ---- triage ---- */
+    const rows = this.rows();
+    const grp = (n) => rows.filter(d => T.groupOf(d, s.positions, s.settings) === n);
+    const actionRows = grp(1).sort((a, b) => T.scoreOf(b, s.settings) - T.scoreOf(a, s.settings));
+    const reentryRows = grp(3).sort((a, b) => T.scoreOf(b, s.settings) - T.scoreOf(a, s.settings));
+    const pendingRows = grp(0);
+    const steady = grp(2).sort((a, b) => T.scoreOf(b, s.settings) - T.scoreOf(a, s.settings));
+
+    const decisions = actionRows.length + reentryRows.length;
+    vals.headline = !s.payload ? "Loading your book…"
+      : !active ? "No list selected."
+        : decisions === 0 ? "Nothing needs a decision today."
+          : decisions === 1 ? "One name needs a decision today."
+            : `${decisions} names need a decision today.`;
+    const today = new Date().toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    vals.subline = active
+      ? `${active.name} · ${today} · rules armed at +${s.settings.gainPct}% gain, ${s.settings.highZonePct}% high zone, ${s.settings.lowZonePct}% basing zone.`
+      : "Create a list to get started.";
+
+    vals.hasAction = actionRows.length > 0;
+    vals.actionCount = actionRows.length + (actionRows.length === 1 ? " name" : " names");
+    vals.actionRows = actionRows.map(d => this.rowVM(d, "action"));
+    vals.hasReentry = reentryRows.length > 0;
+    vals.reentryCount = reentryRows.length + (reentryRows.length === 1 ? " name" : " names");
+    vals.reentryRows = reentryRows.map(d => this.rowVM(d, "reentry"));
+    vals.hasPending = pendingRows.length > 0;
+    vals.pendingCount = pendingRows.length + (pendingRows.length === 1 ? " name" : " names");
+    vals.pendingRows = pendingRows.map(d => ({ symbol: d.symbol, onRemove: () => this.removeSymbol(d.symbol) }));
+
+    /* ---- the rest of the book ---- */
+    vals.restTitle = "The rest of the book";
+    vals.restSub = `${steady.length} ${steady.length === 1 ? "name" : "names"} holding steady · nothing to act on · sorted by score`;
+    vals.q = s.q;
+    vals.onSearch = (e) => this.setState({ q: e.target.value.trim().toLowerCase() });
+    vals.trendF = s.trendF;
+    vals.onTrendFilter = (e) => this.setState({ trendF: e.target.value });
+    vals.isCards = s.settings.view !== "table";
+    vals.isTable = s.settings.view === "table";
+    vals.cardsInk = tabInk(vals.isCards); vals.cardsBg = segBg(vals.isCards);
+    vals.tableInk = tabInk(vals.isTable); vals.tableBg = segBg(vals.isTable);
+    const setView = (v) => {
+      const settings = { ...s.settings, view: v };
+      T.saveSettings(settings);
+      this.setState({ settings });
+    };
+    vals.setCards = () => setView("cards");
+    vals.setTable = () => setView("table");
+
+    vals.sectorChips = T.SECTORS.map(sec => ({
+      label: sec === "all" ? "All sectors" : sec,
+      ink: tabInk(s.sector === sec), underline: line(s.sector === sec),
+      onClick: () => this.setState({ sector: sec, restLimit: 8 }),
+    }));
+    vals.bullLabel = s.trendToggles.bull ? "Uptrend ✓" : "Uptrend";
+    vals.bearLabel = s.trendToggles.bear ? "Downtrend ✓" : "Downtrend";
+    vals.bullInk = s.trendToggles.bull ? "var(--color-text)" : "var(--color-neutral-600)";
+    vals.bearInk = s.trendToggles.bear ? "var(--color-text)" : "var(--color-neutral-600)";
+    vals.toggleBull = () => this.setState(st => ({ trendToggles: { ...st.trendToggles, bull: !st.trendToggles.bull } }));
+    vals.toggleBear = () => this.setState(st => ({ trendToggles: { ...st.trendToggles, bear: !st.trendToggles.bear } }));
+
+    const shown = steady.slice(0, s.restLimit);
+    vals.restCards = shown.map(d => {
+      const score = T.scoreOf(d, s.settings);
+      return {
+        symbol: d.symbol, score: T.fmt(score, 0), scoreInk: T.scoreColor(score),
+        close: "$" + T.fmt(d.close),
+        chg: (d.change_pct >= 0 ? "+" : "−") + T.fmt(Math.abs(d.change_pct)) + "%",
+        chgInk: T.dirColor(d.change_pct),
+        why: this.say(T.why(d, s.positions, s.settings)),
+        onSelect: () => this.select(d.symbol, "detail"),
+      };
+    });
+    vals.showMore = steady.length > s.restLimit;
+    vals.showMoreLabel = `Show ${steady.length - s.restLimit} more`;
+    vals.onShowMore = () => this.setState({ restLimit: 1000 });
+    vals.restEmpty = rows.length === 0;
+    vals.restEmptyText = !active ? "Create a list, then add tickers to it."
+      : (active.symbols.length === 0 ? "This list is empty. Add a ticker with the button above."
+        : "No symbols match the current filters — clear the search, sector or trend filters.");
+
+    /* ---- table ---- */
+    const align = (k) => k === "symbol" ? "left" : "right";
+    vals.tableCols = T.COLS.map(c => ({
+      label: c.lbl + (s.sortKey === c.key ? (s.sortDir < 0 ? " ↓" : " ↑") : ""),
+      ink: s.sortKey === c.key ? "var(--color-accent)" : "var(--color-neutral-600)",
+      align: align(c.key),
+      onClick: () => this.setState(st => st.sortKey === c.key
+        ? { sortDir: st.sortDir * -1 }
+        : { sortKey: c.key, sortDir: c.key === "symbol" ? 1 : -1 }),
+    }));
+    vals.tableRows = rows.map(d => {
+      if (d.pending) {
+        return {
+          symbol: d.symbol, sub: "awaiting data", score: "—", scoreInk: "var(--color-neutral-600)",
+          close: "—", chg: "—", chgInk: "var(--color-neutral-600)", off: "—", offInk: "var(--color-neutral-600)",
+          trend: "—", pbInk: "var(--color-neutral-700)", pbBorder: "var(--color-neutral-900)",
+          reInk: "var(--color-neutral-700)", reBorder: "var(--color-neutral-900)",
+          onSelect: () => this.removeSymbol(d.symbol), onPb: () => { }, onRe: () => { },
+        };
+      }
+      const score = T.scoreOf(d, s.settings), ph = T.pctFromHigh(d), zone = T.zoneOf(d, s.settings);
+      const mark = s.pbre[d.symbol] || {};
+      const members = s.lists.filter(l => l.symbols.includes(d.symbol)).map(l => l.name).join(" · ");
+      return {
+        symbol: d.symbol, sub: members || d.sector || "—",
+        score: T.fmt(score, 0), scoreInk: T.scoreColor(score),
+        close: T.fmt(d.close),
+        chg: (d.change_pct >= 0 ? "+" : "−") + T.fmt(Math.abs(d.change_pct)),
+        chgInk: T.dirColor(d.change_pct),
+        off: ph == null ? "—" : T.fmt(Math.abs(ph) < 0.05 ? 0 : ph, 1) + "%",
+        offInk: zone === "high" ? ink.warn : zone === "low" ? "var(--color-accent-300)" : "var(--color-neutral-500)",
+        trend: T.trendLabel(T.trendOf(d)),
+        pbInk: mark.pb ? "oklch(0.82 0.105 80)" : "var(--color-neutral-600)",
+        pbBorder: mark.pb ? "oklch(0.82 0.105 80)" : "var(--color-neutral-800)",
+        reInk: mark.re ? "var(--color-accent-300)" : "var(--color-neutral-600)",
+        reBorder: mark.re ? "var(--color-accent)" : "var(--color-neutral-800)",
+        onSelect: () => this.select(d.symbol, "detail"),
+        onPb: () => this.askPbre(d.symbol, "pb"),
+        onRe: () => this.askPbre(d.symbol, "re"),
+      };
+    });
+
+    /* ---- alerts ---- */
+    const al = (s.payload && s.payload.alerts) || [];
+    vals.alerts = al.map(a => ({
+      symbol: a.symbol, text: a.type + (a.detail ? " — " + a.detail.toLowerCase() : ""),
+      dir: a.dir === "bull" ? "Bullish" : "Bearish",
+      ink: a.dir === "bull" ? ink.up : ink.down,
+      onClick: () => this.select(a.symbol, "detail"),
+    }));
+    vals.noAlerts = al.length === 0;
+
+    /* ---- sector mix ---- */
+    const mix = s.payload ? T.sectorMix(s.lists, s.payload) : [];
+    vals.sectorMix = mix.map(m => ({
+      name: m.name, width: m.pct.toFixed(1) + "%", pctLabel: m.pctLabel,
+      barColor: m.barColor, moveLabel: m.moveLabel, moveInk: m.moveInk,
+      hover: `${m.count} held · ${m.stocks.map(x => x.symbol + " " + (x.change_pct >= 0 ? "+" : "−") + T.fmt(Math.abs(x.change_pct || 0), 1) + "%").join(", ")}`,
+    }));
+    vals.noSectors = mix.length === 0;
+
+    /* ---- daily summary ---- */
+    const sum = s.payload ? T.summary(s.lists, s.payload) : null;
+    vals.summaryTitle = sum ? `Today · ${sum.listName} · ${sum.date}` : "Today";
+    const sumRow = (d) => ({
+      symbol: d.symbol.replace(/\/USD$/, ""),
+      chg: (d.change_pct >= 0 ? "+" : "−") + T.fmt(Math.abs(d.change_pct || 0), 1) + "%",
+      ink: T.dirColor(d.change_pct || 0),
+      onClick: () => this.select(d.symbol, "detail"),
+    });
+    vals.summaryUp = sum ? sum.up.map(sumRow) : [];
+    vals.summaryDown = sum ? sum.down.map(sumRow) : [];
+    vals.summaryBreadth = sum ? sum.breadth : "Too few holdings with data to rank.";
+    const heldAll = active ? active.symbols.map(x => this.bySym(x)).filter(Boolean) : [];
+    const upN = heldAll.filter(d => (d.change_pct || 0) > 0).length;
+    vals.breadthText = heldAll.length ? `Breadth ${upN} up · ${heldAll.length - upN} down` : "";
+
+    /* ---- drawer ---- */
+    const d = s.selected ? this.bySym(s.selected) : null;
+    vals.drawerOpen = !!(s.drawer && d);
+    vals.closeDrawer = () => this.setState({ drawer: null });
+    vals.isDetailTab = s.drawerTab === "detail";
+    vals.isChartTab = s.drawerTab === "chart";
+    vals.detailTabInk = tabInk(vals.isDetailTab); vals.detailTabLine = line(vals.isDetailTab);
+    vals.chartTabInk = tabInk(vals.isChartTab); vals.chartTabLine = line(vals.isChartTab);
+    vals.showDetailTab = () => this.setState({ drawerTab: "detail" });
+    vals.showChartTab = () => this.setState({ drawerTab: "chart" });
+    vals.priceRef = this.priceRef; vals.rsiRef = this.rsiRef; vals.macdRef = this.macdRef;
+    vals.chartRead = s.chartRead || "Hover any panel for OHLC, RSI and MACD values — all three scroll and zoom together.";
+    const dSel = s.selected ? this.bySym(s.selected) : null;
+    vals.paneNotePrice = dSel
+      ? [s.chCfg.ema.filter(e => s.vis[e.key]).map(e => e.label).join(" · "), s.vis.sr ? "S/R" : "", s.vis.w52 ? "52W H/L" : ""].filter(Boolean).join(" · ")
+      : "";
+    vals.paneNoteRsi = dSel && dSel.rsi14 != null
+      ? `${s.chCfg.rsi.period}-period · now ${T.fmt(dSel.rsi14, 1)} · ${T.rsiZone(dSel.rsi14).toLowerCase()}`
+      : `${s.chCfg.rsi.period}-period`;
+    vals.paneNoteMacd = dSel && dSel.macd_hist != null
+      ? `${s.chCfg.macd.fast}/${s.chCfg.macd.slow}/${s.chCfg.macd.signal} · histogram ${T.signed(dSel.macd_hist)}`
+      : `${s.chCfg.macd.fast}/${s.chCfg.macd.slow}/${s.chCfg.macd.signal}`;
+    vals.spans = T.SPANS.map(sp => ({
+      label: sp, ink: tabInk(s.chCfg.span === sp), bg: segBg(s.chCfg.span === sp),
+      onClick: () => this.setCfg(c => { c.span = sp; }),
+    }));
+    vals.eyes = [
+      { key: "candles", label: "Candles", swatch: T.chartTheme.up },
+      ...s.chCfg.ema.map(e => ({ key: e.key, label: e.label, swatch: e.color })),
+      { key: "sr", label: "S/R", swatch: T.chartTheme.sr },
+      { key: "w52", label: "52W H/L", swatch: T.chartTheme.gold },
+      { key: "pline", label: "Last price", swatch: "var(--color-neutral-600)" },
+      { key: "cross", label: "Crossovers", swatch: T.chartTheme.up },
+    ].map(e => ({
+      label: e.label, swatch: e.swatch,
+      ink: s.vis[e.key] ? "var(--color-text)" : "var(--color-neutral-600)",
+      onClick: () => this.toggleEye(e.key),
+    }));
+    vals.chartCfgOpen = s.chartCfgOpen;
+    vals.chartCfgLabel = s.chartCfgOpen ? "Hide indicator settings" : "Indicator settings";
+    vals.toggleChartCfg = () => this.setState(st => ({ chartCfgOpen: !st.chartCfgOpen }));
+    vals.cfgRows = [
+      ...s.chCfg.ema.map((e, i) => ({
+        label: e.label, hasColor: true, color: e.color, hasColor2: false, color2: "#000000",
+        onColor: (ev) => this.setCfg(c => { c.ema[i].color = ev.target.value; }),
+        onColor2: () => { },
+        numbers: [{
+          label: "period", value: e.period,
+          onChange: (ev) => this.setCfg(c => { c.ema[i].period = Math.max(2, Math.min(400, +ev.target.value || e.period)); }),
+        }],
+      })),
+      {
+        label: "RSI", hasColor: true, color: s.chCfg.rsi.color, hasColor2: false, color2: "#000000",
+        onColor: (ev) => this.setCfg(c => { c.rsi.color = ev.target.value; }),
+        onColor2: () => { },
+        numbers: [{
+          label: "period", value: s.chCfg.rsi.period,
+          onChange: (ev) => this.setCfg(c => { c.rsi.period = Math.max(2, Math.min(100, +ev.target.value || 14)); }),
+        }],
+      },
+      {
+        label: "MACD", hasColor: true, color: s.chCfg.macd.macdColor, hasColor2: true, color2: s.chCfg.macd.signalColor,
+        onColor: (ev) => this.setCfg(c => { c.macd.macdColor = ev.target.value; }),
+        onColor2: (ev) => this.setCfg(c => { c.macd.signalColor = ev.target.value; }),
+        numbers: [
+          { label: "fast", value: s.chCfg.macd.fast, onChange: (ev) => this.setCfg(c => { c.macd.fast = Math.max(2, +ev.target.value || 12); }) },
+          { label: "slow", value: s.chCfg.macd.slow, onChange: (ev) => this.setCfg(c => { c.macd.slow = Math.max(3, +ev.target.value || 26); }) },
+          { label: "signal", value: s.chCfg.macd.signal, onChange: (ev) => this.setCfg(c => { c.macd.signal = Math.max(1, +ev.target.value || 9); }) },
+        ],
+      },
+    ];
+
+    if (d) {
+      const score = T.scoreOf(d, s.settings);
+      const pos = s.positions[d.symbol];
+      const rule = pos ? T.ruleState(d, pos, s.settings) : null;
+      const zone = T.zoneOf(d, s.settings);
+      const ph = T.pctFromHigh(d), pl = T.pctFromLow(d), p52 = T.pos52(d);
+      const comps = d.components || {};
+      const compMeta = [["Trend", "trend"], ["Momentum", "momentum"], ["Volume", "participation"], ["Rel. strength", "rel_strength"], ["Risk adj.", "risk_adj"]];
+      const mark = s.pbre[d.symbol] || {};
+      const rz = T.rsiZone(d.rsi14);
+      const trend = T.trendOf(d);
+      let zoneLabel = "No action zone", zoneInk = "var(--color-neutral-500)";
+      if (p52 == null) { zoneLabel = "no 52w data"; zoneInk = "var(--color-neutral-600)"; }
+      else if (zone === "high") { zoneLabel = "Exit review zone"; zoneInk = ink.warn; }
+      else if (zone === "low") {
+        if (s.settings.reEntryMode === "near_low") { zoneLabel = "Re-entry watch (near-low rule)"; zoneInk = "var(--color-accent-300)"; }
+        else if (d.base_status === "confirmed") { zoneLabel = "Base confirmed — re-entry candidate"; zoneInk = ink.up; }
+        else if (d.base_status === "forming") { zoneLabel = "Base forming (" + (d.base_score != null ? d.base_score + "/5" : "—") + ") — wait"; zoneInk = "var(--color-accent-300)"; }
+        else { zoneLabel = "Near low, no base — falling-knife risk"; zoneInk = ink.down; }
+      }
+      vals.d = {
+        symbol: d.symbol, sector: d.sector || "—",
+        price: "$" + T.fmt(d.close),
+        chg: (d.change_pct >= 0 ? "▲ " : "▼ ") + T.signed(d.change) + " (" + T.fmt(d.change_pct) + "%) today",
+        chgInk: T.dirColor(d.change_pct),
+        lists: s.lists.map(l => {
+          const inIt = l.symbols.includes(d.symbol);
+          return {
+            label: (inIt ? "✓ " : "+ ") + l.name,
+            ink: inIt ? "var(--color-text)" : "var(--color-neutral-500)",
+            bd: inIt ? "var(--color-accent)" : "var(--color-neutral-800)",
+            style: inIt ? "solid" : "dashed",
+            onClick: () => this.toggleMembership(d.symbol, l.id),
+          };
+        }),
+        verdict: rule ? rule.label : (T.action(d, s.positions, s.settings) ? T.action(d, s.positions, s.settings).text : ""),
+        verdictTitle: rule
+          ? (rule.phase === "trigger" ? "Booking trigger met" : rule.phase === "exit" ? "Trail exit" : rule.phase === "trail" ? "Trailing ⅔" : "Watching")
+          : (zone === "high" ? "Exit review zone" : zone === "low" ? "Re-entry watch" : "No action"),
+        verdictInk: rule
+          ? (rule.phase === "trigger" ? ink.warn : rule.phase === "exit" ? ink.down : rule.phase === "trail" ? ink.up : "var(--color-neutral-400)")
+          : (zone === "high" ? ink.warn : "var(--color-accent-300)"),
+        verdictBorder: rule
+          ? (rule.phase === "trigger" ? "color-mix(in srgb, oklch(0.82 0.105 80) 45%, transparent)"
+            : rule.phase === "exit" ? "color-mix(in srgb, oklch(0.70 0.135 20) 45%, transparent)"
+              : rule.phase === "trail" ? "color-mix(in srgb, oklch(0.79 0.11 158) 45%, transparent)" : "var(--color-neutral-800)")
+          : (zone === "high" ? "color-mix(in srgb, oklch(0.82 0.105 80) 45%, transparent)" : "var(--color-accent-700)"),
+        score: T.fmt(score, 0) + " / 100", scoreInk: T.scoreColor(score),
+        components: compMeta.map(([label, key]) => {
+          const v = comps[key] != null ? Math.max(0, Math.min(100, comps[key])) : null;
+          return {
+            label, value: v == null ? "—" : Math.round(v), width: (v == null ? 0 : v) + "%",
+            ink: v == null ? "var(--color-neutral-800)" : T.scoreColor(v),
+          };
+        }),
+        scoreNote: this.say(T.why(d, s.positions, s.settings)),
+        zoneLabel, zoneInk,
+        pos52: (p52 == null ? 50 : p52).toFixed(1) + "%",
+        low52: d.low_252 != null ? "$" + T.fmt(d.low_252) + " low" : "low",
+        high52: d.high_252 != null ? "$" + T.fmt(d.high_252) + " high" : "high",
+        stats: [
+          { label: "From 52w high", value: ph == null ? "—" : T.fmt(Math.abs(ph) < 0.05 ? 0 : ph, 1) + "%", ink: zone === "high" ? ink.warn : "var(--color-text)" },
+          { label: "From 52w low", value: pl == null ? "—" : "+" + T.fmt(pl, 1) + "%", ink: zone === "low" ? "var(--color-accent-300)" : "var(--color-text)" },
+          { label: "RSI (14)", value: T.fmt(d.rsi14, 1) + " · " + rz.toLowerCase(), ink: rz === "Overbought" ? ink.down : rz === "Oversold" ? ink.up : "var(--color-text)" },
+          { label: "MACD histogram", value: T.signed(d.macd_hist), ink: d.macd_hist >= 0 ? ink.up : ink.down },
+          { label: "EMA 20 / 50 / 200", value: [d.ema20, d.ema50, d.ema200].map(x => x == null ? "—" : T.fmt(x)).join(" · "), ink: "var(--color-text)" },
+          { label: "Rel. volume", value: d.rel_volume != null ? T.fmt(d.rel_volume) + "×" : "—", ink: "var(--color-text)" },
+        ],
+        sigLabel: trend === "bull" ? "constructive" : trend === "bear" ? "weak" : "mixed",
+        sigInk: trend === "bull" ? ink.up : trend === "bear" ? ink.down : "var(--color-neutral-400)",
+        chips: T.signalChips(d, s.settings),
+        ladder: T.ladder(d).map(l => ({
+          name: l.name, tag: l.tag, tagInk: l.tagInk, value: l.value, dist: l.dist,
+          bg: l.cur ? "color-mix(in srgb, var(--color-accent-900) 60%, transparent)" : "transparent",
+          radius: l.cur ? "8px" : "0px",
+          nameInk: l.cur ? "var(--color-text)" : "var(--color-neutral-500)",
+          valueInk: l.cur ? "var(--color-accent-300)" : "var(--color-text)",
+        })),
+      };
+      vals.entryPrice = s.entryPrice; vals.entryDate = s.entryDate;
+      vals.onEntryPrice = (e) => this.setState({ entryPrice: e.target.value });
+      vals.onEntryDate = (e) => this.setState({ entryDate: e.target.value });
+      vals.saveEntry = () => this.saveEntry();
+      vals.clearEntry = () => this.clearEntry();
+      vals.hasPosition = !!pos;
+      vals.bookedLabel = pos && pos.booked ? "⅓ booked ✓" : "Mark ⅓ booked";
+      vals.toggleBooked = () => this.toggleBooked();
+      vals.dPb = () => this.askPbre(d.symbol, "pb");
+      vals.dRe = () => this.askPbre(d.symbol, "re");
+      vals.dPbInk = mark.pb ? "oklch(0.82 0.105 80)" : "var(--color-neutral-500)";
+      vals.dPbBorder = mark.pb ? "oklch(0.82 0.105 80)" : "var(--color-neutral-800)";
+      vals.dReInk = mark.re ? "var(--color-accent-300)" : "var(--color-neutral-500)";
+      vals.dReBorder = mark.re ? "var(--color-accent)" : "var(--color-neutral-800)";
+    } else {
+      vals.d = { symbol: "—", sector: "", price: "—", chg: "", chgInk: "var(--color-neutral-500)", lists: [], components: [], stats: [], chips: [], ladder: [] };
+    }
+
+    /* ---- settings modal ---- */
+    vals.settingsOpen = s.settingsOpen && !!s.form;
+    vals.closeSettings = () => this.setState({ settingsOpen: false });
+    vals.form = s.form || { dataUrl: "", syncUrl: "" };
+    vals.onFormDataUrl = (e) => this.setForm("dataUrl", e.target.value);
+    vals.onFormSyncUrl = (e) => this.setForm("syncUrl", e.target.value);
+    vals.reconnect = () => this.reconnect();
+    const f = s.form || {};
+    /* Appearance — applied immediately rather than on Save, so the swatch you
+       pick is the page you are looking at. Theme is a device preference, not
+       part of the synced settings payload. */
+    const themeOn = (v) => s.theme === v;
+    vals.darkInk = tabInk(themeOn("dark")); vals.darkBg = segBg(themeOn("dark"));
+    vals.lightInk = tabInk(themeOn("light")); vals.lightBg = segBg(themeOn("light"));
+    vals.setDark = () => this.setTheme("dark");
+    vals.setLight = () => this.setTheme("light");
+    const horizonOn = (v) => f.horizon === v;
+    vals.longInk = tabInk(horizonOn("long")); vals.longBg = segBg(horizonOn("long"));
+    vals.swingInk = tabInk(horizonOn("swing")); vals.swingBg = segBg(horizonOn("swing"));
+    const applyHorizon = (v) => {
+      const p = T.HORIZON_PRESETS[v];
+      this.setState(st => ({ form: { ...st.form, horizon: v, gainPct: p.gain, highZonePct: p.high, lowZonePct: p.low } }));
+    };
+    vals.setLong = () => applyHorizon("long");
+    vals.setSwing = () => applyHorizon("swing");
+    const reOn = (v) => f.reEntryMode === v;
+    vals.baseInk = tabInk(reOn("base")); vals.baseBg = segBg(reOn("base"));
+    vals.nearLowInk = tabInk(reOn("near_low")); vals.nearLowBg = segBg(reOn("near_low"));
+    vals.setBase = () => this.setForm("reEntryMode", "base");
+    vals.setNearLow = () => this.setForm("reEntryMode", "near_low");
+    vals.ruleFields = [
+      { label: "Profit trigger", key: "gainPct", unit: "% gain", min: 5, max: 200, step: 1 },
+      { label: "Near-high zone", key: "highZonePct", unit: "% from 52w high", min: 0.5, max: 10, step: 0.5 },
+      { label: "Basing zone", key: "lowZonePct", unit: "% above 52w low", min: 2, max: 30, step: 1 },
+    ].map(x => ({ ...x, value: f[x.key], onChange: (e) => this.setForm(x.key, e.target.value) }));
+    vals.weightFields = [
+      { label: "Trend", key: "trend" }, { label: "Momentum", key: "momentum" },
+      { label: "Participation", key: "participation" }, { label: "Rel. strength", key: "relStrength" },
+      { label: "Risk adj.", key: "risk" },
+    ].map(x => ({ ...x, value: f[x.key], onChange: (e) => this.setForm(x.key, e.target.value) }));
+    const total = this.weightTotal();
+    vals.weightSum = total + " / 100";
+    vals.weightSumInk = total === 100 ? ink.up : ink.down;
+    vals.saveSettingsForm = () => this.saveSettingsForm();
+    vals.resetSettings = () => this.resetSettings();
+    vals.openListsFromSettings = () => this.setState({ settingsOpen: false, listsOpen: true });
+
+    /* ---- add-to-list modal ---- */
+    vals.addModalOpen = s.addModalOpen;
+    vals.addSym = s.addSym;
+    vals.closeAddModal = () => this.setState({ addModalOpen: false });
+    vals.confirmAdd = () => this.confirmAdd();
+    vals.addChoices = s.lists.map(l => {
+      const already = l.symbols.includes(s.addSym);
+      const on = s.addTarget === l.id;
+      return {
+        name: l.name, type: T.TYPE_LABEL[l.type] + (already ? " · already in" : ""),
+        ink: already ? "var(--color-neutral-600)" : "var(--color-text)",
+        cursor: already ? "default" : "pointer", opacity: already ? "0.45" : "1",
+        dot: on ? "var(--color-accent)" : "transparent",
+        dotBorder: on ? "var(--color-accent)" : "var(--color-neutral-700)",
+        onClick: () => { if (!already) this.setState({ addTarget: l.id }); },
+      };
+    });
+
+    /* ---- manage lists modal ---- */
+    vals.listsOpen = s.listsOpen;
+    vals.closeListsModal = () => this.setState({ listsOpen: false });
+    vals.manageRows = s.lists.map(l => ({
+      name: l.name, type: T.TYPE_LABEL[l.type], count: l.symbols.length,
+      onRename: () => {
+        const nn = prompt("Rename list", l.name);
+        if (nn && nn.trim()) this.saveLists(s.lists.map(x => x.id === l.id ? { ...x, name: nn.trim() } : x));
+      },
+      onDelete: () => {
+        if (confirm(`Delete "${l.name}"? Tickers stay in any other lists.`)) {
+          this.saveLists(s.lists.filter(x => x.id !== l.id));
+          if (s.activeListId === l.id) this.setState({ activeListId: null });
+        }
+      },
+    }));
+    vals.newListName = s.newListName; vals.newListType = s.newListType;
+    vals.onNewListName = (e) => this.setState({ newListName: e.target.value });
+    vals.onNewListType = (e) => this.setState({ newListType: e.target.value });
+    vals.addList = () => {
+      const n = String(s.newListName || "").trim();
+      if (!n) return;
+      this.saveLists(s.lists.concat({ id: T.uid(), name: n, type: s.newListType, symbols: [] }));
+      this.setState({ newListName: "" });
+    };
+
+    /* ---- PB/RE confirm ---- */
+    vals.confirmOpen = !!s.confirm;
+    vals.confirmTitle = s.confirm ? s.confirm.title : "";
+    vals.confirmMsg = s.confirm ? s.confirm.msg : "";
+    vals.closeConfirm = () => this.setState({ confirm: null });
+    vals.applyConfirm = () => this.applyPbre();
+
+    return vals;
+  }
+}
+
+</script>
+</body>
+</html>

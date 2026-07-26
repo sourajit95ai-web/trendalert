@@ -1,0 +1,62 @@
+/* TrendAlert theme layer — loaded AFTER the Nocturne styles.css.
+ *
+ * Nocturne ships dark-only: one :root block, no prefers-color-scheme, no
+ * [data-theme]. That dark palette is canonical and is NOT edited here — this
+ * file only adds the light counterpart, so the vendor's styles.css can be
+ * dropped in wholesale if the design system is ever regenerated.
+ *
+ * Ramp semantics, inherited from Nocturne: a LOW index is high contrast
+ * against the page background, a HIGH index is low contrast. Light mode keeps
+ * that ordering so every existing var() usage keeps its intent.
+ *
+ * The light ramp is not a mirror of the dark one. A near-black page lets
+ * mid-greys read as text; a near-white page does not, so steps 400-600 (which
+ * carry secondary and helper copy) are pulled substantially darker than a
+ * straight inversion would put them. Targets: 600 >= 4.5:1 for body copy,
+ * 700 decorative, 800/900 borders and fills.
+ */
+
+:root {
+  /* Semantic inks, previously hardcoded as oklch() literals inside
+     trendalert-core.js. As custom properties they follow the theme without
+     the logic layer knowing a theme exists. */
+  --ta-up: oklch(0.79 0.11 158);
+  --ta-down: oklch(0.70 0.135 20);
+  --ta-warn: oklch(0.82 0.105 80);
+  --ta-scrollbar: #3f424d;
+}
+
+:root[data-theme="light"] {
+  --color-bg: #f7f8fc;
+  --color-surface: #ffffff;
+  --color-text: #14161d;
+  --color-accent: #5b4fa0;
+  --color-accent-2: #6f63b5;
+  --color-divider: color-mix(in srgb, #14161d 14%, transparent);
+
+  --color-neutral-100: #14161d;
+  --color-neutral-200: #23262f;
+  --color-neutral-300: #343845;
+  --color-neutral-400: #474b5b;
+  --color-neutral-500: #585d70;
+  --color-neutral-600: #676c80;
+  --color-neutral-700: #a9adbe;
+  --color-neutral-800: #d5d8e6;
+  --color-neutral-900: #ebedf6;
+
+  --color-accent-100: #2b2741;
+  --color-accent-200: #423a6a;
+  --color-accent-300: #5d5294;
+  --color-accent-400: #796cbf;
+  --color-accent-500: #968ae0;
+  --color-accent-600: #b5abfc;
+  --color-accent-700: #d2cefd;
+  --color-accent-800: #e7e5fe;
+  --color-accent-900: #f5f4ff;
+
+  /* Chart/tag inks: same hues, dropped in lightness so they carry on white. */
+  --ta-up: oklch(0.52 0.13 158);
+  --ta-down: oklch(0.51 0.17 22);
+  --ta-warn: oklch(0.52 0.12 70);
+  --ta-scrollbar: #c4c8d8;
+}
