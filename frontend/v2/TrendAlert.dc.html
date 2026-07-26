@@ -35,6 +35,25 @@
     .ta-triage { grid-template-columns: 1fr !important; gap: 12px !important; }
     .ta-triage .ta-triage-act { flex-direction: row !important; flex-wrap: wrap; }
     .ta-triage .ta-triage-act > button { flex: 1 1 auto; }
+
+    /* Touch targets. The template carries its geometry in inline styles, but it
+       only ever sets padding and font-size -- never min-height/min-width -- so
+       these rules win on specificity without editing a single element.
+       align-items is the exception: several rows set it inline (usually to
+       baseline), so centring the now-taller content needs !important. */
+    button, [role="button"], input, select, textarea {
+      min-height: 44px;
+    }
+    button, [role="button"] {
+      min-width: 44px;
+      align-items: center !important;
+    }
+    /* Dense read-only rows -- the index tape and the daily-summary movers --
+       would add ~400px of dead height at 44px each. They are still comfortably
+       above the 24px WCAG 2.5.8 floor at 36. */
+    .ta-scroll > button, .ta-summary-row {
+      min-height: 36px;
+    }
   }
 </style>
 </helmet>
@@ -358,7 +377,7 @@
         <div style="display:flex; flex-direction:column; gap:5px">
           <span style="font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-600)">Top up</span>
           <sc-for list="{{ summaryUp }}" as="s" hint-placeholder-count="4">
-            <button type="button" onClick="{{ s.onClick }}" style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; font-size:12.5px; background:transparent; border:0; padding:2px 0; cursor:pointer; color:var(--color-neutral-300); font-family:var(--font-body)">
+            <button type="button" class="ta-summary-row" onClick="{{ s.onClick }}" style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; font-size:12.5px; background:transparent; border:0; padding:2px 0; cursor:pointer; color:var(--color-neutral-300); font-family:var(--font-body)">
               <span>{{ s.symbol }}</span><span style="font-variant-numeric:tabular-nums; color:{{ s.ink }}">{{ s.chg }}</span>
             </button>
           </sc-for>
@@ -366,7 +385,7 @@
         <div style="display:flex; flex-direction:column; gap:5px">
           <span style="font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-600)">Top down</span>
           <sc-for list="{{ summaryDown }}" as="s" hint-placeholder-count="4">
-            <button type="button" onClick="{{ s.onClick }}" style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; font-size:12.5px; background:transparent; border:0; padding:2px 0; cursor:pointer; color:var(--color-neutral-300); font-family:var(--font-body)">
+            <button type="button" class="ta-summary-row" onClick="{{ s.onClick }}" style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; font-size:12.5px; background:transparent; border:0; padding:2px 0; cursor:pointer; color:var(--color-neutral-300); font-family:var(--font-body)">
               <span>{{ s.symbol }}</span><span style="font-variant-numeric:tabular-nums; color:{{ s.ink }}">{{ s.chg }}</span>
             </button>
           </sc-for>
