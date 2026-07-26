@@ -15,12 +15,11 @@
   const LS_KEY = "trendalert_lists_v1";
   const DATA_KEY = "trendalert_data_url";
   const SET_KEY = "trendalert_settings_v1";
-  const POS_KEY = "trendalert_positions_v1";
   const SYNC_KEY = "trendalert_sync_url";
   const PBRE_KEY = "trendalert_pbre_v1";
   const CH_KEY = "trendalert_chartcfg_v1";
   const GROUPS_KEY = "trendalert_groups_v1";
-  TA.keys = { LS_KEY, DATA_KEY, SET_KEY, POS_KEY, SYNC_KEY, PBRE_KEY, CH_KEY, GROUPS_KEY };
+  TA.keys = { LS_KEY, DATA_KEY, SET_KEY, SYNC_KEY, PBRE_KEY, CH_KEY, GROUPS_KEY };
 
   const DEFAULT_DATA_URL = "https://storage.googleapis.com/trendalert-data-rattle/data.json";
   const DEFAULT_SYNC_URL = "https://us-central1-trendalert-prod.cloudfunctions.net/notes";
@@ -100,8 +99,6 @@
   };
   TA.saveSettings = (s) => lsSet(SET_KEY, JSON.stringify(s));
 
-  TA.loadPositions = () => { try { return JSON.parse(lsGet(POS_KEY)) || {}; } catch (e) { return {}; } };
-  TA.savePositions = (p) => lsSet(POS_KEY, JSON.stringify(p));
   TA.loadPbre = () => { try { return JSON.parse(lsGet(PBRE_KEY)) || {}; } catch (e) { return {}; } };
   TA.savePbre = (p) => lsSet(PBRE_KEY, JSON.stringify(p));
   TA.loadGroups = () => {
@@ -178,28 +175,10 @@
   TA.scoreColor = s => s >= 66 ? UP : s <= 33 ? DOWN : WARN;
   TA.dirColor = v => (v >= 0 ? UP : DOWN);
 
-  /* ---------- booking rule (Option C) ---------- */
-  const BOOK_FRACTION = "⅓";
-  TA.ruleState = (d, p, settings) => {
-    const gain = (d.close - p.entry) / p.entry * 100;
-    const nearHigh = TA.zoneOf(d, settings) === "high";
-    const trailExit = (d.ema50 != null) ? d.close < d.ema50 : false;
-    const G = settings.gainPct, HZ = settings.highZonePct;
-    if (!p.booked) {
-      if (gain >= G && nearHigh) return { gain, phase: "trigger", label: "Trigger met — book " + BOOK_FRACTION, cls: "go" };
-      const need = [];
-      if (gain < G) need.push("gain " + fmt(gain, 1) + "% / +" + G + "%");
-      if (!nearHigh) need.push(fmt(Math.abs(TA.pctFromHigh(d) || 0), 1) + "% from 52w high / ≤" + HZ + "%");
-      return { gain, phase: "watch", label: "Watching — " + need.join(" · "), cls: "" };
-    }
-    if (trailExit) return { gain, phase: "exit", label: "Trail exit — close below EMA50, review remaining ⅔", cls: "trail-exit" };
-    return { gain, phase: "trail", label: "Trailing ⅔ — holding (close above EMA50)", cls: "trail-ok" };
-  };
 
   /* group 0 awaiting data · 1 action required · 3 re-entry watch · 2 holding steady */
-  TA.groupOf = (d, positions, settings) => {
+  TA.groupOf = (d, settings) => {
     if (d.pending) return 0;
-    if (positions[d.symbol]) return 1;
     if (d.limited_history) return 2;
     const z = TA.zoneOf(d, settings);
     if (z === "high") return 1;
@@ -208,17 +187,9 @@
   };
 
   /* the "why" sentence — plain text (the DC styles the emphasis) */
-  TA.why = (d, positions, settings) => {
+  TA.why = (d, settings) => {
     if (d.limited_history)
       return `Listed only ${d.history_bars} trading days ago — no true 52-week range yet, so booking and base rules stay disarmed (needs 252).`;
-    const p = positions[d.symbol];
-    if (p) {
-      const st = TA.ruleState(d, p, settings);
-      if (st.phase === "trigger") return `+${fmt(st.gain, 1)}% since entry and inside the ${settings.highZonePct}% high zone — both booking conditions fire.`;
-      if (st.phase === "exit") return `Closed below EMA50 — trail rule says review the remaining ⅔.`;
-      if (st.phase === "trail") return `⅓ booked; remainder rides until a close below EMA50${d.ema50 != null ? " ($" + fmt(d.ema50) + ")" : ""}.`;
-      return `Tracked from $${fmt(p.entry)} — ${fmt(st.gain, 1)}% vs the +${settings.gainPct}% trigger.`;
-    }
     const zn = TA.zoneOf(d, settings);
     if (zn === "high") return `${fmt(Math.abs(TA.pctFromHigh(d) || 0), 1)}% from the 52-week high — exit review zone.`;
     if (zn === "low") {
@@ -237,17 +208,9 @@
   };
 
   /* the sizing instruction — {text, ink} or null */
-  TA.action = (d, positions, settings) => {
-    const grp = TA.groupOf(d, positions, settings);
+  TA.action = (d, settings) => {
+    const grp = TA.groupOf(d, settings);
     if (grp !== 1 && grp !== 3) return null;
-    const p = positions[d.symbol];
-    if (p) {
-      const st = TA.ruleState(d, p, settings);
-      if (st.phase === "trigger") return { text: "Book ⅓ (33%) of the position now — trail the remaining ⅔.", ink: WARN };
-      if (st.phase === "exit") return { text: "Sell the remaining ⅔ (67%) — trail stop hit (close below EMA50).", ink: DOWN };
-      if (st.phase === "trail") return { text: `Hold the remaining ⅔ (67%) — sell only on a close below EMA50${d.ema50 != null ? " ($" + fmt(d.ema50) + ")" : ""}.`, ink: UP };
-      return { text: `Plan: book ⅓ (33%) at +${settings.gainPct}% and ≤${settings.highZonePct}% from the high.`, ink: "var(--color-neutral-500)" };
-    }
     const zn = TA.zoneOf(d, settings);
     if (zn === "high") return { text: "If holding: book ⅓ (33%) — exit review zone.", ink: WARN };
     if (zn === "low") {
@@ -272,15 +235,6 @@
       return { text: "Falling knife", ink: DOWN, border: "color-mix(in srgb, var(--ta-down) 45%, transparent)" };
     }
     return null;
-  };
-  TA.verdictTag = (d, positions, settings) => {
-    const p = positions[d.symbol];
-    if (!p) return null;
-    const st = TA.ruleState(d, p, settings);
-    if (st.phase === "trigger") return { text: "Book ⅓", ink: WARN };
-    if (st.phase === "exit") return { text: "Trail exit", ink: DOWN };
-    if (st.phase === "trail") return { text: "Trailing ⅔", ink: UP };
-    return { text: fmt(st.gain, 1) + "% / +" + settings.gainPct + "%", ink: "var(--color-neutral-400)" };
   };
   /* 52-week extreme sticker — the fixed 2% rule, shared everywhere */
   TA.at52 = d => {

@@ -739,12 +739,11 @@ const __ds_scope = {};
   const LS_KEY = "trendalert_lists_v1";
   const DATA_KEY = "trendalert_data_url";
   const SET_KEY = "trendalert_settings_v1";
-  const POS_KEY = "trendalert_positions_v1";
   const SYNC_KEY = "trendalert_sync_url";
   const PBRE_KEY = "trendalert_pbre_v1";
   const CH_KEY = "trendalert_chartcfg_v1";
   const GROUPS_KEY = "trendalert_groups_v1";
-  TA.keys = { LS_KEY, DATA_KEY, SET_KEY, POS_KEY, SYNC_KEY, PBRE_KEY, CH_KEY, GROUPS_KEY };
+  TA.keys = { LS_KEY, DATA_KEY, SET_KEY, SYNC_KEY, PBRE_KEY, CH_KEY, GROUPS_KEY };
 
   const DEFAULT_DATA_URL = "https://storage.googleapis.com/trendalert-data-rattle/data.json";
   const DEFAULT_SYNC_URL = "https://us-central1-trendalert-prod.cloudfunctions.net/notes";
@@ -824,8 +823,6 @@ const __ds_scope = {};
   };
   TA.saveSettings = (s) => lsSet(SET_KEY, JSON.stringify(s));
 
-  TA.loadPositions = () => { try { return JSON.parse(lsGet(POS_KEY)) || {}; } catch (e) { return {}; } };
-  TA.savePositions = (p) => lsSet(POS_KEY, JSON.stringify(p));
   TA.loadPbre = () => { try { return JSON.parse(lsGet(PBRE_KEY)) || {}; } catch (e) { return {}; } };
   TA.savePbre = (p) => lsSet(PBRE_KEY, JSON.stringify(p));
   TA.loadGroups = () => {
@@ -902,28 +899,10 @@ const __ds_scope = {};
   TA.scoreColor = s => s >= 66 ? UP : s <= 33 ? DOWN : WARN;
   TA.dirColor = v => (v >= 0 ? UP : DOWN);
 
-  /* ---------- booking rule (Option C) ---------- */
-  const BOOK_FRACTION = "⅓";
-  TA.ruleState = (d, p, settings) => {
-    const gain = (d.close - p.entry) / p.entry * 100;
-    const nearHigh = TA.zoneOf(d, settings) === "high";
-    const trailExit = (d.ema50 != null) ? d.close < d.ema50 : false;
-    const G = settings.gainPct, HZ = settings.highZonePct;
-    if (!p.booked) {
-      if (gain >= G && nearHigh) return { gain, phase: "trigger", label: "Trigger met — book " + BOOK_FRACTION, cls: "go" };
-      const need = [];
-      if (gain < G) need.push("gain " + fmt(gain, 1) + "% / +" + G + "%");
-      if (!nearHigh) need.push(fmt(Math.abs(TA.pctFromHigh(d) || 0), 1) + "% from 52w high / ≤" + HZ + "%");
-      return { gain, phase: "watch", label: "Watching — " + need.join(" · "), cls: "" };
-    }
-    if (trailExit) return { gain, phase: "exit", label: "Trail exit — close below EMA50, review remaining ⅔", cls: "trail-exit" };
-    return { gain, phase: "trail", label: "Trailing ⅔ — holding (close above EMA50)", cls: "trail-ok" };
-  };
 
   /* group 0 awaiting data · 1 action required · 3 re-entry watch · 2 holding steady */
-  TA.groupOf = (d, positions, settings) => {
+  TA.groupOf = (d, settings) => {
     if (d.pending) return 0;
-    if (positions[d.symbol]) return 1;
     if (d.limited_history) return 2;
     const z = TA.zoneOf(d, settings);
     if (z === "high") return 1;
@@ -932,17 +911,9 @@ const __ds_scope = {};
   };
 
   /* the "why" sentence — plain text (the DC styles the emphasis) */
-  TA.why = (d, positions, settings) => {
+  TA.why = (d, settings) => {
     if (d.limited_history)
       return `Listed only ${d.history_bars} trading days ago — no true 52-week range yet, so booking and base rules stay disarmed (needs 252).`;
-    const p = positions[d.symbol];
-    if (p) {
-      const st = TA.ruleState(d, p, settings);
-      if (st.phase === "trigger") return `+${fmt(st.gain, 1)}% since entry and inside the ${settings.highZonePct}% high zone — both booking conditions fire.`;
-      if (st.phase === "exit") return `Closed below EMA50 — trail rule says review the remaining ⅔.`;
-      if (st.phase === "trail") return `⅓ booked; remainder rides until a close below EMA50${d.ema50 != null ? " ($" + fmt(d.ema50) + ")" : ""}.`;
-      return `Tracked from $${fmt(p.entry)} — ${fmt(st.gain, 1)}% vs the +${settings.gainPct}% trigger.`;
-    }
     const zn = TA.zoneOf(d, settings);
     if (zn === "high") return `${fmt(Math.abs(TA.pctFromHigh(d) || 0), 1)}% from the 52-week high — exit review zone.`;
     if (zn === "low") {
@@ -961,17 +932,9 @@ const __ds_scope = {};
   };
 
   /* the sizing instruction — {text, ink} or null */
-  TA.action = (d, positions, settings) => {
-    const grp = TA.groupOf(d, positions, settings);
+  TA.action = (d, settings) => {
+    const grp = TA.groupOf(d, settings);
     if (grp !== 1 && grp !== 3) return null;
-    const p = positions[d.symbol];
-    if (p) {
-      const st = TA.ruleState(d, p, settings);
-      if (st.phase === "trigger") return { text: "Book ⅓ (33%) of the position now — trail the remaining ⅔.", ink: WARN };
-      if (st.phase === "exit") return { text: "Sell the remaining ⅔ (67%) — trail stop hit (close below EMA50).", ink: DOWN };
-      if (st.phase === "trail") return { text: `Hold the remaining ⅔ (67%) — sell only on a close below EMA50${d.ema50 != null ? " ($" + fmt(d.ema50) + ")" : ""}.`, ink: UP };
-      return { text: `Plan: book ⅓ (33%) at +${settings.gainPct}% and ≤${settings.highZonePct}% from the high.`, ink: "var(--color-neutral-500)" };
-    }
     const zn = TA.zoneOf(d, settings);
     if (zn === "high") return { text: "If holding: book ⅓ (33%) — exit review zone.", ink: WARN };
     if (zn === "low") {
@@ -996,15 +959,6 @@ const __ds_scope = {};
       return { text: "Falling knife", ink: DOWN, border: "color-mix(in srgb, var(--ta-down) 45%, transparent)" };
     }
     return null;
-  };
-  TA.verdictTag = (d, positions, settings) => {
-    const p = positions[d.symbol];
-    if (!p) return null;
-    const st = TA.ruleState(d, p, settings);
-    if (st.phase === "trigger") return { text: "Book ⅓", ink: WARN };
-    if (st.phase === "exit") return { text: "Trail exit", ink: DOWN };
-    if (st.phase === "trail") return { text: "Trailing ⅔", ink: UP };
-    return { text: fmt(st.gain, 1) + "% / +" + settings.gainPct + "%", ink: "var(--color-neutral-400)" };
   };
   /* 52-week extreme sticker — the fixed 2% rule, shared everywhere */
   TA.at52 = d => {
@@ -1815,18 +1769,7 @@ const __ds_scope = {};
             </div>
 
             <div style="display:flex; flex-direction:column; gap:12px">
-              <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">Position</span>
-              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
-                <input type="text" value="{{ entryPrice }}" onChange="{{ onEntryPrice }}" placeholder="Entry price" style="width:120px; font-size:13px; font-variant-numeric:tabular-nums; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:9px 11px; outline:0" />
-                <input type="text" value="{{ entryDate }}" onChange="{{ onEntryDate }}" placeholder="YYYY-MM-DD" style="width:140px; font-size:13px; font-variant-numeric:tabular-nums; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:9px 11px; outline:0" />
-                <button type="button" class="ta-hit" onClick="{{ saveEntry }}" style="font-size:12.5px; color:var(--color-accent); background:transparent; border:1px solid var(--color-accent); border-radius:8px; padding:9px 14px; cursor:pointer">Save entry</button>
-                <sc-if value="{{ hasPosition }}">
-                  <button type="button" class="ta-hit" onClick="{{ toggleBooked }}" style="font-size:12.5px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:9px 14px; cursor:pointer">{{ bookedLabel }}</button>
-                </sc-if>
-                <sc-if value="{{ hasPosition }}">
-                  <button type="button" class="ta-hit" onClick="{{ clearEntry }}" style="font-size:12.5px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:9px 14px; cursor:pointer">Clear</button>
-                </sc-if>
-              </div>
+              <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">Marks</span>
               <div style="display:flex; gap:8px; align-items:center">
                 <button type="button" onClick="{{ dPb }}" style="font-size:11px; font-weight:500; letter-spacing:0.06em; color:{{ dPbInk }}; background:transparent; border:1px solid {{ dPbBorder }}; border-radius:6px; padding:4px 10px; cursor:pointer">PB · profit booked</button>
                 <button type="button" onClick="{{ dRe }}" style="font-size:11px; font-weight:500; letter-spacing:0.06em; color:{{ dReInk }}; background:transparent; border:1px solid {{ dReBorder }}; border-radius:6px; padding:4px 10px; cursor:pointer">RE · re-entered</button>
@@ -4006,7 +3949,7 @@ class Component extends DCLogic {
       lists, activeType: "portfolio", activeListId: null, selected: null,
       q: "", trendF: "all", sector: "all", sortKey: "change_pct", sortDir: -1,
       trendToggles: { bull: true, bear: true },
-      settings: T.loadSettings(), positions: T.loadPositions(), pbre: T.loadPbre(),
+      settings: T.loadSettings(), pbre: T.loadPbre(),
       dataUrl: T.lsGet(T.keys.DATA_KEY) || T.DEFAULT_DATA_URL,
       syncUrl: T.lsGet(T.keys.SYNC_KEY) || T.DEFAULT_SYNC_URL,
       chCfg: T.loadCh(T.keys.CH_KEY, T.DEFAULT_CHCFG),
@@ -4019,7 +3962,6 @@ class Component extends DCLogic {
       settingsOpen: false, addModalOpen: false, addSym: "", addTarget: null,
       listsOpen: false, newListName: "", newListType: "portfolio",
       confirm: null, toast: "", form: null,
-      entryPrice: "", entryDate: "",
       theme: T.loadTheme(),
     };
     const v = this.state.vis;
@@ -4037,9 +3979,8 @@ class Component extends DCLogic {
   componentDidMount() {
     const T = window.TA;
     this.applyTheme(this.state.theme);
-    Promise.all([T.pull(this.state.syncUrl, "positions"), T.pull(this.state.syncUrl, "pbre")]).then(([pos, pb]) => {
+    T.pull(this.state.syncUrl, "pbre").then((pb) => {
       const patch = {};
-      if (pos) { patch.positions = pos; T.savePositions(pos); }
       if (pb) { patch.pbre = pb; T.savePbre(pb); }
       if (Object.keys(patch).length) this.setState(patch);
       this.load();
@@ -4134,13 +4075,7 @@ class Component extends DCLogic {
     });
   }
   select(sym, tab) {
-    this.setState(st => {
-      const p = st.positions[sym];
-      return {
-        selected: sym, drawer: true, drawerTab: tab || "detail", chartRead: "",
-        entryPrice: p ? String(p.entry) : "", entryDate: p && p.date ? p.date : "",
-      };
-    });
+    this.setState({ selected: sym, drawer: true, drawerTab: tab || "detail", chartRead: "" });
   }
 
   /* ---------------- PB / RE ---------------- */
@@ -4169,38 +4104,6 @@ class Component extends DCLogic {
     T.post(this.state.syncUrl, "pbre", pbre);
     this.setState({ pbre, confirm: null });
     if (msg) this.flash(msg);
-  }
-
-  /* ---------------- positions ---------------- */
-  savePositions(positions) {
-    const T = window.TA;
-    T.savePositions(positions);
-    T.post(this.state.syncUrl, "positions", positions);
-    this.setState({ positions });
-  }
-  saveEntry() {
-    const sym = this.state.selected;
-    const entry = parseFloat(String(this.state.entryPrice).replace(/[^0-9.\-]/g, ""));
-    if (!sym || !entry || isNaN(entry)) { this.flash("Enter a numeric entry price."); return; }
-    const positions = { ...this.state.positions };
-    const prev = positions[sym] || {};
-    positions[sym] = { ...prev, entry, date: this.state.entryDate || new Date().toISOString().slice(0, 10) };
-    this.savePositions(positions);
-    this.flash(`${sym} entry saved at $${window.TA.fmt(entry)}.`);
-  }
-  clearEntry() {
-    const sym = this.state.selected;
-    const positions = { ...this.state.positions };
-    delete positions[sym];
-    this.savePositions(positions);
-    this.setState({ entryPrice: "", entryDate: "" });
-  }
-  toggleBooked() {
-    const sym = this.state.selected;
-    const positions = { ...this.state.positions };
-    if (!positions[sym]) return;
-    positions[sym] = { ...positions[sym], booked: !positions[sym].booked };
-    this.savePositions(positions);
   }
 
   /* ---------------- lists ---------------- */
@@ -4296,9 +4199,8 @@ class Component extends DCLogic {
     const T = window.TA, f = this.state.form;
     T.lsSet(T.keys.DATA_KEY, f.dataUrl); T.lsSet(T.keys.SYNC_KEY, f.syncUrl);
     this.setState({ dataUrl: f.dataUrl, syncUrl: f.syncUrl }, () => {
-      Promise.all([T.pull(f.syncUrl, "positions"), T.pull(f.syncUrl, "pbre")]).then(([pos, pb]) => {
+      T.pull(f.syncUrl, "pbre").then((pb) => {
         const patch = {};
-        if (pos) { patch.positions = pos; T.savePositions(pos); }
         if (pb) { patch.pbre = pb; T.savePbre(pb); }
         if (Object.keys(patch).length) this.setState(patch);
         this.load();
@@ -4550,11 +4452,10 @@ class Component extends DCLogic {
     const T = window.TA, s = this.state;
     const score = T.scoreOf(d, s.settings);
     const tag = T.zoneTag(d, s.settings);
-    const verdict = T.verdictTag(d, s.positions, s.settings);
-    const action = T.action(d, s.positions, s.settings);
+    const verdict = null;
+    const action = T.action(d, s.settings);
     const mark = s.pbre[d.symbol] || {};
     const members = s.lists.filter(l => l.symbols.includes(d.symbol)).map(l => l.name).join(" · ");
-    const pos = s.positions[d.symbol];
     return {
       symbol: d.symbol, sector: d.sector || "—",
       score: T.fmt(score, 0), scoreInk: T.scoreColor(score),
@@ -4564,7 +4465,7 @@ class Component extends DCLogic {
       tag: verdict ? verdict.text + (tag ? " · " + tag.text : "") : (tag ? tag.text : ""),
       tagInk: verdict ? verdict.ink : (tag ? tag.ink : "var(--color-neutral-400)"),
       tagBorder: tag ? tag.border : "var(--color-neutral-800)",
-      why: this.say(T.why(d, s.positions, s.settings)),
+      why: this.say(T.why(d, s.settings)),
       action: action ? this.say(action.text) : "",
       actionInk: action ? action.ink : "var(--color-neutral-500)",
       ...this.rowSkin(kind === "reentry" ? "reentry" : "action"),
@@ -4578,7 +4479,7 @@ class Component extends DCLogic {
       cta: kind === "reentry"
         ? ((d.base_status === "confirmed" || s.settings.reEntryMode === "near_low")
           ? (mark.re ? "Re-entry marked" : "Mark re-entered") : "")
-        : (pos ? (mark.pb ? "Profit booked" : "Mark profit booked") : "Add entry price"),
+        : (mark.pb ? "Profit booked" : "Mark profit booked"),
       onSelect: () => this.select(d.symbol, "detail"),
       onChart: () => this.select(d.symbol, "chart"),
       onPb: () => this.askPbre(d.symbol, "pb"),
@@ -4655,7 +4556,7 @@ class Component extends DCLogic {
 
     /* ---- triage ---- */
     const rows = this.rows();
-    const grp = (n) => rows.filter(d => T.groupOf(d, s.positions, s.settings) === n);
+    const grp = (n) => rows.filter(d => T.groupOf(d, s.settings) === n);
     const actionRows = grp(1).sort((a, b) => T.scoreOf(b, s.settings) - T.scoreOf(a, s.settings));
     const reentryRows = grp(3).sort((a, b) => T.scoreOf(b, s.settings) - T.scoreOf(a, s.settings));
     const pendingRows = grp(0);
@@ -4669,7 +4570,7 @@ class Component extends DCLogic {
             : `${decisions} names need a decision today.`;
     const today = new Date().toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     vals.subline = active
-      ? `${active.name} · ${today} · rules armed at +${s.settings.gainPct}% gain, ${s.settings.highZonePct}% high zone, ${s.settings.lowZonePct}% basing zone.`
+      ? `${active.name} · ${today} · rules armed at ${s.settings.highZonePct}% high zone, ${s.settings.lowZonePct}% basing zone.`
       : "Create a list to get started.";
 
     vals.hasAction = actionRows.length > 0;
@@ -4721,7 +4622,7 @@ class Component extends DCLogic {
         close: "$" + T.fmt(d.close),
         chg: (d.change_pct >= 0 ? "+" : "−") + T.fmt(Math.abs(d.change_pct)) + "%",
         chgInk: T.dirColor(d.change_pct),
-        why: this.say(T.why(d, s.positions, s.settings)),
+        why: this.say(T.why(d, s.settings)),
         onSelect: () => this.select(d.symbol, "detail"),
       };
     });
@@ -4884,8 +4785,6 @@ class Component extends DCLogic {
 
     if (d) {
       const score = T.scoreOf(d, s.settings);
-      const pos = s.positions[d.symbol];
-      const rule = pos ? T.ruleState(d, pos, s.settings) : null;
       const zone = T.zoneOf(d, s.settings);
       const ph = T.pctFromHigh(d), pl = T.pctFromLow(d), p52 = T.pos52(d);
       const comps = d.components || {};
@@ -4917,18 +4816,10 @@ class Component extends DCLogic {
             onClick: () => this.toggleMembership(d.symbol, l.id),
           };
         }),
-        verdict: rule ? rule.label : (T.action(d, s.positions, s.settings) ? T.action(d, s.positions, s.settings).text : ""),
-        verdictTitle: rule
-          ? (rule.phase === "trigger" ? "Booking trigger met" : rule.phase === "exit" ? "Trail exit" : rule.phase === "trail" ? "Trailing ⅔" : "Watching")
-          : (zone === "high" ? "Exit review zone" : zone === "low" ? "Re-entry watch" : "No action"),
-        verdictInk: rule
-          ? (rule.phase === "trigger" ? ink.warn : rule.phase === "exit" ? ink.down : rule.phase === "trail" ? ink.up : "var(--color-neutral-400)")
-          : (zone === "high" ? ink.warn : "var(--color-accent-300)"),
-        verdictBorder: rule
-          ? (rule.phase === "trigger" ? "color-mix(in srgb, oklch(0.82 0.105 80) 45%, transparent)"
-            : rule.phase === "exit" ? "color-mix(in srgb, oklch(0.70 0.135 20) 45%, transparent)"
-              : rule.phase === "trail" ? "color-mix(in srgb, oklch(0.79 0.11 158) 45%, transparent)" : "var(--color-neutral-800)")
-          : (zone === "high" ? "color-mix(in srgb, oklch(0.82 0.105 80) 45%, transparent)" : "var(--color-accent-700)"),
+        verdict: T.action(d, s.settings) ? T.action(d, s.settings).text : "",
+        verdictTitle: (zone === "high" ? "Exit review zone" : zone === "low" ? "Re-entry watch" : "No action"),
+        verdictInk: (zone === "high" ? ink.warn : "var(--color-accent-300)"),
+        verdictBorder: (zone === "high" ? "color-mix(in srgb, var(--ta-warn) 45%, transparent)" : "var(--color-accent-700)"),
         score: T.fmt(score, 0) + " / 100", scoreInk: T.scoreColor(score),
         components: compMeta.map(([label, key]) => {
           const v = comps[key] != null ? Math.max(0, Math.min(100, comps[key])) : null;
@@ -4937,7 +4828,7 @@ class Component extends DCLogic {
             ink: v == null ? "var(--color-neutral-800)" : T.scoreColor(v),
           };
         }),
-        scoreNote: this.say(T.why(d, s.positions, s.settings)),
+        scoreNote: this.say(T.why(d, s.settings)),
         zoneLabel, zoneInk,
         pos52: (p52 == null ? 50 : p52).toFixed(1) + "%",
         low52: d.low_252 != null ? "$" + T.fmt(d.low_252) + " low" : "low",
@@ -4961,14 +4852,6 @@ class Component extends DCLogic {
           valueInk: l.cur ? "var(--color-accent-300)" : "var(--color-text)",
         })),
       };
-      vals.entryPrice = s.entryPrice; vals.entryDate = s.entryDate;
-      vals.onEntryPrice = (e) => this.setState({ entryPrice: e.target.value });
-      vals.onEntryDate = (e) => this.setState({ entryDate: e.target.value });
-      vals.saveEntry = () => this.saveEntry();
-      vals.clearEntry = () => this.clearEntry();
-      vals.hasPosition = !!pos;
-      vals.bookedLabel = pos && pos.booked ? "⅓ booked ✓" : "Mark ⅓ booked";
-      vals.toggleBooked = () => this.toggleBooked();
       vals.dPb = () => this.askPbre(d.symbol, "pb");
       vals.dRe = () => this.askPbre(d.symbol, "re");
       vals.dPbInk = mark.pb ? "oklch(0.82 0.105 80)" : "var(--color-neutral-500)";
@@ -5009,8 +4892,9 @@ class Component extends DCLogic {
     vals.nearLowInk = tabInk(reOn("near_low")); vals.nearLowBg = segBg(reOn("near_low"));
     vals.setBase = () => this.setForm("reEntryMode", "base");
     vals.setNearLow = () => this.setForm("reEntryMode", "near_low");
+    /* "Profit trigger" (gainPct) was removed with entry tracking -- it only
+       ever fed the booking rule, which needed an entry price to compare against. */
     vals.ruleFields = [
-      { label: "Profit trigger", key: "gainPct", unit: "% gain", min: 5, max: 200, step: 1 },
       { label: "Near-high zone", key: "highZonePct", unit: "% from 52w high", min: 0.5, max: 10, step: 0.5 },
       { label: "Basing zone", key: "lowZonePct", unit: "% above 52w low", min: 2, max: 30, step: 1 },
     ].map(x => ({ ...x, value: f[x.key], onChange: (e) => this.setForm(x.key, e.target.value) }));
