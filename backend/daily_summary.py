@@ -18,7 +18,8 @@ inlined (alerts_email.send_telegram_photo / send_email_image). Never raises.
 
 import io
 
-from alerts_email import (_read_json, send_telegram_photo, send_email_image)
+from alerts_email import (_read_json, fan_out, send_telegram_photo,
+                          send_email_image)
 from trading_calendar import is_trading_day, _eastern_now
 
 # fallback Core if core.json is absent — mirrors the dashboard's CORE_SYMBOLS
@@ -207,10 +208,48 @@ def _action_reason(rec, pos, hz, gain_pct):
 def _reentry_reason(rec, lz):
     pl = _pfl(rec)
     bs = rec.get("base_status", "")
-    tag = ("base confirmed — re-entry candidate" if bs == "confirmed"
-           else f"base forming {rec.get('base_score', '?')}/5 — wait" if bs == "forming"
+    tag = ("base confirmed" if bs == "confirmed"
+           else f"base forming {rec.get('base_score', '?')}/5" if bs == "forming"
            else "no base — still falling")
     return (f"{pl:.1f}% off low · " if pl is not None else "") + tag
+
+
+def _reentry_status(rec):
+    """Verdict shown as a pill next to the reason (and in the caption).
+
+    Split out of the reason text so the poster can render it as a chip and the
+    'is there anything worth waiting on?' count in the standfirst can be taken
+    from the same place.
+    """
+    bs = rec.get("base_status", "")
+    return "READY" if bs == "confirmed" else "WAIT" if bs == "forming" else "NOT YET"
+
+
+# spelled-out counts for the headline — the poster reads as a sentence, and
+# "Twelve up, eighteen down." beats "12 up, 18 down." at display size
+_ONES = ("zero one two three four five six seven eight nine ten eleven twelve "
+         "thirteen fourteen fifteen sixteen seventeen eighteen nineteen").split()
+_TENS = ("", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy",
+         "eighty", "ninety")
+
+
+def _words(n):
+    """0-999 as words; anything larger falls back to digits."""
+    try:
+        n = int(n)
+    except (TypeError, ValueError):
+        return str(n)
+    if n < 0 or n > 999:
+        return str(n)
+    if n < 20:
+        return _ONES[n]
+    if n < 100:
+        return _TENS[n // 10] + ("-" + _ONES[n % 10] if n % 10 else "")
+    return _ONES[n // 100] + " hundred" + (" " + _words(n % 100) if n % 100 else "")
+
+
+def _cap(s):
+    return s[:1].upper() + s[1:] if s else s
 
 
 def compute_summary(records, core_syms, label, core_name="Core",
@@ -247,7 +286,7 @@ def compute_summary(records, core_syms, label, core_name="Core",
     ext = sum(1 for r in held if _badge(r))
 
     # action / re-entry over the Core holdings — same rules as the dashboard badges
-    action, reentry = [], []
+    action, reentry, status = [], [], {}
     for sym in core_syms:
         r = by.get(sym)
         if not ok(r):
@@ -255,8 +294,10 @@ def compute_summary(records, core_syms, label, core_name="Core",
         g = _group(r, positions, hz, lz)
         if g == 1:
             action.append((sym, _action_reason(r, positions.get(sym), hz, gain_pct)))
+            status[sym] = "AT HIGH"
         elif g == 3:
             reentry.append((sym, _reentry_reason(r, lz)))
+            status[sym] = _reentry_status(r)
 
     golden, death = _crosses(alerts, _cross_scope(records, core_syms))
 
@@ -264,15 +305,65 @@ def compute_summary(records, core_syms, label, core_name="Core",
     dsym = lambda r: r["symbol"].replace("/USD", "")
     r52 = {r["symbol"]: _r52(r) for r in up + down}
     r52.update({dsym(r): _r52(r) for r in idx})
-    return {
+    s = {
         "core_name": core_name, "label": label, "session": session,
         "up": [row(r) for r in up], "down": [row(r) for r in down],
         "idx": [(dsym(r), round(r.get("change_pct") or 0, 1), _badge(r)) for r in idx],
-        "action": action, "reentry": reentry, "r52": r52,
+        "action": action, "reentry": reentry, "status": status, "r52": r52,
         "golden": golden, "death": death,
+        "up_n": up_n, "down_n": down_n, "watched": len(held),
         "breadth": f"{up_n} up · {down_n} down"
                    + (f" · {ext} at 52-week extremes" if ext else ""),
     }
+    s["headline"] = f"{_cap(_words(up_n))} up, {_words(down_n)} down."
+    s["standfirst"] = standfirst(s)
+    return s
+
+
+def standfirst(s):
+    """The two-sentence read under the headline — what actually happened.
+
+    Written from the same numbers the poster draws: the day's worst (or, on an
+    all-green day, best) Core mover, how many names are sitting near their
+    lows, and how many of those have a base underneath them. Crosses get a
+    clause only when they printed.
+    """
+    overnight = (s.get("session") or "") in ("PRE-MARKET", "30 MIN TO OPEN")
+    when = "overnight" if overnight else "today"
+    movers = (s.get("up") or []) + (s.get("down") or [])
+    lead = ""
+    if movers:
+        # the day's worst Core name leads the read; on an all-green day the best
+        # one does instead, so the sentence is never a non-event
+        sym, v, _b = min(movers, key=lambda m: m[1])
+        if v >= 0:
+            sym, v, _b = max(movers, key=lambda m: m[1])
+        lead = (f"{sym} gave back {abs(v):.0f}% {when}" if v < 0
+                else f"{sym} led the book +{v:.0f}% {when}")
+
+    n = len(s.get("reentry") or [])
+    st = s.get("status") or {}
+    based = sum(1 for sym, _ in (s.get("reentry") or [])
+                if st.get(sym) in ("WAIT", "READY"))
+    if n:
+        low = (f"{_words(n)} name{'s' if n != 1 else ''} "
+               f"{'are' if n != 1 else 'is'} still circling their lows")
+        first = f"{lead} and {low}." if lead else f"{_cap(low)}."
+        second = ("None of them has a base under it yet." if not based
+                  else f"{_cap(_words(based))} of them "
+                       f"{'have' if based != 1 else 'has'} a base worth waiting on.")
+    else:
+        first = f"{lead} and nothing is sitting at its lows." if lead \
+            else "Nothing is sitting at its lows."
+        second = ""
+
+    g, d = len(s.get("golden") or []), len(s.get("death") or [])
+    cross = ""
+    if g or d:
+        bits = [f"{_words(n)} {name} cross{'es' if n != 1 else ''}"
+                for n, name in ((g, "golden"), (d, "death")) if n]
+        cross = f"{_cap(' and '.join(bits))} printed."
+    return " ".join(x for x in (first, second, cross) if x)
 
 
 def summary_text(s):
@@ -284,12 +375,17 @@ def summary_text(s):
     signals, under one header per group.
     """
     head = (s.get("session") or "").title()
+    st = s.get("status") or {}
     lines = [f"TrendAlert Daily · {head}" if head else "TrendAlert Daily",
              f"{s['core_name']} · {s['label']}"]
-    for tag, rows, _col, total in _callout_groups(s):
+    if s.get("standfirst"):
+        lines += ["", s["standfirst"]]
+    groups = _callout_groups(s)
+    for tag, rows, _col, total in groups:
         lines += ["", f"{tag} ({total})"]
-        lines += [f"  {sym:<5} {why}" if sym else f"  {why}" for sym, why in rows]
-    if len(lines) == 2:
+        lines += [f"  {sym:<5} {why}" + (f"  [{st[sym]}]" if st.get(sym) else "")
+                  if sym else f"  {why}" for sym, why in rows]
+    if not groups:
         lines += ["", "No action, re-entry or cross signals today."]
     return "\n".join(lines)
 
@@ -297,179 +393,278 @@ def summary_text(s):
 # ----------------------------------------------------------------------
 # render (matplotlib -> PNG bytes)
 # ----------------------------------------------------------------------
-HEADER_PAD = 1.25       # group header + its rule, in row-height units
-GROUP_GAP = 0.4         # blank space between groups
+# The alert is laid out as a poster, not a chart: a headline that reads as a
+# sentence, three stat circles, the signal cards, then one row per name with a
+# 1-day move bar over a 52-week rail. Everything is drawn on a single axis in
+# LAYOUT UNITS where 1 unit == 1 point == 1 px at 72 dpi, so the numbers below
+# are the pixel geometry of the design at its 580-wide reference size.
+BG = "#F5EEE3"          # cream page
+ROW_BG = "#FBF7F0"      # zebra band behind alternating mover rows
+INK = "#241F1A"
+INK_SOFT = "#6A6156"
+INK_FAINT = "#9C9488"
+RUST = "#9A5B26"        # eyebrow + section labels
+GREEN = "#7C8C4F"       # up
+ORANGE = "#C1592A"      # down
+TRACK = "#E7DFD2"       # 1-day move capsule
+RAIL = "#DED6C8"        # 52-week rail
+GREEN_CARD = "#EDF2DD"
+AMBER_CARD = "#FBEEDB"
+PINK_CARD = "#FBE4DB"
+GREEN_TINT = "#DEE9CC"  # best circle
+PINK_TINT = "#F8DAD0"   # worst circle
+GREY_TINT = "#E4E1D9"   # breadth circle
+SESSION_BG = "#C0692C"
+SERIF = "DejaVu Serif"  # matplotlib-bundled; no font install on the function
+SANS = "DejaVu Sans"
+STATUS_BG = {"WAIT": "#6F7A4A", "NOT YET": "#A9421A",
+             "READY": "#3F6B3A", "AT HIGH": "#B07415"}
+# one card skin per callout group: (poster title, card fill, label ink)
+GROUP_SKIN = {
+    "⚡ ACTION": ("ACTION", AMBER_CARD, "#8A5A00"),
+    "◎ RE-ENTRY": ("RE-ENTRY WATCH", GREEN_CARD, RUST),
+    "▲ GOLDEN CROSS": ("GOLDEN CROSS", GREEN_CARD, "#3F6B3A"),
+    "▼ DEATH CROSS": ("DEATH CROSS", PINK_CARD, "#A32B27"),
+}
+
+W = 580                 # page width in layout units
+PAD = 24
+COL = W - 2 * PAD
+ROW_H = 74              # a mover: ticker + move bar, then the 52-week rail
+ROW_GAP = 5
+SIG_H = 53              # a signal row inside a callout card
+CIRCLES_H = 187
 
 
-def _callout_height(groups):
-    """Callout block size in 'line units' — groups grow with their row count."""
-    return sum(len(rows) + HEADER_PAD for _t, rows, _c, _n in groups) \
-        + GROUP_GAP * max(len(groups) - 1, 0)
+def _spaced(t):
+    """Letterspacing, which matplotlib has no property for — hair spaces."""
+    return " ".join(t)
 
 
-def _draw_callout(ax, groups, L):
-    """ONE colored header per group, a rule under it, then the rows.
+def _wrap(text, width):
+    import textwrap
+    return textwrap.wrap(text, width) or [""]
 
-    Deliberately unboxed: the section headers echo the chart's own
-    1-DAY MOVE / 52-WEEK RANGE labels, and a group with one row takes exactly
-    one row of space instead of a panel's worth.
+
+def _long_date(label):
+    """'2026-07-24' -> 'Friday 24 July 2026'; anything else passes through."""
+    from datetime import datetime
+    try:
+        return datetime.strptime(str(label)[:10], "%Y-%m-%d").strftime(
+            "%A %d %B %Y").replace(" 0", " ")
+    except (ValueError, TypeError):
+        return str(label)
+
+
+class _Sheet:
+    """Top-down page painter. ax=None measures the layout without drawing.
+
+    The height of the PNG depends on how many signal rows and movers there are,
+    and matplotlib needs the figure size up front — so the same layout code
+    runs twice: once dry to total the height, once for real.
     """
-    ax.axis("off")
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, L)
-    top = L
-    for tag, rows, (strong, edge, _fill), total in groups:
-        hy = top - 0.6
-        ax.text(0.006, hy, f"{tag}  ({total})", va="center", ha="left",
-                fontsize=9.5, fontweight="bold", color=strong)
-        ax.plot([0.006, 0.994], [hy - 0.42, hy - 0.42], color=edge, lw=1.4)
+
+    def __init__(self, ax=None):
+        self.ax = ax
+
+    def box(self, x, y, w, h, r, fc, ec="none"):
+        if self.ax is None:
+            return
+        from matplotlib.patches import FancyBboxPatch
+        self.ax.add_patch(FancyBboxPatch(
+            (x, y), w, h, boxstyle=f"round,pad=0,rounding_size={r}",
+            fc=fc, ec=ec, lw=0 if ec == "none" else 1.0, zorder=1))
+
+    def txt(self, x, y, t, size, color, family=SANS, weight="normal",
+            ha="left", va="center"):
+        if self.ax is None:
+            return
+        self.ax.text(x, y, t, fontsize=size, color=color, family=family,
+                     fontweight=weight, ha=ha, va=va, zorder=4)
+
+    def pill(self, x, y, t, size, fc, tc, ha="left"):
+        if self.ax is None:
+            return
+        self.ax.text(x, y, t, fontsize=size, color=tc, family=SANS,
+                     fontweight="bold", ha=ha, va="center", zorder=4,
+                     bbox=dict(boxstyle="round,pad=0.5,rounding_size=1.4",
+                               fc=fc, ec="none"))
+
+    def line(self, x0, x1, y, color, lw=1.0):
+        if self.ax is None:
+            return
+        self.ax.plot([x0, x1], [y, y], color=color, lw=lw,
+                     solid_capstyle="round", zorder=2)
+
+    def dot(self, x, y, r, fc, ec):
+        if self.ax is None:
+            return
+        from matplotlib.patches import Circle
+        self.ax.add_patch(Circle((x, y), r, fc=fc, ec=ec, lw=1.4, zorder=5))
+
+    def circle(self, cx, cy, r, fc):
+        if self.ax is None:
+            return
+        from matplotlib.patches import Circle
+        self.ax.add_patch(Circle((cx, cy), r, fc=fc, ec="none", zorder=2))
+
+
+def _paint_row(sh, top, m, mx, meta, left, right):
+    """One name: ticker, 1-day move capsule, and the 52-week rail beneath it."""
+    sym, v = m[0], m[1]
+    col = GREEN if v >= 0 else ORANGE
+    ymid, yrail = top + 24, top + 52
+
+    sh.txt(left + 14, ymid, sym, 14, INK, SERIF, "bold")
+
+    bx0, bx1 = left + 66, right - 86
+    sh.box(bx0, ymid - 6.5, bx1 - bx0, 13, 6.5, TRACK)
+    cx, half = (bx0 + bx1) / 2, (bx1 - bx0) / 2 - 4
+    span = max(abs(v) / mx * half, 3.5)
+    sh.box(cx if v >= 0 else cx - span, ymid - 6.5, span, 13, 6.5, col)
+    sh.txt(right - 8, ymid, f"{v:+.1f}%".replace("-", "−"), 12, col, SANS,
+           "bold", ha="right")
+
+    mm = meta.get(sym, {})
+    lo, hi, c = mm.get("lo"), mm.get("hi"), mm.get("close")
+    ph, pl = mm.get("pfh"), mm.get("pfl")
+    near_hi = ph is not None and ph >= -2
+    near_lo = pl is not None and pl <= 2
+    rx0, rx1 = left + 122, right - 86
+    sh.line(rx0, rx1, yrail, RAIL, 3.0)
+    frac = (c - lo) / (hi - lo) if (hi and lo and hi > lo and c) else 0.5
+    sh.dot(rx0 + min(max(frac, 0), 1) * (rx1 - rx0), yrail, 4.2,
+           GREEN if near_hi else ORANGE if near_lo else "#6B6357", BG)
+    sh.txt(rx0 - 10, yrail, _money(lo), 9.5, INK_SOFT, SANS, ha="right")
+    sh.txt(rx1 + 10, yrail, _money(hi), 9.5, INK_SOFT, SANS)
+    if near_hi or near_lo:
+        sh.txt(left + 2, yrail, _spaced("NEAR HIGH" if near_hi else "NEAR LOW"),
+               7.5, GREEN if near_hi else ORANGE, SANS, "bold")
+
+
+def _paint(sh, s):
+    """Draw (or measure) the whole poster. -> total page height in units."""
+    movers = sorted(s["up"] + s["down"], key=lambda m: m[1], reverse=True)
+    idx = sorted(s["idx"], key=lambda m: m[1], reverse=True)
+    meta = s.get("r52", {})
+    status = s.get("status", {})
+    mx = max((abs(m[1]) for m in movers + idx), default=1) or 1
+
+    # ---- masthead ----
+    y = 34
+    sh.txt(PAD, y, _spaced(f"TRENDALERT · {s['core_name'].upper()}"), 9.5,
+           RUST, SANS, "bold")
+    if s.get("session"):
+        sh.pill(W - PAD, y, _spaced(s["session"]), 9, SESSION_BG, "#FFF6EA",
+                ha="right")
+    y += 34
+
+    for line in _wrap(s.get("headline") or "", 26):
+        sh.txt(PAD, y + 14, line, 27, INK, SERIF, "bold")
+        y += 37
+    y += 4
+    for line in _wrap(s.get("standfirst") or "", 58):
+        sh.txt(PAD, y + 9, line, 12.5, INK_SOFT)
+        y += 20
+    y += 6
+    sh.txt(PAD, y + 8, f"{_long_date(s['label'])} · {s.get('watched', 0)} "
+                       f"ticker{'s' if s.get('watched') != 1 else ''} watched",
+           10.5, INK_FAINT)
+    y += 30
+
+    # ---- three stat circles: best, worst, breadth ----
+    best = movers[0] if movers else None
+    worst = movers[-1] if movers else None
+    for cx, cy, r, fc, val, lab, vc in (
+            (PAD + 79, y + 78, 78, GREEN_TINT,
+             f"{best[1]:+.1f}%" if best else "—",
+             f"{best[0]} · BEST" if best else "BEST", "#3E4A22"),
+            (PAD + 243, y + 101, 86, PINK_TINT,
+             f"{worst[1]:+.1f}%" if worst else "—",
+             f"{worst[0]} · WORST" if worst else "WORST", "#8E2F14"),
+            (PAD + 390, y + 71, 57, GREY_TINT,
+             f"{s.get('up_n', 0)} / {s.get('down_n', 0)}", "UP / DOWN", INK)):
+        sh.circle(cx, cy, r, fc)
+        sh.txt(cx, cy - 6, val.replace("-", "−"), 23, vc, SERIF, "bold",
+               ha="center")
+        sh.txt(cx, cy + 18, _spaced(lab), 7.5, vc, SANS, "bold", ha="center")
+    y += CIRCLES_H + 30
+
+    # ---- signal cards (action / re-entry / crosses) ----
+    for tag, rows, _col, total in _callout_groups(s):
+        title, fill, ink = GROUP_SKIN.get(tag, (tag, GREEN_CARD, RUST))
+        sh.txt(PAD, y, _spaced(f"{title} · {total}"), 9.5, ink, SANS, "bold")
+        y += 20
+        h = len(rows) * SIG_H + 12
+        sh.box(PAD, y, COL, h, 14, fill)
+        ry = y + 6
         for i, (sym, why) in enumerate(rows):
-            ry = top - HEADER_PAD - i - 0.5
-            ax.text(0.022, ry, sym, va="center", ha="left", fontsize=9.5,
-                    fontweight="bold", color="#111", family=MONO)
-            ax.text(0.11, ry, why, va="center", ha="left", fontsize=9.5,
-                    color="#1f1f1f")
-        top -= len(rows) + HEADER_PAD + GROUP_GAP
+            if i:
+                sh.line(PAD + 18, PAD + COL - 18, ry, "#FFFFFF", 1.2)
+            mid = ry + SIG_H / 2
+            sh.txt(PAD + 18, mid, sym, 14, INK, SERIF, "bold")
+            sh.txt(PAD + 92, mid, why, 11.5, INK_SOFT)
+            if status.get(sym):
+                sh.pill(PAD + COL - 18, mid, status[sym], 8.5,
+                        STATUS_BG.get(status[sym], RUST), "#FDF8F1", ha="right")
+            ry += SIG_H
+        y += h + 24
+
+    # ---- movers ----
+    sh.txt(PAD, y, _spaced("1-DAY MOVE"), 9.5, RUST, SANS, "bold")
+    sh.txt(W - PAD, y, _spaced("52-WEEK RANGE"), 9.5, RUST, SANS, "bold",
+           ha="right")
+    y += 20
+    for i, m in enumerate(movers):
+        if i % 2 == 0:
+            sh.box(PAD, y, COL, ROW_H, 12, ROW_BG)
+        _paint_row(sh, y, m, mx, meta, PAD, W - PAD)
+        y += ROW_H + ROW_GAP
+
+    # ---- indexes, in their own panel ----
+    if idx:
+        y += 12
+        h = 34 + len(idx) * ROW_H + 10
+        sh.box(PAD, y, COL, h, 14, GREEN_CARD)
+        sh.txt(PAD + 18, y + 20, _spaced("INDEXES"), 9.5, RUST, SANS, "bold")
+        ry = y + 34
+        for m in idx:
+            _paint_row(sh, ry, m, mx, meta, PAD + 16, W - PAD - 16)
+            ry += ROW_H
+        y += h + 20
+
+    sh.txt(PAD, y + 8, s.get("breadth", ""), 9.5, INK_SOFT)
+    y += 22
+    sh.txt(PAD, y + 8, "Dot marks the last price inside the 52-week range. "
+                       "Not advice.", 9.5, INK_FAINT)
+    return y + 30
 
 
 def render_chart_png(s):
-    """1-day move bars (left) beside a 52-week range gauge (right).
+    """The daily summary as a single-column poster PNG.
 
-    Each gauge is a lo ●———— hi track with the real prices labeled at the ends
-    and a marker where the current close sits; it glows amber within 2% of the
-    52w high (book-profit watch) and blue within 2% of the low. Zebra banding
-    ties the two columns together, values ride in solid chips, and numbers are
-    monospaced so the columns align. Above the chart, each signal group
-    (action / re-entry / golden cross / death cross) gets ONE colored header
-    with a rule under it and its rows beneath — never a tag repeated per row.
-    The session badge (PRE-MARKET, MARKET CLOSE, …) sits top-right so the run
-    is identifiable at a glance.
+    Masthead and session badge, a spelled-out headline over the standfirst,
+    three stat circles (best / worst / breadth), one card per signal group with
+    a verdict chip on each row, then every mover and index as a 1-day move
+    capsule above its 52-week rail — the dot glows green near the 52w high and
+    orange near the low. Height is computed from the content by painting the
+    layout once with a null canvas.
     """
     import matplotlib
     matplotlib.use("Agg")                   # headless; imported lazily so the pure
     import matplotlib.pyplot as plt          # logic (and tests) need no matplotlib
 
-    from matplotlib.gridspec import GridSpec
+    height = _paint(_Sheet(None), s)
+    fig = plt.figure(figsize=(W / 72, height / 72), dpi=150, facecolor=BG)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_xlim(0, W)
+    ax.set_ylim(height, 0)                  # inverted: lay the page out top-down
+    ax.set_facecolor(BG)
+    ax.axis("off")
+    _paint(_Sheet(ax), s)
 
-    movers = sorted(s["up"] + s["down"], key=lambda m: m[1], reverse=True)
-    idx = sorted(s["idx"], key=lambda m: m[1], reverse=True)
-    meta = s.get("r52", {})
-    groups = _callout_groups(s)
-    L = _callout_height(groups)
-    ch = 0.30 * L + 0.30
-
-    # one stacked axis: movers, a labelled spacer, then indexes
-    rows = [("m", m) for m in movers] + [("gap", None)] + [("i", m) for m in idx]
-    n = len(rows)
-    mx = max((abs(m[1]) for m in movers + idx), default=1) or 1
-
-    fig = plt.figure(dpi=150, figsize=(9.8, 0.5 * n + ch + 1.75))
-    if groups:
-        gs = GridSpec(2, 2, height_ratios=[ch, 0.5 * n],
-                      width_ratios=[1.0, 1.32], hspace=0.15, wspace=0.03)
-        ax_c = fig.add_subplot(gs[0, :])
-        axL, axR = fig.add_subplot(gs[1, 0]), fig.add_subplot(gs[1, 1])
-    else:
-        gs = GridSpec(1, 2, width_ratios=[1.0, 1.32], wspace=0.03)
-        ax_c = None
-        axL, axR = fig.add_subplot(gs[0]), fig.add_subplot(gs[1])
-
-    ys = [n - 1 - i for i in range(n)]
-
-    # zebra banding, drawn under both columns so rows read straight across
-    for ax in (axL, axR):
-        ax.set_ylim(-0.6, n - 0.4)
-        for j, (y, (kind, m)) in enumerate(zip(ys, rows)):
-            if m is not None and j % 2 == 0:
-                ax.axhspan(y - 0.5, y + 0.5, color="#f2f3f5", zorder=0)
-
-    # ---- left: 1-day move bars ----
-    for y, (kind, m) in zip(ys, rows):
-        if m is None:
-            axL.text(-mx * 1.35, y, "INDEXES", va="center", ha="left", fontsize=8.5,
-                     color="#fff", fontweight="bold",
-                     bbox=dict(boxstyle="round,pad=0.3", fc="#333", ec="none"))
-            continue
-        v = m[1]
-        axL.barh(y, v, color=UP if v >= 0 else DOWN, height=0.5, zorder=3)
-        axL.text(v + (mx * 0.03 if v >= 0 else -mx * 0.03), y, f"{v:+.1f}%",
-                 va="center", ha="left" if v >= 0 else "right", fontsize=9,
-                 fontweight="bold", color="white", family=MONO,
-                 bbox=dict(boxstyle="round,pad=0.22",
-                           fc=UP if v >= 0 else DOWN, ec="none"))
-    axL.axvline(0, color="#222", lw=1.1, zorder=2)
-    axL.set_xlim(-mx * 1.4, mx * 1.4)
-    axL.set_yticks([y for y, (k, m) in zip(ys, rows) if m is not None])
-    axL.set_yticklabels([m[0] for (k, m) in rows if m is not None], fontsize=11.5,
-                        fontweight="bold", color="#111")
-    for sp in ("top", "right", "left"):
-        axL.spines[sp].set_visible(False)
-    axL.tick_params(length=0)
-    axL.set_xticks([])
-    axL.set_title("1-DAY MOVE", loc="left", fontsize=9.5, color="#333",
-                  fontweight="bold", pad=8)
-
-    # ---- right: 52-week range gauges ----
-    axR.set_xlim(0, 1)
-    axR.set_title("52-WEEK RANGE", loc="left", fontsize=9.5, color="#333",
-                  fontweight="bold", pad=8)
-    for sp in axR.spines.values():
-        sp.set_visible(False)
-    # column divider as this axis's own spine — can't bleed into the callout
-    axR.spines["left"].set_visible(True)
-    axR.spines["left"].set_color("#d5d7db")
-    axR.spines["left"].set_linewidth(1.0)
-    axR.tick_params(length=0)
-    axR.set_xticks([])
-    axR.set_yticks([])
-    gx0, gx1 = 0.24, 0.80
-    for y, (kind, m) in zip(ys, rows):
-        if m is None:
-            continue
-        mm = meta.get(m[0], {})
-        lo, hi, c = mm.get("lo"), mm.get("hi"), mm.get("close")
-        axR.plot([gx0, gx1], [y, y], color="#b9bcc2", lw=4.5,
-                 solid_capstyle="round", zorder=1)
-        ph, pl = mm.get("pfh"), mm.get("pfl")
-        frac = (c - lo) / (hi - lo) if (hi and lo and hi > lo and c) else 0.5
-        frac = min(max(frac, 0), 1)
-        xp = gx0 + frac * (gx1 - gx0)
-        near_hi = ph is not None and ph >= -2
-        near_lo = pl is not None and pl <= 2
-        mc = HI_C if near_hi else LO_C if near_lo else "#111"
-        axR.scatter([xp], [y], s=100 if (near_hi or near_lo) else 60, color=mc,
-                    zorder=3, edgecolors="white", linewidths=1.5)
-        axR.text(gx0 - 0.02, y, _money(lo), va="center", ha="right",
-                 fontsize=8.5, color="#333", family=MONO)
-        axR.text(gx1 + 0.02, y, _money(hi), va="center", ha="left",
-                 fontsize=8.5, color="#333", family=MONO)
-        if near_hi:
-            axR.text(xp, y + 0.34, f"{abs(ph):.1f}% to hi", va="bottom",
-                     ha="center", fontsize=8, fontweight="bold", color=HI_C)
-        elif near_lo:
-            axR.text(xp, y + 0.34, f"{pl:.1f}% off lo", va="bottom",
-                     ha="center", fontsize=8, fontweight="bold", color=LO_C)
-
-    # ---- grouped signal panels, full-width on top ----
-    if ax_c is not None:
-        _draw_callout(ax_c, groups, L)
-
-    fig.text(0.015, 0.988, "TrendAlert Daily", ha="left", va="top",
-             fontsize=15, fontweight="bold", color="#0d0d0d")
-    if s.get("session"):
-        fig.text(0.985, 0.984, s["session"], ha="right", va="top", fontsize=9.5,
-                 fontweight="bold", color="white",
-                 bbox=dict(boxstyle="round,pad=0.42", fc="#111", ec="none"))
-    fig.text(0.015, 0.949, f"{s['core_name']} · {s['label']}", ha="left", va="top",
-             fontsize=9.5, color="#555", fontweight="bold")
-    fig.add_artist(plt.Line2D([0.015, 0.985], [0.934, 0.934], color=UP, lw=2.5,
-                              transform=fig.transFigure))
-    fig.text(0.015, 0.012,
-             s["breadth"] + "    ·    amber = near 52w high · blue = near 52w low",
-             fontsize=8.5, color="#333")
-    fig.subplots_adjust(top=0.915, bottom=0.05, left=0.08, right=0.985)
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight", facecolor="white")
+    fig.savefig(buf, format="png", facecolor=BG)
     plt.close(fig)
     return buf.getvalue()
 
@@ -523,14 +718,11 @@ def run_daily_summary(bucket, force=False):
         caption = summary_text(s)
         subject = f"TrendAlert Daily {raw or ''} — {session.title()}".strip()
 
-        statuses = []
-        for send in (lambda: send_telegram_photo(png, caption),
-                     lambda: send_email_image(subject, caption, png)):
-            try:
-                statuses.append(send())
-            except Exception as e:
-                statuses.append(f"error({type(e).__name__})")
-        return {"ok": True, "summary": "+".join(statuses),
+        status = fan_out(cfg, (
+            ("telegram", lambda: send_telegram_photo(png, caption)),
+            ("email", lambda: send_email_image(subject, caption, png)),
+        ))
+        return {"ok": True, "summary": status,
                 "movers": len(s["up"]) + len(s["down"])}
     except Exception as e:
         return {"ok": False, "summary": f"error({type(e).__name__})"}

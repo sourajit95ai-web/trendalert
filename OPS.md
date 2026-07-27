@@ -148,6 +148,16 @@ either channel can be disabled independently). Setup:
 Leave the secret or chat id unset to disable (`telegram:disabled`). If the
 token ever leaks, revoke it in BotFather with `/revoke`.
 
+**Choosing the channel (Settings > Alerts).** The dashboard writes
+`alertChannel` (`telegram` | `email` | `both`, default `both`) into
+`settings.json` via the notes function, and every scheduled alert — daily
+summary, morning brief, bloodbath alarm, EOD rule signals — routes through
+`alerts_email.fan_out`, which reports a skipped channel as `telegram:off` /
+`email:off` in the function response. It gates only what the user picked; the
+env config still has the final say (`telegram:disabled` when the token or chat
+id is unset). A missing or unrecognised value means both, so a bad write can
+never silence the alerts.
+
 **Adding another recipient.** One bot can message many people:
 1. Share the bot with them (its `t.me/<botname>` link) and have *them* send
    it any message first — a bot can never message someone who hasn't

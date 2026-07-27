@@ -683,6 +683,19 @@
             <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">Weights apply to the client-side score immediately. To change the published score, mirror them in scoring.py WEIGHTS.</p>
           </div>
 
+          <div style="display:flex; flex-direction:column; gap:12px">
+            <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">Alerts</span>
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+              <span style="width:120px; font-size:13px; color:var(--color-neutral-400)">Send alerts to</span>
+              <div style="display:flex; border:1px solid var(--color-neutral-800); border-radius:8px; overflow:hidden">
+                <button type="button" onClick="{{ setChTelegram }}" style="font-size:12.5px; color:{{ chTelegramInk }}; background:{{ chTelegramBg }}; border:0; padding:7px 13px; cursor:pointer">Telegram</button>
+                <button type="button" onClick="{{ setChEmail }}" style="font-size:12.5px; color:{{ chEmailInk }}; background:{{ chEmailBg }}; border:0; border-left:1px solid var(--color-neutral-800); padding:7px 13px; cursor:pointer">Email</button>
+                <button type="button" onClick="{{ setChBoth }}" style="font-size:12.5px; color:{{ chBothInk }}; background:{{ chBothBg }}; border:0; border-left:1px solid var(--color-neutral-800); padding:7px 13px; cursor:pointer">Both</button>
+              </div>
+            </div>
+            <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">{{ alertChannelNote }} Applies to every scheduled alert — the daily summary chart, the morning brief, the pre-open bloodbath alarm and the end-of-day rule signals. Saved server-side with the settings above, so it takes effect on the next scheduled run from any browser.</p>
+          </div>
+
           <div style="display:flex; flex-direction:column; gap:10px">
             <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">Lists</span>
             <div>
@@ -988,6 +1001,7 @@ class Component extends DCLogic {
         horizon: s.horizon || "long", reEntryMode: s.reEntryMode || "base",
         gainPct: s.gainPct, highZonePct: s.highZonePct, lowZonePct: s.lowZonePct,
         trendFast: s.trendFast || 50, trendSlow: s.trendSlow || 150,
+        alertChannel: s.alertChannel || "both",
         trend: s.weights.trend, momentum: s.weights.momentum, participation: s.weights.participation,
         relStrength: s.weights.relStrength, risk: s.weights.risk,
       }
@@ -1014,6 +1028,7 @@ class Component extends DCLogic {
       lowZonePct: Math.max(2, Math.min(30, +f.lowZonePct || 10)),
       trendFast: +f.trendFast || 50, trendSlow: +f.trendSlow || 150,
       horizon: f.horizon, reEntryMode: f.reEntryMode,
+      alertChannel: ["telegram", "email", "both"].includes(f.alertChannel) ? f.alertChannel : "both",
       weights: {
         trend: +f.trend, momentum: +f.momentum, participation: +f.participation,
         relStrength: +f.relStrength, risk: +f.risk
@@ -1744,6 +1759,18 @@ class Component extends DCLogic {
     vals.onTrendFast = (e) => this.setForm("trendFast", e.target.value);
     vals.onTrendSlow = (e) => this.setForm("trendSlow", e.target.value);
     vals.trendRuleNote = `Uptrend when EMA ${f.trendFast} is above EMA ${f.trendSlow}, downtrend when it is below.`;
+    /* Alert delivery. Unlike theme this IS part of the synced payload — the
+       schedulers read it out of settings.json, not out of this browser. */
+    const chOn = (v) => (f.alertChannel || "both") === v;
+    vals.chTelegramInk = tabInk(chOn("telegram")); vals.chTelegramBg = segBg(chOn("telegram"));
+    vals.chEmailInk = tabInk(chOn("email")); vals.chEmailBg = segBg(chOn("email"));
+    vals.chBothInk = tabInk(chOn("both")); vals.chBothBg = segBg(chOn("both"));
+    vals.setChTelegram = () => this.setForm("alertChannel", "telegram");
+    vals.setChEmail = () => this.setForm("alertChannel", "email");
+    vals.setChBoth = () => this.setForm("alertChannel", "both");
+    vals.alertChannelNote = chOn("both")
+      ? "Alerts go to both Telegram and email."
+      : `Alerts go to ${chOn("telegram") ? "Telegram" : "email"} only — the other channel stays silent.`;
 
     /* "Profit trigger" (gainPct) was removed with entry tracking -- it only
        ever fed the booking rule, which needed an entry price to compare against. */

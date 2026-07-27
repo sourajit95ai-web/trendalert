@@ -86,7 +86,7 @@
   /* ---------- settings ---------- */
   const DEFAULT_SETTINGS = {
     gainPct: 20, highZonePct: 2, lowZonePct: 10, horizon: "long", reEntryMode: "base", view: "cards",
-    trendFast: 50, trendSlow: 150,
+    trendFast: 50, trendSlow: 150, alertChannel: "both",
     weights: { trend: 30, momentum: 20, participation: 20, relStrength: 20, risk: 10 }
   };
   TA.DEFAULT_SETTINGS = DEFAULT_SETTINGS;

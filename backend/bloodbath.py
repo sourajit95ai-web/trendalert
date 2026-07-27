@@ -26,7 +26,8 @@ scheduler must always get a 200.
 
 import requests
 
-from alerts_email import _read_json, send_email_text, send_telegram_text
+from alerts_email import (_read_json, fan_out, send_email_text,
+                          send_telegram_text)
 from trading_calendar import is_trading_day, _eastern_now
 
 SNAPSHOT_URL = "https://data.alpaca.markets/v2/stocks/snapshots"
@@ -212,7 +213,8 @@ def run_bloodbath_check(bucket, symbols, sectors, headers):
         if "SPY" not in quotes or "QQQ" not in quotes:
             return {"ok": True, "bloodbath": "skipped(no-premarket-index-prints)"}
 
-        params = load_params(_read_json(bucket, "settings.json", {}) or {})
+        cfg = _read_json(bucket, "settings.json", {}) or {}
+        params = load_params(cfg)
         a = assess(quotes, sector_of, params)
         if not a["triggered"]:
             return {"ok": True, "bloodbath": f"quiet(spy {quotes['SPY']['pct']:+.2f}%"
@@ -226,16 +228,13 @@ def run_bloodbath_check(bucket, symbols, sectors, headers):
         body = compose_alert(a, quotes, sector_of, positions,
                              data.get("symbols", []), now_label)
 
-        statuses = []
-        for send in (lambda: send_telegram_text(body),
-                     lambda: send_email_text(
-                         f"🩸 TrendAlert {a['tier']} {today} — "
-                         f"SPY {quotes['SPY']['pct']:+.1f}% QQQ {quotes['QQQ']['pct']:+.1f}%",
-                         body)):
-            try:
-                statuses.append(send())
-            except Exception as e:
-                statuses.append(f"error({type(e).__name__})")
-        return {"ok": True, "bloodbath": "+".join(statuses), "tier": a["tier"]}
+        status = fan_out(cfg, (
+            ("telegram", lambda: send_telegram_text(body)),
+            ("email", lambda: send_email_text(
+                f"🩸 TrendAlert {a['tier']} {today} — "
+                f"SPY {quotes['SPY']['pct']:+.1f}% QQQ {quotes['QQQ']['pct']:+.1f}%",
+                body)),
+        ))
+        return {"ok": True, "bloodbath": status, "tier": a["tier"]}
     except Exception as e:
         return {"ok": False, "bloodbath": f"error({type(e).__name__})"}

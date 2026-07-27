@@ -6,8 +6,9 @@ QQQ/SPY/BTC pinned plus best+worst of the rest, breadth, and 52w badges.
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from daily_summary import (compute_summary, summary_text, _badge, _crosses,
-                           _cross_scope, _callout_groups, session_label, MAX_ROWS)
+from daily_summary import (compute_summary, summary_text, standfirst, _badge,
+                           _crosses, _cross_scope, _callout_groups, _words,
+                           _long_date, session_label, MAX_ROWS)
 
 
 def rec(sym, sec, chg, close=100.0, hi=None, lo=None):
@@ -213,6 +214,54 @@ def test_callout_groups_one_tag_each_and_caps_long_groups():
     txt = summary_text(s)
     assert txt.count("◎ RE-ENTRY") == 1
     assert "+3 more" in txt
+
+
+# ----------------------------------------------------------------------
+# poster copy — the headline, standfirst and verdict chips
+# ----------------------------------------------------------------------
+def test_headline_and_meta_are_spelled_out():
+    s = compute_summary(RECORDS, CORE, "2026-07-24", session="PRE-MARKET")
+    assert s["headline"] == "Four up, three down."      # 4 up / 3 down in the fixture
+    assert (s["up_n"], s["down_n"], s["watched"]) == (4, 3, 7)
+    assert _words(0) == "zero" and _words(12) == "twelve" and _words(30) == "thirty"
+    assert _words(21) == "twenty-one" and _words(1000) == "1000"
+    assert _long_date("2026-07-24") == "Friday 24 July 2026"
+    assert _long_date("close") == "close"               # non-ISO labels pass through
+
+
+def test_standfirst_reads_the_days_worst_and_the_re_entry_bench():
+    recs = [
+        rec("SINK", "Technology", -15.1, close=52, hi=300, lo=50),   # worst mover
+        rec("BASE", "Finance", -1.0, close=44, hi=100, lo=40),       # near low
+        rec("AAA", "Technology", 3.0), rec("BBB", "Finance", -2.0),
+        rec("CCC", "Consumer", 1.0),
+    ]
+    recs[1]["base_status"] = "forming"
+    recs[1]["base_score"] = 3
+    core = ["SINK", "BASE", "AAA", "BBB", "CCC"]
+    s = compute_summary(recs, core, "L", session="PRE-MARKET")
+    assert s["standfirst"].startswith("SINK gave back 15% overnight")
+    # SINK is 4% off its own low, so it is on the re-entry bench as well
+    assert "two names are still circling their lows" in s["standfirst"]
+    assert s["status"]["SINK"] == "NOT YET"      # no base under it
+    assert "One of them has a base worth waiting on." in s["standfirst"]
+    # the same reason line no longer carries the verdict — that is a chip now
+    assert dict(s["reentry"])["BASE"] == "10.0% off low · base forming 3/5"
+    assert s["status"]["BASE"] == "WAIT"
+    # …and the caption still says it, so a text-only reader loses nothing
+    assert "[WAIT]" in summary_text(s)
+
+
+def test_standfirst_session_wording_and_cross_clause():
+    s = compute_summary(RECORDS, CORE, "L", session="MARKET CLOSE",
+                        alerts=[{"symbol": "AAA", "dir": "bull", "type": "x"},
+                                {"symbol": "SPY", "dir": "bear", "type": "y"}])
+    assert "today" in s["standfirst"] and "overnight" not in s["standfirst"]
+    assert "One golden cross and one death cross printed." in s["standfirst"]
+    # no re-entry names in this fixture -> says so instead of trailing off
+    assert "nothing is sitting at its lows" in s["standfirst"]
+    assert standfirst({"session": "", "up": [], "down": [], "reentry": []}) \
+        == "Nothing is sitting at its lows."
 
 
 def test_force_flag_bypasses_the_trading_day_gate():

@@ -23,7 +23,7 @@ from datetime import datetime
 
 import requests
 
-from alerts_email import _read_json, send_email_text, send_telegram_text
+from alerts_email import _read_json, fan_out, send_email_text, send_telegram_text
 from trading_calendar import is_trading_day, _eastern_now
 
 SNAPSHOT_URL = "https://data.alpaca.markets/v2/stocks/snapshots"
@@ -159,13 +159,11 @@ def run_morning_brief(bucket, symbols, sectors, headers):
         now_label = et.strftime("%a %b %d, %H:%M ET")
         body = compose_brief(snaps, sector_of, positions, now_label)
 
-        statuses = []
-        for send in (lambda: send_telegram_text(body),
-                     lambda: send_email_text(f"TrendAlert Morning Brief {today}", body)):
-            try:
-                statuses.append(send())
-            except Exception as e:
-                statuses.append(f"error({type(e).__name__})")
-        return {"ok": True, "brief": "+".join(statuses), "symbols": len(snaps)}
+        cfg = _read_json(bucket, "settings.json", {}) or {}
+        status = fan_out(cfg, (
+            ("telegram", lambda: send_telegram_text(body)),
+            ("email", lambda: send_email_text(f"TrendAlert Morning Brief {today}", body)),
+        ))
+        return {"ok": True, "brief": status, "symbols": len(snaps)}
     except Exception as e:
         return {"ok": False, "brief": f"error({type(e).__name__})"}

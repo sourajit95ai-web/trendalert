@@ -36,6 +36,46 @@ from email.mime.text import MIMEText
 STATE_OBJECT = "alerts_state.json"
 DEFAULT_GAIN_PCT = 20.0
 DEFAULT_HIGH_ZONE_PCT = 2.0
+CHANNELS = ("telegram", "email", "both")
+DEFAULT_CHANNEL = "both"
+
+
+# ----------------------------------------------------------------------
+# delivery channel (Settings > Alerts -> settings.json "alertChannel")
+# ----------------------------------------------------------------------
+def alert_channel(settings):
+    """-> 'telegram' | 'email' | 'both'. Anything unrecognised means both.
+
+    A missing or junk value must never silence the alerts, so the default is
+    the most-delivered option rather than the least.
+    """
+    v = (settings or {}).get("alertChannel") if isinstance(settings, dict) else None
+    return v if v in CHANNELS else DEFAULT_CHANNEL
+
+
+def channel_on(settings, ch):
+    """Is this channel switched on for the user? (env config still gates it.)"""
+    picked = alert_channel(settings)
+    return picked == "both" or picked == ch
+
+
+def fan_out(settings, senders):
+    """Run each ('telegram'|'email', callable) the user still wants, safely.
+
+    Every alert in the pipeline delivers the same way: both channels are
+    independent, one failing or being switched off must not stop the other,
+    and the joined statuses become the HTTP response body.
+    """
+    statuses = []
+    for ch, send in senders:
+        if not channel_on(settings, ch):
+            statuses.append(f"{ch}:off")
+            continue
+        try:
+            statuses.append(send())
+        except Exception as e:
+            statuses.append(f"{ch}:error({type(e).__name__})")
+    return "+".join(statuses)
 
 
 # ----------------------------------------------------------------------
@@ -254,13 +294,7 @@ def send_eod_alerts(records, cross_alerts, bucket, asof, trading_day=True):
         _write_json(bucket, STATE_OBJECT, new_state)
         if not lines:
             return "alerts:none"
-        # each channel is independent — one failing must not block the other
-        statuses = []
-        for sender, tag in ((_send_telegram, "telegram"), (_send, "email")):
-            try:
-                statuses.append(sender(lines, asof))
-            except Exception as e:
-                statuses.append(f"{tag}:error({type(e).__name__})")
-        return "+".join(statuses)
+        return fan_out(settings, (("telegram", lambda: _send_telegram(lines, asof)),
+                                  ("email", lambda: _send(lines, asof))))
     except Exception as e:
         return f"alerts:error({type(e).__name__})"

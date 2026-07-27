@@ -4,7 +4,7 @@ notes_function.py — HTTP Cloud Function persisting notes AND positions to GCS.
 Stores in one function, selected by the `kind` param:
   kind=notes     -> notes.json      { "AAPL": [ {text, date}, ... ] }
   kind=positions -> positions.json  { "AAPL": {entry, date, booked, bookedDate}, ... }
-  kind=settings  -> settings.json   scoring weights / thresholds
+  kind=settings  -> settings.json   scoring weights / thresholds / alert channel
   kind=universe  -> universe.json   [ "AAPL", ... ] — union of dashboard list
   kind=pbre      -> pbre.json       { "AAPL": {pb:1, re:1}, ... } — booked/re-entered markers
                     symbols; the pipeline merges it into its fetch universe
@@ -154,6 +154,9 @@ def notes(request):
                 clean["horizon"] = cfg["horizon"]
             if cfg.get("reEntryMode") in ("base", "near_low"):
                 clean["reEntryMode"] = cfg["reEntryMode"]
+            # which channels the scheduled alerts may use (Settings > Alerts)
+            if cfg.get("alertChannel") in ("telegram", "email", "both"):
+                clean["alertChannel"] = cfg["alertChannel"]
             w = cfg.get("weights")
             if isinstance(w, dict):
                 try:
