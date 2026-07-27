@@ -619,6 +619,25 @@
           </div>
 
           <div style="display:flex; flex-direction:column; gap:12px">
+            <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">Trend definition</span>
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+              <span style="width:120px; font-size:13px; color:var(--color-neutral-400)">Uptrend / downtrend</span>
+              <select onChange="{{ onTrendFast }}" style="font-size:13px; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:8px 10px; outline:0">
+                <sc-for list="{{ trendEmaFast }}" as="o" hint-placeholder-count="4">
+                  <option value="{{ o.value }}" selected="{{ o.selected }}">{{ o.label }}</option>
+                </sc-for>
+              </select>
+              <span style="font-size:12.5px; color:var(--color-neutral-600)">above / below</span>
+              <select onChange="{{ onTrendSlow }}" style="font-size:13px; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:8px 10px; outline:0">
+                <sc-for list="{{ trendEmaSlow }}" as="o" hint-placeholder-count="4">
+                  <option value="{{ o.value }}" selected="{{ o.selected }}">{{ o.label }}</option>
+                </sc-for>
+              </select>
+            </div>
+            <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">{{ trendRuleNote }} This drives the Uptrend/Downtrend toggles, the Bullish/Bearish/Mixed filter and the Table's Trend column. Defaults to EMA 50 above EMA 150 — the same pair the pipeline calls a golden or death cross. Anything without enough history for both EMAs stays "mixed".</p>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:12px">
             <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">Strategy</span>
             <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap">
               <span style="width:120px; font-size:13px; color:var(--color-neutral-400)">Holding horizon</span>
@@ -968,6 +987,7 @@ class Component extends DCLogic {
         dataUrl: this.state.dataUrl, syncUrl: this.state.syncUrl,
         horizon: s.horizon || "long", reEntryMode: s.reEntryMode || "base",
         gainPct: s.gainPct, highZonePct: s.highZonePct, lowZonePct: s.lowZonePct,
+        trendFast: s.trendFast || 50, trendSlow: s.trendSlow || 150,
         trend: s.weights.trend, momentum: s.weights.momentum, participation: s.weights.participation,
         relStrength: s.weights.relStrength, risk: s.weights.risk,
       }
@@ -983,11 +1003,16 @@ class Component extends DCLogic {
     const T = window.TA, f = this.state.form;
     const total = this.weightTotal();
     if (total !== 100) { this.flash("Score weights must sum to 100 (currently " + total + ")."); return; }
+    if (+f.trendFast >= +f.trendSlow) {
+      this.flash(`Trend EMAs: the fast one must be shorter than the slow one (got ${f.trendFast} and ${f.trendSlow}).`);
+      return;
+    }
     const settings = {
       ...this.state.settings,
       gainPct: Math.max(5, Math.min(200, +f.gainPct || 20)),
       highZonePct: Math.max(0.5, Math.min(10, +f.highZonePct || 2)),
       lowZonePct: Math.max(2, Math.min(30, +f.lowZonePct || 10)),
+      trendFast: +f.trendFast || 50, trendSlow: +f.trendSlow || 150,
       horizon: f.horizon, reEntryMode: f.reEntryMode,
       weights: {
         trend: +f.trend, momentum: +f.momentum, participation: +f.participation,
@@ -1481,7 +1506,7 @@ class Component extends DCLogic {
         chgInk: T.dirColor(d.change_pct),
         off: ph == null ? "—" : T.fmt(Math.abs(ph) < 0.05 ? 0 : ph, 1) + "%",
         offInk: zone === "high" ? ink.warn : zone === "low" ? "var(--color-accent-300)" : "var(--color-neutral-500)",
-        trend: T.trendLabel(T.trendOf(d)),
+        trend: T.trendLabel(T.trendOf(d, s.settings)),
         pbInk: mark.pb ? "oklch(0.82 0.105 80)" : "var(--color-neutral-600)",
         pbBorder: mark.pb ? "oklch(0.82 0.105 80)" : "var(--color-neutral-800)",
         reInk: mark.re ? "var(--color-accent-300)" : "var(--color-neutral-600)",
@@ -1607,7 +1632,7 @@ class Component extends DCLogic {
       const compMeta = [["Trend", "trend"], ["Momentum", "momentum"], ["Volume", "participation"], ["Rel. strength", "rel_strength"], ["Risk adj.", "risk_adj"]];
       const mark = s.pbre[d.symbol] || {};
       const rz = T.rsiZone(d.rsi14);
-      const trend = T.trendOf(d);
+      const trend = T.trendOf(d, s.settings);
       let zoneLabel = "No action zone", zoneInk = "var(--color-neutral-500)";
       if (p52 == null) { zoneLabel = "no 52w data"; zoneInk = "var(--color-neutral-600)"; }
       else if (zone === "high") { zoneLabel = "Exit review zone"; zoneInk = ink.warn; }
@@ -1708,6 +1733,18 @@ class Component extends DCLogic {
     vals.nearLowInk = tabInk(reOn("near_low")); vals.nearLowBg = segBg(reOn("near_low"));
     vals.setBase = () => this.setForm("reEntryMode", "base");
     vals.setNearLow = () => this.setForm("reEntryMode", "near_low");
+    /* Uptrend / downtrend EMA pair. Options are the EMAs the pipeline already
+       publishes, so no new data is needed to change the rule. */
+    vals.trendEmaFast = T.TREND_EMAS.map(n => ({
+      value: String(n), label: "EMA " + n, selected: +f.trendFast === n,
+    }));
+    vals.trendEmaSlow = T.TREND_EMAS.map(n => ({
+      value: String(n), label: "EMA " + n, selected: +f.trendSlow === n,
+    }));
+    vals.onTrendFast = (e) => this.setForm("trendFast", e.target.value);
+    vals.onTrendSlow = (e) => this.setForm("trendSlow", e.target.value);
+    vals.trendRuleNote = `Uptrend when EMA ${f.trendFast} is above EMA ${f.trendSlow}, downtrend when it is below.`;
+
     /* "Profit trigger" (gainPct) was removed with entry tracking -- it only
        ever fed the booking rule, which needed an entry price to compare against. */
     vals.ruleFields = [

@@ -86,6 +86,7 @@
   /* ---------- settings ---------- */
   const DEFAULT_SETTINGS = {
     gainPct: 20, highZonePct: 2, lowZonePct: 10, horizon: "long", reEntryMode: "base", view: "cards",
+    trendFast: 50, trendSlow: 150,
     weights: { trend: 30, momentum: 20, participation: 20, relStrength: 20, risk: 10 }
   };
   TA.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
@@ -160,8 +161,22 @@
     if (pl != null && pl <= settings.lowZonePct) return "low";
     return null;
   };
-  TA.trendOf = d => (d.close > d.ema20 && d.ema20 > d.ema50 && d.ema50 > d.ema200) ? "bull"
-    : (d.close < d.ema20 && d.ema20 < d.ema50 && d.ema50 < d.ema200) ? "bear" : "mixed";
+  /* Uptrend / downtrend is a two-EMA comparison, defaulting to the same
+     EMA50 vs EMA150 pair the pipeline already calls a golden / death cross.
+     Which pair is used is a setting, so this is configurable without a deploy.
+
+     The previous rule demanded a full four-level stack
+     (close > EMA20 > EMA50 > EMA200) and dropped anything with one link out of
+     order into "mixed" -- which was 19 of 28 Core names, and meant a name like
+     TMO (price 12% above its own EMA50, but EMA50 $0.90 under EMA200) showed
+     under every filter state because mixed was never filtered. */
+  TA.TREND_EMAS = [20, 50, 150, 200];
+  TA.trendOf = (d, settings) => {
+    const fast = d["ema" + ((settings && settings.trendFast) || 50)];
+    const slow = d["ema" + ((settings && settings.trendSlow) || 150)];
+    if (fast == null || slow == null) return "mixed";   // not enough history yet
+    return fast > slow ? "bull" : fast < slow ? "bear" : "mixed";
+  };
   TA.trendRank = t => ({ bull: 2, mixed: 1, bear: 0 })[t];
   TA.trendLabel = t => ({ bull: "Bullish", bear: "Bearish", mixed: "Mixed" })[t];
   TA.rsiZone = v => v >= 70 ? "Overbought" : v <= 30 ? "Oversold" : "Neutral";
@@ -251,11 +266,11 @@
     let rows = list.symbols.map(bySym).filter(Boolean);
     if (st.sector !== "all") rows = rows.filter(d => !d.sector || d.sector === st.sector);
     if (st.q) rows = rows.filter(d => d.symbol.toLowerCase().includes(st.q));
-    if (st.trendF !== "all") rows = rows.filter(d => TA.trendOf(d) === st.trendF);
-    rows = rows.filter(d => { const t = TA.trendOf(d); return t === "mixed" ? true : st.trendToggles[t] !== false; });
+    if (st.trendF !== "all") rows = rows.filter(d => TA.trendOf(d, st.settings) === st.trendF);
+    rows = rows.filter(d => { const t = TA.trendOf(d, st.settings); return t === "mixed" ? true : st.trendToggles[t] !== false; });
     rows.sort((a, b) => {
       let av, bv;
-      if (st.sortKey === "trend") { av = TA.trendRank(TA.trendOf(a)); bv = TA.trendRank(TA.trendOf(b)); }
+      if (st.sortKey === "trend") { av = TA.trendRank(TA.trendOf(a, st.settings)); bv = TA.trendRank(TA.trendOf(b, st.settings)); }
       else if (st.sortKey === "score") { av = TA.scoreOf(a, st.settings); bv = TA.scoreOf(b, st.settings); }
       else if (st.sortKey === "pos52") { av = TA.pos52(a); bv = TA.pos52(b); }
       else if (st.sortKey === "symbol") { return a.symbol.localeCompare(b.symbol) * st.sortDir; }
@@ -269,7 +284,7 @@
 
   /* ---------- signals & levels ---------- */
   TA.signalChips = (d, settings) => {
-    const px = d.close, t = TA.trendOf(d), rz = TA.rsiZone(d.rsi14), zn = TA.zoneOf(d, settings);
+    const px = d.close, t = TA.trendOf(d, settings), rz = TA.rsiZone(d.rsi14), zn = TA.zoneOf(d, settings);
     const ph = TA.pctFromHigh(d), mb = d.macd_hist >= 0;
     const ok = { ink: UP, border: "color-mix(in srgb, var(--ta-up) 40%, transparent)" };
     const bad = { ink: DOWN, border: "color-mix(in srgb, var(--ta-down) 40%, transparent)" };
