@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Build frontend/dashboard-v2.html from the frontend/v2/ source tree.
+"""Build frontend/dashboard.html from the frontend/v2/ source tree.
 
-The v2 dashboard is authored as a source tree (template + runtime + design
+The dashboard is authored as a source tree (template + runtime + design
 tokens + vendored libs) but deployed as ONE self-contained GCS object, the same
 way dashboard.html always has been. This script does that inlining.
 
@@ -17,7 +17,7 @@ Two rules make or break the output, both learned from the vendor handoff:
      fetching React from unpkg -- which breaks the "no CDN" guarantee and fails
      entirely offline. react.js/react-dom.js stay in <head>.
 
-Usage:  python frontend/build_v2.py [--check]
+Usage:  python frontend/build_dashboard.py [--check]
         --check  build in memory and diff against the committed output
                  instead of writing it (used by CI)
 """
@@ -31,7 +31,7 @@ from pathlib import Path
 
 SRC_DIR = Path(__file__).resolve().parent / "v2"
 ENTRY = SRC_DIR / "TrendAlert.dc.html"
-OUT = Path(__file__).resolve().parent / "dashboard-v2.html"
+OUT = Path(__file__).resolve().parent / "dashboard.html"
 
 # support.js is pulled out of <head> and re-emitted after </x-dc> (rule 1).
 DEFERRED = "support.js"
@@ -45,7 +45,7 @@ def read(href: str) -> str:
     """Resolve an href relative to the source tree and return its text."""
     path = (SRC_DIR / href.lstrip("./")).resolve()
     if not path.is_file():
-        sys.exit(f"build_v2: missing asset {href} (looked in {path})")
+        sys.exit(f"build_dashboard: missing asset {href} (looked in {path})")
     return path.read_text(encoding="utf-8")
 
 
@@ -63,7 +63,7 @@ def build() -> str:
     doc = ENTRY.read_text(encoding="utf-8")
 
     if CLOSE_TEMPLATE not in doc:
-        sys.exit(f"build_v2: {ENTRY.name} has no {CLOSE_TEMPLATE} -- not a Design Component.")
+        sys.exit(f"build_dashboard: {ENTRY.name} has no {CLOSE_TEMPLATE} -- not a Design Component.")
 
     deferred_js: list[str] = []
 
@@ -81,7 +81,7 @@ def build() -> str:
     doc = STYLE_HREF.sub(inline_style, doc)
 
     if not deferred_js:
-        sys.exit(f"build_v2: never found <script src=...{DEFERRED}> to defer.")
+        sys.exit(f"build_dashboard: never found <script src=...{DEFERRED}> to defer.")
 
     runtime = "".join(f"<script>\n{js}\n</script>\n" for js in deferred_js)
     head, sep, tail = doc.partition(CLOSE_TEMPLATE + "\n")
@@ -97,16 +97,16 @@ def main() -> int:
 
     if args.check:
         if not OUT.is_file():
-            print(f"build_v2: {OUT.name} is missing -- run `python frontend/build_v2.py`")
+            print(f"build_dashboard: {OUT.name} is missing -- run `python frontend/build_dashboard.py`")
             return 1
         if OUT.read_text(encoding="utf-8") != out:
-            print(f"build_v2: {OUT.name} is stale -- run `python frontend/build_v2.py` and commit")
+            print(f"build_dashboard: {OUT.name} is stale -- run `python frontend/build_dashboard.py` and commit")
             return 1
-        print(f"build_v2: {OUT.name} is up to date ({len(out):,} bytes)")
+        print(f"build_dashboard: {OUT.name} is up to date ({len(out):,} bytes)")
         return 0
 
     OUT.write_text(out, encoding="utf-8", newline="")
-    print(f"build_v2: wrote {OUT.name} ({len(out):,} bytes)")
+    print(f"build_dashboard: wrote {OUT.name} ({len(out):,} bytes)")
     return 0
 
 
