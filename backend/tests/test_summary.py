@@ -6,7 +6,8 @@ QQQ/SPY/BTC pinned plus best+worst of the rest, breadth, and 52w badges.
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from daily_summary import (compute_summary, summary_text, standfirst, _badge,
+from daily_summary import (compute_summary, summary_text, standfirst,
+                           edges_line, _badge,
                            _crosses, _cross_scope, _callout_groups, _words,
                            _long_date, session_label, MAX_ROWS)
 
@@ -262,6 +263,27 @@ def test_standfirst_session_wording_and_cross_clause():
     assert "nothing is sitting at its lows" in s["standfirst"]
     assert standfirst({"session": "", "up": [], "down": [], "reentry": []}) \
         == "Nothing is sitting at its lows."
+
+
+def test_edges_line_replaces_the_per_row_52w_rails():
+    """Movers are a plain bar chart now — the 52w context is one sentence."""
+    s = {"up": [("NOW", 7.4, "lo"), ("VEEV", 3.8, "")],
+         "down": [("NFLX", -1.0, "lo"), ("AMD", -3.2, "hi")]}
+    assert edges_line(s) == "NOW and NFLX sit near 52-week lows · AMD near its high"
+    assert edges_line({"up": [("AMD", 1.0, "hi")]}) == "AMD near its high"
+    assert edges_line({"down": [("X", -1.0, "lo")]}) == "X sits near its 52-week low"
+    assert edges_line({"up": [("A", 1.0, "hi")], "down": [("B", -1.0, "hi")]}) \
+        == "A and B near their highs"
+    assert edges_line({"up": [], "down": []}) == ""     # line is dropped entirely
+    # three or more reads as a list
+    assert edges_line({"up": [(c, 1.0, "lo") for c in "ABC"]}).startswith(
+        "A, B and C sit near 52-week lows")
+    # and the caption carries it, so a text-only reader still gets the context
+    s2 = compute_summary(RECORDS + [rec("EDGE", "Technology", 0.9, close=100,
+                                        hi=101, lo=40)],
+                         CORE + ["EDGE"], "L")
+    assert s2["edges"] == "EDGE near its high"
+    assert "At the edges: EDGE near its high" in summary_text(s2)
 
 
 def test_force_flag_bypasses_the_trading_day_gate():
