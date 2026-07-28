@@ -634,7 +634,7 @@
                 </sc-for>
               </select>
             </div>
-            <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">{{ trendRuleNote }} This drives the Uptrend/Downtrend toggles, the Bullish/Bearish/Mixed filter and the Table's Trend column. Defaults to EMA 50 above EMA 150 — the same pair the pipeline calls a golden or death cross. Anything without enough history for both EMAs stays "mixed".</p>
+            <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">{{ trendRuleNote }} This drives the Uptrend/Downtrend toggles, the Bullish/Bearish/Mixed filter and the Table's Trend column. Defaults to EMA 50 above EMA 200 — the classic long-term trend filter. (The pipeline's golden/death cross alerts are a separate, faster 50/150 signal.) Anything without enough history for both EMAs stays "mixed".</p>
           </div>
 
           <div style="display:flex; flex-direction:column; gap:12px">
@@ -693,7 +693,22 @@
                 <button type="button" onClick="{{ setChBoth }}" style="font-size:12.5px; color:{{ chBothInk }}; background:{{ chBothBg }}; border:0; border-left:1px solid var(--color-neutral-800); padding:7px 13px; cursor:pointer">Both</button>
               </div>
             </div>
-            <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">{{ alertChannelNote }} Applies to every scheduled alert — the daily summary chart, the morning brief, the pre-open bloodbath alarm and the end-of-day rule signals. Saved server-side with the settings above, so it takes effect on the next scheduled run from any browser.</p>
+            <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">{{ alertChannelNote }} Saved server-side with the settings above, so it takes effect on the next scheduled run from any browser.</p>
+
+            <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-top:4px">
+              <span style="font-size:13px; color:var(--color-neutral-400)">Which alerts</span>
+              <span style="font-size:12.5px; font-variant-numeric:tabular-nums; color:{{ alertCountInk }}">{{ alertCount }}</span>
+            </div>
+            <sc-for list="{{ alertRows }}" as="a" hint-placeholder-count="5">
+              <div style="display:flex; align-items:center; gap:12px">
+                <span style="flex:1; min-width:0; font-size:13px; color:var(--color-text)">{{ a.label }}<span style="display:block; font-size:11px; color:var(--color-neutral-600)">{{ a.when }}</span></span>
+                <div style="display:flex; border:1px solid var(--color-neutral-800); border-radius:8px; overflow:hidden">
+                  <button type="button" onClick="{{ a.setOn }}" style="font-size:12.5px; color:{{ a.onInk }}; background:{{ a.onBg }}; border:0; padding:6px 12px; cursor:pointer">On</button>
+                  <button type="button" onClick="{{ a.setOff }}" style="font-size:12.5px; color:{{ a.offInk }}; background:{{ a.offBg }}; border:0; border-left:1px solid var(--color-neutral-800); padding:6px 12px; cursor:pointer">Off</button>
+                </div>
+              </div>
+            </sc-for>
+            <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">Switch one off and that scheduler run does nothing but read this setting — the job still fires, it just returns without sending. The two summaries are the same chart at two times of day, so pre-market and market-close are separate switches.</p>
           </div>
 
           <div style="display:flex; flex-direction:column; gap:10px">
@@ -1000,14 +1015,18 @@ class Component extends DCLogic {
         dataUrl: this.state.dataUrl, syncUrl: this.state.syncUrl,
         horizon: s.horizon || "long", reEntryMode: s.reEntryMode || "base",
         gainPct: s.gainPct, highZonePct: s.highZonePct, lowZonePct: s.lowZonePct,
-        trendFast: s.trendFast || 50, trendSlow: s.trendSlow || 150,
+        trendFast: s.trendFast || 50, trendSlow: s.trendSlow || 200,
         alertChannel: s.alertChannel || "both",
+        alertTypes: { ...(s.alertTypes || {}) },
         trend: s.weights.trend, momentum: s.weights.momentum, participation: s.weights.participation,
         relStrength: s.weights.relStrength, risk: s.weights.risk,
       }
     });
   }
   setForm(k, v) { this.setState(st => ({ form: { ...st.form, [k]: v } })); }
+  setAlertType(key, on) {
+    this.setState(st => ({ form: { ...st.form, alertTypes: { ...st.form.alertTypes, [key]: on } } }));
+  }
   weightTotal() {
     const f = this.state.form;
     if (!f) return 100;
@@ -1026,9 +1045,10 @@ class Component extends DCLogic {
       gainPct: Math.max(5, Math.min(200, +f.gainPct || 20)),
       highZonePct: Math.max(0.5, Math.min(10, +f.highZonePct || 2)),
       lowZonePct: Math.max(2, Math.min(30, +f.lowZonePct || 10)),
-      trendFast: +f.trendFast || 50, trendSlow: +f.trendSlow || 150,
+      trendFast: +f.trendFast || 50, trendSlow: +f.trendSlow || 200,
       horizon: f.horizon, reEntryMode: f.reEntryMode,
       alertChannel: ["telegram", "email", "both"].includes(f.alertChannel) ? f.alertChannel : "both",
+      alertTypes: Object.fromEntries(T.ALERT_KINDS.map(a => [a.key, (f.alertTypes || {})[a.key] !== false])),
       weights: {
         trend: +f.trend, momentum: +f.momentum, participation: +f.participation,
         relStrength: +f.relStrength, risk: +f.risk
@@ -1771,6 +1791,19 @@ class Component extends DCLogic {
     vals.alertChannelNote = chOn("both")
       ? "Alerts go to both Telegram and email."
       : `Alerts go to ${chOn("telegram") ? "Telegram" : "email"} only — the other channel stays silent.`;
+    /* One switch per scheduled alert, listed in the order the day fires them. */
+    const types = f.alertTypes || {};
+    const onOf = (k) => types[k] !== false;
+    vals.alertRows = T.ALERT_KINDS.map(a => ({
+      label: a.label, when: a.when,
+      onInk: tabInk(onOf(a.key)), onBg: segBg(onOf(a.key)),
+      offInk: tabInk(!onOf(a.key)), offBg: segBg(!onOf(a.key)),
+      setOn: () => this.setAlertType(a.key, true),
+      setOff: () => this.setAlertType(a.key, false),
+    }));
+    const live = T.ALERT_KINDS.filter(a => onOf(a.key)).length;
+    vals.alertCount = `${live} / ${T.ALERT_KINDS.length} on`;
+    vals.alertCountInk = live ? "var(--color-neutral-500)" : ink.down;
 
     /* "Profit trigger" (gainPct) was removed with entry tracking -- it only
        ever fed the booking rule, which needed an entry price to compare against. */

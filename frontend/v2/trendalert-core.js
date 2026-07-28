@@ -84,9 +84,22 @@
     || lists.find(l => l.type === "portfolio") || null;
 
   /* ---------- settings ---------- */
+  /* Every alert the backend can send, in the order the trading day fires them.
+     Mirrors ALERT_KINDS in alerts_email.py — the keys are the contract. */
+  const ALERT_KINDS = [
+    { key: "bloodbath", label: "Bloodbath alarm", when: "8:30 ET · silent unless the open is ugly" },
+    { key: "summary_premkt", label: "Pre-market summary", when: "8:35 ET · the chart" },
+    { key: "brief", label: "Morning brief", when: "9:50 ET" },
+    { key: "eod", label: "End-of-day signals", when: "16:45 ET · rule-engine transitions" },
+    { key: "summary_close", label: "Market-close summary", when: "16:50 ET · the chart" },
+  ];
+  TA.ALERT_KINDS = ALERT_KINDS;
+  const ALL_ALERTS = () => Object.fromEntries(ALERT_KINDS.map(a => [a.key, true]));
+  const SETTINGS_VERSION = 2;   /* bump to migrate stored settings; see loadSettings */
   const DEFAULT_SETTINGS = {
     gainPct: 20, highZonePct: 2, lowZonePct: 10, horizon: "long", reEntryMode: "base", view: "cards",
-    trendFast: 50, trendSlow: 150, alertChannel: "both",
+    trendFast: 50, trendSlow: 200, alertChannel: "both", alertTypes: ALL_ALERTS(),
+    sv: SETTINGS_VERSION,
     weights: { trend: 30, momentum: 20, participation: 20, relStrength: 20, risk: 10 }
   };
   TA.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
@@ -94,8 +107,19 @@
   TA.loadSettings = () => {
     try {
       const v = JSON.parse(lsGet(SET_KEY));
-      return v ? { ...DEFAULT_SETTINGS, ...v, weights: { ...DEFAULT_SETTINGS.weights, ...(v.weights || {}) } }
-        : JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+      if (!v) return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+      const s = {
+        ...DEFAULT_SETTINGS, ...v,
+        alertTypes: { ...ALL_ALERTS(), ...(v.alertTypes || {}) },
+        weights: { ...DEFAULT_SETTINGS.weights, ...(v.weights || {}) }
+      };
+      /* v1 -> v2: the trend pair moved to EMA 50 / EMA 200. Settings live only
+         in localStorage, so without this the browsers that already saved the
+         old 50/150 default would silently keep it. Only the untouched default
+         is migrated — an explicitly chosen pair is left alone. */
+      if ((v.sv || 1) < 2 && +v.trendFast === 50 && +v.trendSlow === 150) s.trendSlow = 200;
+      s.sv = SETTINGS_VERSION;
+      return s;
     } catch (e) { return JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); }
   };
   TA.saveSettings = (s) => lsSet(SET_KEY, JSON.stringify(s));

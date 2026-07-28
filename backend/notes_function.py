@@ -154,9 +154,15 @@ def notes(request):
                 clean["horizon"] = cfg["horizon"]
             if cfg.get("reEntryMode") in ("base", "near_low"):
                 clean["reEntryMode"] = cfg["reEntryMode"]
-            # which channels the scheduled alerts may use (Settings > Alerts)
+            # Settings > Alerts: which channels, and which alerts at all
             if cfg.get("alertChannel") in ("telegram", "email", "both"):
                 clean["alertChannel"] = cfg["alertChannel"]
+            types = cfg.get("alertTypes")
+            if isinstance(types, dict):
+                from alerts_email import ALERT_KEYS   # same --source dir
+                known = {k: bool(types[k]) for k in ALERT_KEYS if k in types}
+                if known:
+                    clean["alertTypes"] = known
             w = cfg.get("weights")
             if isinstance(w, dict):
                 try:

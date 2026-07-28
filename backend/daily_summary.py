@@ -18,8 +18,8 @@ inlined (alerts_email.send_telegram_photo / send_email_image). Never raises.
 
 import io
 
-from alerts_email import (_read_json, fan_out, send_telegram_photo,
-                          send_email_image)
+from alerts_email import (_read_json, alert_on, fan_out,
+                          send_telegram_photo, send_email_image)
 from trading_calendar import is_trading_day, _eastern_now
 
 # fallback Core if core.json is absent — mirrors the dashboard's CORE_SYMBOLS
@@ -775,6 +775,15 @@ def run_daily_summary(bucket, force=False):
         if not is_trading_day(et.date()) and not force:
             return {"ok": True, "summary": "skipped(non-trading-day)"}
 
+        # the same code serves both scheduled runs, so which switch applies is
+        # decided by the clock — Settings > Alerts lists them separately
+        session = session_label(et)
+        kind = "summary_premkt" if session in ("PRE-MARKET", "30 MIN TO OPEN") \
+            else "summary_close"
+        cfg = _read_json(bucket, "settings.json", {}) or {}
+        if not alert_on(cfg, kind):
+            return {"ok": True, "summary": f"skipped(off:{kind})"}
+
         data = _read_json(bucket, "data.json", {}) or {}
         records = data.get("symbols", [])
         if not records:
@@ -783,12 +792,10 @@ def run_daily_summary(bucket, force=False):
         raw = data.get("expected_last_trading_day") \
             or (str(data.get("generated_at", ""))[:10] or None)
         label = raw or et.strftime("%b %d")
-        session = session_label(et)
 
         positions = _read_json(bucket, "positions.json", {}) or {}
         if isinstance(positions, dict) and "positions" in positions:
             positions = positions["positions"]
-        cfg = _read_json(bucket, "settings.json", {}) or {}
         f = lambda k, d: float(cfg.get(k, d)) if isinstance(cfg, dict) else d
 
         s = compute_summary(records, load_core(bucket), label, positions=positions,

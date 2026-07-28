@@ -39,6 +39,19 @@ DEFAULT_HIGH_ZONE_PCT = 2.0
 CHANNELS = ("telegram", "email", "both")
 DEFAULT_CHANNEL = "both"
 
+# Every alert this project can send, in the order the trading day fires them.
+# (key, dashboard label, when it runs) — the dashboard renders this list as the
+# Settings > Alerts switches, and each entry point checks its own key, so an
+# alert that is switched off costs nothing but the settings read.
+ALERT_KINDS = (
+    ("bloodbath", "Bloodbath alarm", "8:30 ET · silent unless the open is ugly"),
+    ("summary_premkt", "Pre-market summary", "8:35 ET · the chart"),
+    ("brief", "Morning brief", "9:50 ET"),
+    ("eod", "End-of-day signals", "16:45 ET · rule-engine transitions"),
+    ("summary_close", "Market-close summary", "16:50 ET · the chart"),
+)
+ALERT_KEYS = tuple(k for k, _l, _w in ALERT_KINDS)
+
 
 # ----------------------------------------------------------------------
 # delivery channel (Settings > Alerts -> settings.json "alertChannel")
@@ -51,6 +64,19 @@ def alert_channel(settings):
     """
     v = (settings or {}).get("alertChannel") if isinstance(settings, dict) else None
     return v if v in CHANNELS else DEFAULT_CHANNEL
+
+
+def alert_on(settings, kind):
+    """Is this alert switched on? Missing / junk means on, like the channel.
+
+    Silence has to be chosen explicitly: a settings.json that predates the
+    switches, or one written by a browser that does not know this alert yet,
+    must keep delivering it.
+    """
+    types = (settings or {}).get("alertTypes") if isinstance(settings, dict) else None
+    if not isinstance(types, dict):
+        return True
+    return types.get(kind, True) is not False
 
 
 def channel_on(settings, ch):
@@ -287,6 +313,8 @@ def send_eod_alerts(records, cross_alerts, bucket, asof, trading_day=True):
         if isinstance(positions, dict) and "positions" in positions:
             positions = positions["positions"]
         settings = _read_json(bucket, "settings.json", {}) or {}
+        if not alert_on(settings, "eod"):
+            return "alerts:off"
         state = _read_json(bucket, STATE_OBJECT, {}) or {}
 
         events = detect_events(records, positions, settings)

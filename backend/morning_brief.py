@@ -23,7 +23,8 @@ from datetime import datetime
 
 import requests
 
-from alerts_email import _read_json, fan_out, send_email_text, send_telegram_text
+from alerts_email import (_read_json, alert_on, fan_out, send_email_text,
+                          send_telegram_text)
 from trading_calendar import is_trading_day, _eastern_now
 
 SNAPSHOT_URL = "https://data.alpaca.markets/v2/stocks/snapshots"
@@ -134,6 +135,9 @@ def run_morning_brief(bucket, symbols, sectors, headers):
         et = _eastern_now()
         if not is_trading_day(et.date()):
             return {"ok": True, "brief": "skipped(non-trading-day)"}
+        cfg = _read_json(bucket, "settings.json", {}) or {}
+        if not alert_on(cfg, "brief"):
+            return {"ok": True, "brief": "skipped(off:brief)"}
 
         # universe = core + UI-added equities; sector falls back to data.json
         extras = _read_json(bucket, "universe.json", []) or []
@@ -159,7 +163,6 @@ def run_morning_brief(bucket, symbols, sectors, headers):
         now_label = et.strftime("%a %b %d, %H:%M ET")
         body = compose_brief(snaps, sector_of, positions, now_label)
 
-        cfg = _read_json(bucket, "settings.json", {}) or {}
         status = fan_out(cfg, (
             ("telegram", lambda: send_telegram_text(body)),
             ("email", lambda: send_email_text(f"TrendAlert Morning Brief {today}", body)),

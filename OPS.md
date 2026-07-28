@@ -158,6 +158,27 @@ env config still has the final say (`telegram:disabled` when the token or chat
 id is unset). A missing or unrecognised value means both, so a bad write can
 never silence the alerts.
 
+**Choosing which alerts fire (Settings > Alerts > Which alerts).** The same
+panel carries one switch per scheduled alert, written as `alertTypes` in
+`settings.json`. The keys are `ALERT_KINDS` in `alerts_email.py` — the order
+the trading day fires them:
+
+| key | alert | scheduler job | when |
+| --- | --- | --- | --- |
+| `bloodbath` | Bloodbath alarm | `trendalert-bloodbath` | 8:30 ET |
+| `summary_premkt` | Pre-market summary chart | `trendalert-summary-premkt` | 8:35 ET |
+| `brief` | Morning brief | `trendalert-morning-brief` | 9:50 ET |
+| `eod` | End-of-day rule signals | `trendalert-refresh-close` | 16:45 ET |
+| `summary_close` | Market-close summary chart | `trendalert-summary-close` | 16:50 ET |
+
+Each entry point checks its own key first and returns `skipped(off:<key>)`
+(`alerts:off` for EOD) without fetching quotes or rendering — the scheduler job
+still runs, it just costs one settings read. Both summary jobs share
+`run_daily_summary`, so which switch applies is decided by `session_label`:
+PRE-MARKET / 30 MIN TO OPEN → `summary_premkt`, anything later →
+`summary_close`. A missing key means on, so an alert added later keeps
+delivering to a browser that has never seen its switch.
+
 **Adding another recipient.** One bot can message many people:
 1. Share the bot with them (its `t.me/<botname>` link) and have *them* send
    it any message first — a bot can never message someone who hasn't

@@ -26,7 +26,7 @@ scheduler must always get a 200.
 
 import requests
 
-from alerts_email import (_read_json, fan_out, send_email_text,
+from alerts_email import (_read_json, alert_on, fan_out, send_email_text,
                           send_telegram_text)
 from trading_calendar import is_trading_day, _eastern_now
 
@@ -197,6 +197,9 @@ def run_bloodbath_check(bucket, symbols, sectors, headers):
         et = _eastern_now()
         if not is_trading_day(et.date()):
             return {"ok": True, "bloodbath": "skipped(non-trading-day)"}
+        cfg = _read_json(bucket, "settings.json", {}) or {}
+        if not alert_on(cfg, "bloodbath"):
+            return {"ok": True, "bloodbath": "skipped(off:bloodbath)"}
         today = et.date().isoformat()
 
         # universe = core + UI-added equities; sector falls back to data.json
@@ -213,7 +216,6 @@ def run_bloodbath_check(bucket, symbols, sectors, headers):
         if "SPY" not in quotes or "QQQ" not in quotes:
             return {"ok": True, "bloodbath": "skipped(no-premarket-index-prints)"}
 
-        cfg = _read_json(bucket, "settings.json", {}) or {}
         params = load_params(cfg)
         a = assess(quotes, sector_of, params)
         if not a["triggered"]:
