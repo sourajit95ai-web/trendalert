@@ -165,11 +165,25 @@ the trading day fires them:
 
 | key | alert | scheduler job | when |
 | --- | --- | --- | --- |
-| `bloodbath` | Bloodbath alarm | `trendalert-bloodbath` | 8:30 ET |
 | `summary_premkt` | Pre-market summary chart | `trendalert-summary-premkt` | 8:35 ET |
 | `brief` | Morning brief | `trendalert-morning-brief` | 9:50 ET |
-| `eod` | End-of-day rule signals | `trendalert-refresh-close` | 16:45 ET |
 | `summary_close` | Market-close summary chart | `trendalert-summary-close` | 16:50 ET |
+
+**Retired 2026-07-28: the bloodbath alarm and the end-of-day rule signals.**
+They have no switch and never send — `RETIRED_ALERTS` in `alerts_email.py`
+makes `alert_on` refuse them whatever `settings.json` holds, so they cannot be
+revived by a stale browser. `bloodbath.py`, the `?mode=bloodbath` route and
+their tests are all kept, so bringing one back is a one-line edit. The 8:30
+scheduler job now costs a settings read and returns `skipped(retired)`; pause
+it so it stops running at all:
+
+```
+gcloud scheduler jobs pause trendalert-bloodbath --location us-central1
+```
+
+(`resume` puts it back.) The EOD signals had no job of their own — they rode
+the 16:45 `trendalert-refresh-close` pipeline run, which still refreshes data
+as before and now reports `alerts:retired`.
 
 Each entry point checks its own key first and returns `skipped(off:<key>)`
 (`alerts:off` for EOD) without fetching quotes or rendering — the scheduler job

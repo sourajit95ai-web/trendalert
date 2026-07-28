@@ -84,13 +84,13 @@
     || lists.find(l => l.type === "portfolio") || null;
 
   /* ---------- settings ---------- */
-  /* Every alert the backend can send, in the order the trading day fires them.
-     Mirrors ALERT_KINDS in alerts_email.py — the keys are the contract. */
+  /* Every alert the backend sends, in the order the trading day fires them.
+     Mirrors ALERT_KINDS in alerts_email.py — the keys are the contract. The
+     bloodbath alarm and the end-of-day rule signals were retired, so they are
+     absent here AND refused server-side (RETIRED_ALERTS). */
   const ALERT_KINDS = [
-    { key: "bloodbath", label: "Bloodbath alarm", when: "8:30 ET · silent unless the open is ugly" },
     { key: "summary_premkt", label: "Pre-market summary", when: "8:35 ET · the chart" },
     { key: "brief", label: "Morning brief", when: "9:50 ET" },
-    { key: "eod", label: "End-of-day signals", when: "16:45 ET · rule-engine transitions" },
     { key: "summary_close", label: "Market-close summary", when: "16:50 ET · the chart" },
   ];
   TA.ALERT_KINDS = ALERT_KINDS;

@@ -1,6 +1,6 @@
 """Daily-summary composition tests — pure ranking/selection, no matplotlib/GCS.
 
-Mirrors the dashboard's renderSummary: top 5 up / 5 down among CORE holdings,
+Mirrors the poster: top 3 up / 3 down among CORE holdings,
 QQQ/SPY/BTC pinned plus best+worst of the rest, breadth, and 52w badges.
 """
 import sys, os
@@ -81,7 +81,8 @@ def test_summary_text_drops_the_chart_transcript():
 
 
 def test_r52_context_and_caption_range():
-    recs = list(RECORDS) + [rec("ZZZ", "Technology", 1.0, close=210, hi=214, lo=164)]
+    # +5.0% puts ZZZ inside the top 3, which is what the poster draws
+    recs = list(RECORDS) + [rec("ZZZ", "Technology", 5.0, close=210, hi=214, lo=164)]
     core = CORE + ["ZZZ"]
     s = compute_summary(recs, core, "L")
     # per-symbol 52w context is carried for movers and indexes
@@ -266,7 +267,7 @@ def test_standfirst_session_wording_and_cross_clause():
 
 
 def test_edges_line_replaces_the_per_row_52w_rails():
-    """Movers are a plain bar chart now — the 52w context is one sentence."""
+    """Who is at a 52-week extreme, as one caption sentence."""
     s = {"up": [("NOW", 7.4, "lo"), ("VEEV", 3.8, "")],
          "down": [("NFLX", -1.0, "lo"), ("AMD", -3.2, "hi")]}
     assert edges_line(s) == "NOW and NFLX sit near 52-week lows · AMD near its high"
@@ -279,7 +280,7 @@ def test_edges_line_replaces_the_per_row_52w_rails():
     assert edges_line({"up": [(c, 1.0, "lo") for c in "ABC"]}).startswith(
         "A, B and C sit near 52-week lows")
     # and the caption carries it, so a text-only reader still gets the context
-    s2 = compute_summary(RECORDS + [rec("EDGE", "Technology", 0.9, close=100,
+    s2 = compute_summary(RECORDS + [rec("EDGE", "Technology", 9.9, close=100,
                                         hi=101, lo=40)],
                          CORE + ["EDGE"], "L")
     assert s2["edges"] == "EDGE near its high"

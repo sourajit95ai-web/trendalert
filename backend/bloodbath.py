@@ -199,7 +199,7 @@ def run_bloodbath_check(bucket, symbols, sectors, headers):
             return {"ok": True, "bloodbath": "skipped(non-trading-day)"}
         cfg = _read_json(bucket, "settings.json", {}) or {}
         if not alert_on(cfg, "bloodbath"):
-            return {"ok": True, "bloodbath": "skipped(off:bloodbath)"}
+            return {"ok": True, "bloodbath": "skipped(retired)"}
         today = et.date().isoformat()
 
         # universe = core + UI-added equities; sector falls back to data.json

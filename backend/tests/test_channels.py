@@ -8,8 +8,8 @@ channel off must not stop the other one from sending.
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from alerts_email import (ALERT_KEYS, ALERT_KINDS, alert_channel, alert_on,
-                          channel_on, fan_out)
+from alerts_email import (ALERT_KEYS, ALERT_KINDS, RETIRED_ALERTS,
+                          alert_channel, alert_on, channel_on, fan_out)
 
 
 def test_default_is_both_for_missing_or_junk():
@@ -43,10 +43,18 @@ def test_fan_out_skips_the_disabled_channel():
 
 
 def test_every_scheduled_alert_has_a_switch():
-    """The five alerts the schedulers fire, each with its own key."""
-    assert ALERT_KEYS == ("bloodbath", "summary_premkt", "brief", "eod",
-                          "summary_close")
+    """The alerts the schedulers still fire, each with its own key."""
+    assert ALERT_KEYS == ("summary_premkt", "brief", "summary_close")
     assert all(len(k) == 3 and all(k) for k in ALERT_KINDS)   # key, label, when
+    # a retired alert is not offered as a switch and cannot be one
+    assert not set(RETIRED_ALERTS) & set(ALERT_KEYS)
+
+
+def test_retired_alerts_stay_off_whatever_settings_say():
+    """Fail-open is for live alerts only — a retired one must not come back."""
+    for kind in RETIRED_ALERTS:
+        assert not alert_on({}, kind)                        # the usual default
+        assert not alert_on({"alertTypes": {kind: True}}, kind)   # even asked for
 
 
 def test_alert_on_defaults_to_on_and_honours_a_false():
@@ -58,7 +66,7 @@ def test_alert_on_defaults_to_on_and_honours_a_false():
     assert not alert_on(cfg, "brief")
     assert all(alert_on(cfg, k) for k in ALERT_KEYS if k != "brief")
     # only an explicit False is off — truthy junk stays on
-    assert alert_on({"alertTypes": {"eod": 1}}, "eod")
+    assert alert_on({"alertTypes": {"summary_close": 1}}, "summary_close")
 
 
 def test_summary_run_picks_its_switch_from_the_clock():
