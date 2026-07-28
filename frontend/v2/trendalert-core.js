@@ -95,10 +95,13 @@
   ];
   TA.ALERT_KINDS = ALERT_KINDS;
   const ALL_ALERTS = () => Object.fromEntries(ALERT_KINDS.map(a => [a.key, true]));
-  const SETTINGS_VERSION = 2;   /* bump to migrate stored settings; see loadSettings */
+  const SETTINGS_VERSION = 3;   /* bump to migrate stored settings; see loadSettings */
+  /* trendFast/trendSlow default to EMA 50 / EMA 150 — the SAME pair main.py
+     calls a golden or death cross. One trend definition across the product:
+     what the table calls an uptrend is what the alerts call a golden cross. */
   const DEFAULT_SETTINGS = {
     gainPct: 20, highZonePct: 2, lowZonePct: 10, horizon: "long", reEntryMode: "base", view: "cards",
-    trendFast: 50, trendSlow: 200, alertChannel: "both", alertTypes: ALL_ALERTS(),
+    trendFast: 50, trendSlow: 150, alertChannel: "both", alertTypes: ALL_ALERTS(),
     sv: SETTINGS_VERSION,
     weights: { trend: 30, momentum: 20, participation: 20, relStrength: 20, risk: 10 }
   };
@@ -113,11 +116,12 @@
         alertTypes: { ...ALL_ALERTS(), ...(v.alertTypes || {}) },
         weights: { ...DEFAULT_SETTINGS.weights, ...(v.weights || {}) }
       };
-      /* v1 -> v2: the trend pair moved to EMA 50 / EMA 200. Settings live only
-         in localStorage, so without this the browsers that already saved the
-         old 50/150 default would silently keep it. Only the untouched default
-         is migrated — an explicitly chosen pair is left alone. */
-      if ((v.sv || 1) < 2 && +v.trendFast === 50 && +v.trendSlow === 150) s.trendSlow = 200;
+      /* v2 -> v3: the trend pair briefly defaulted to EMA 50 / EMA 200 before
+         being put back to 50/150 for consistency with the cross alerts.
+         Settings live only in localStorage, so a browser that loaded the v2
+         build has 200 stored and would keep it silently. Only the untouched v2
+         default is moved back — a pair chosen by hand is left alone. */
+      if (v.sv === 2 && +v.trendFast === 50 && +v.trendSlow === 200) s.trendSlow = 150;
       s.sv = SETTINGS_VERSION;
       return s;
     } catch (e) { return JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); }

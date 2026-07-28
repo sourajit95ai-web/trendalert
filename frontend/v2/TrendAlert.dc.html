@@ -634,7 +634,7 @@
                 </sc-for>
               </select>
             </div>
-            <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">{{ trendRuleNote }} This drives the Uptrend/Downtrend toggles, the Bullish/Bearish/Mixed filter and the Table's Trend column. Defaults to EMA 50 above EMA 200 — the classic long-term trend filter. (The pipeline's golden/death cross alerts are a separate, faster 50/150 signal.) Anything without enough history for both EMAs stays "mixed".</p>
+            <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">{{ trendRuleNote }} This drives the Uptrend/Downtrend toggles, the Bullish/Bearish/Mixed filter and the Table's Trend column. Defaults to EMA 50 above EMA 150 — the same pair the pipeline calls a golden or death cross, so an uptrend here and a golden cross in the alerts mean the same thing. Anything without enough history for both EMAs stays "mixed".</p>
           </div>
 
           <div style="display:flex; flex-direction:column; gap:12px">
@@ -1015,7 +1015,7 @@ class Component extends DCLogic {
         dataUrl: this.state.dataUrl, syncUrl: this.state.syncUrl,
         horizon: s.horizon || "long", reEntryMode: s.reEntryMode || "base",
         gainPct: s.gainPct, highZonePct: s.highZonePct, lowZonePct: s.lowZonePct,
-        trendFast: s.trendFast || 50, trendSlow: s.trendSlow || 200,
+        trendFast: s.trendFast || 50, trendSlow: s.trendSlow || 150,
         alertChannel: s.alertChannel || "both",
         alertTypes: { ...(s.alertTypes || {}) },
         trend: s.weights.trend, momentum: s.weights.momentum, participation: s.weights.participation,
@@ -1045,7 +1045,7 @@ class Component extends DCLogic {
       gainPct: Math.max(5, Math.min(200, +f.gainPct || 20)),
       highZonePct: Math.max(0.5, Math.min(10, +f.highZonePct || 2)),
       lowZonePct: Math.max(2, Math.min(30, +f.lowZonePct || 10)),
-      trendFast: +f.trendFast || 50, trendSlow: +f.trendSlow || 200,
+      trendFast: +f.trendFast || 50, trendSlow: +f.trendSlow || 150,
       horizon: f.horizon, reEntryMode: f.reEntryMode,
       alertChannel: ["telegram", "email", "both"].includes(f.alertChannel) ? f.alertChannel : "both",
       alertTypes: Object.fromEntries(T.ALERT_KINDS.map(a => [a.key, (f.alertTypes || {})[a.key] !== false])),
