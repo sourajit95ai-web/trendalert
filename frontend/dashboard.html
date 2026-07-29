@@ -2032,10 +2032,30 @@ const __ds_scope = {};
           </div>
         </div>
 
-        <div style="position:sticky; bottom:0; margin-top:26px; padding:16px 26px; background:var(--color-bg); border-top:1px solid var(--color-neutral-900); display:flex; justify-content:flex-end; gap:10px">
-          <button type="button" class="ta-hit" onClick="{{ resetSettings }}" style="font-size:13px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:9px 16px; cursor:pointer">Reset defaults</button>
-          <button type="button" class="ta-hit" onClick="{{ saveSettingsForm }}" style="font-size:13px; color:var(--color-accent); background:transparent; border:1px solid var(--color-accent); border-radius:8px; padding:9px 18px; cursor:pointer">Done</button>
+        <div style="position:sticky; bottom:0; margin-top:26px; padding:16px 26px; background:var(--color-bg); border-top:1px solid {{ footBorder }}; display:flex; align-items:center; justify-content:space-between; gap:12px">
+          <span style="font-size:12px; color:{{ dirtyInk }}">{{ dirtyNote }}</span>
+          <div style="display:flex; gap:10px">
+            <button type="button" class="ta-hit" onClick="{{ resetSettings }}" style="font-size:13px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:9px 16px; cursor:pointer">Reset defaults</button>
+            <sc-if value="{{ settingsDirty }}">
+              <button type="button" class="ta-hit" onClick="{{ cancelSettings }}" style="font-size:13px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:9px 16px; cursor:pointer">Cancel</button>
+            </sc-if>
+            <button type="button" class="ta-hit" onClick="{{ saveSettingsForm }}" style="font-size:13px; color:{{ saveInk }}; background:{{ saveBg }}; border:1px solid var(--color-accent); border-radius:8px; padding:9px 18px; cursor:pointer">{{ saveLabel }}</button>
+          </div>
         </div>
+
+        <sc-if value="{{ confirmCloseOpen }}">
+          <div style="position:absolute; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; padding:24px; background:rgba(10,11,20,0.72)">
+            <div style="width:min(360px, 100%); background:var(--color-bg); border:1px solid var(--color-neutral-800); border-radius:14px; box-shadow:var(--shadow-lg); padding:22px">
+              <h4 style="font-family:var(--font-heading); font-weight:500; font-size:16px; margin:0 0 8px">Unsaved changes</h4>
+              <p style="font-size:12.5px; line-height:1.6; color:var(--color-neutral-500); margin:0 0 18px">{{ confirmCloseNote }}</p>
+              <div style="display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap">
+                <button type="button" class="ta-hit" onClick="{{ keepEditing }}" style="font-size:12.5px; color:var(--color-neutral-400); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:8px 14px; cursor:pointer">Keep editing</button>
+                <button type="button" class="ta-hit" onClick="{{ discardChanges }}" style="font-size:12.5px; color:{{ discardInk }}; background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:8px 14px; cursor:pointer">Discard</button>
+                <button type="button" class="ta-hit" onClick="{{ saveAndClose }}" style="font-size:12.5px; color:var(--color-accent); background:transparent; border:1px solid var(--color-accent); border-radius:8px; padding:8px 14px; cursor:pointer">Save</button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
       </div>
     </div>
   </sc-if>
@@ -4051,7 +4071,7 @@ class Component extends DCLogic {
       drawer: null, drawerTab: "detail", pane: "price", chartCfgOpen: false, chartRead: "",
       settingsOpen: false, addModalOpen: false, addSym: "", addTarget: null,
       listsOpen: false, newListName: "", newListType: "portfolio",
-      confirm: null, toast: "", form: null,
+      confirm: null, confirmClose: null, toast: "", form: null,
       theme: T.loadTheme(),
     };
     const v = this.state.vis;
@@ -4234,21 +4254,56 @@ class Component extends DCLogic {
   }
 
   /* ---------------- settings form ---------------- */
+  /* The form is a working copy: nothing here touches the live settings until
+     Save. formOf is the single place that maps settings -> form, so the
+     dirty check below can rebuild the pristine copy and compare against it. */
+  formOf(s) {
+    return {
+      dataUrl: this.state.dataUrl, syncUrl: this.state.syncUrl,
+      horizon: s.horizon || "long", reEntryMode: s.reEntryMode || "base",
+      gainPct: s.gainPct, highZonePct: s.highZonePct, lowZonePct: s.lowZonePct,
+      trendFast: s.trendFast || 50, trendSlow: s.trendSlow || 150,
+      alertChannel: s.alertChannel || "both",
+      alertTypes: { ...(s.alertTypes || {}) },
+      trend: s.weights.trend, momentum: s.weights.momentum, participation: s.weights.participation,
+      relStrength: s.weights.relStrength, risk: s.weights.risk,
+    };
+  }
   openSettings() {
-    const s = this.state.settings;
+    this.setState({ settingsOpen: true, confirmClose: null, form: this.formOf(this.state.settings) });
+  }
+  settingsDirty() {
+    const f = this.state.form;
+    if (!f) return false;
+    const was = this.formOf(this.state.settings);
+    const fields = ["dataUrl", "syncUrl", "horizon", "reEntryMode", "gainPct", "highZonePct",
+      "lowZonePct", "trendFast", "trendSlow", "alertChannel", "trend", "momentum",
+      "participation", "relStrength", "risk"];
+    /* compared as strings: number inputs hand back "20" where the setting holds 20 */
+    if (fields.some(k => String(f[k]) !== String(was[k]))) return true;
+    const on = (o, k) => (o || {})[k] !== false;
+    return window.TA.ALERT_KINDS.some(a => on(f.alertTypes, a.key) !== on(was.alertTypes, a.key));
+  }
+  /* Closing with edits pending must never silently drop them — ask instead.
+     `intent` is where to go once answered, so "Manage lists" is guarded too. */
+  requestCloseSettings(intent) {
+    if (this.settingsDirty()) { this.setState({ confirmClose: intent }); return; }
+    this.setState({ settingsOpen: false, listsOpen: intent === "lists" });
+  }
+  cancelSettings() {
+    this.setState({ confirmClose: null, settingsOpen: false, form: this.formOf(this.state.settings) });
+  }
+  discardChanges() {
+    const next = this.state.confirmClose;
     this.setState({
-      settingsOpen: true,
-      form: {
-        dataUrl: this.state.dataUrl, syncUrl: this.state.syncUrl,
-        horizon: s.horizon || "long", reEntryMode: s.reEntryMode || "base",
-        gainPct: s.gainPct, highZonePct: s.highZonePct, lowZonePct: s.lowZonePct,
-        trendFast: s.trendFast || 50, trendSlow: s.trendSlow || 150,
-        alertChannel: s.alertChannel || "both",
-        alertTypes: { ...(s.alertTypes || {}) },
-        trend: s.weights.trend, momentum: s.weights.momentum, participation: s.weights.participation,
-        relStrength: s.weights.relStrength, risk: s.weights.risk,
-      }
+      confirmClose: null, settingsOpen: false, listsOpen: next === "lists",
+      form: this.formOf(this.state.settings),
     });
+  }
+  saveAndClose() {
+    const next = this.state.confirmClose;
+    this.setState({ confirmClose: null });
+    this.saveSettingsForm(() => { if (next === "lists") this.setState({ listsOpen: true }); });
   }
   setForm(k, v) { this.setState(st => ({ form: { ...st.form, [k]: v } })); }
   setAlertType(key, on) {
@@ -4259,7 +4314,7 @@ class Component extends DCLogic {
     if (!f) return 100;
     return ["trend", "momentum", "participation", "relStrength", "risk"].reduce((a, k) => a + (+f[k] || 0), 0);
   }
-  saveSettingsForm() {
+  saveSettingsForm(after) {
     const T = window.TA, f = this.state.form;
     const total = this.weightTotal();
     if (total !== 100) { this.flash("Score weights must sum to 100 (currently " + total + ")."); return; }
@@ -4288,15 +4343,18 @@ class Component extends DCLogic {
     T.post(this.state.syncUrl, "settings", settings);
     const urlChanged = f.dataUrl !== this.state.dataUrl || f.syncUrl !== this.state.syncUrl;
     T.lsSet(T.keys.DATA_KEY, f.dataUrl); T.lsSet(T.keys.SYNC_KEY, f.syncUrl);
-    this.setState({ settings, chCfg, dataUrl: f.dataUrl, syncUrl: f.syncUrl, settingsOpen: false }, () => {
+    this.setState({
+      settings, chCfg, dataUrl: f.dataUrl, syncUrl: f.syncUrl,
+      settingsOpen: false, confirmClose: null,
+    }, () => {
       if (urlChanged) this.load();
+      if (after) after();
     });
   }
+  /* Reset fills the FORM with the defaults rather than saving them, so it is
+     one more pending change that Cancel can still undo. */
   resetSettings() {
-    const T = window.TA;
-    const settings = JSON.parse(JSON.stringify(T.DEFAULT_SETTINGS));
-    T.saveSettings(settings);
-    this.setState({ settings }, () => this.openSettings());
+    this.setState({ form: this.formOf(JSON.parse(JSON.stringify(window.TA.DEFAULT_SETTINGS))) });
   }
   reconnect() {
     const T = window.TA, f = this.state.form;
@@ -4967,7 +5025,7 @@ class Component extends DCLogic {
 
     /* ---- settings modal ---- */
     vals.settingsOpen = s.settingsOpen && !!s.form;
-    vals.closeSettings = () => this.setState({ settingsOpen: false });
+    vals.closeSettings = () => this.requestCloseSettings("close");
     vals.form = s.form || { dataUrl: "", syncUrl: "" };
     vals.onFormDataUrl = (e) => this.setForm("dataUrl", e.target.value);
     vals.onFormSyncUrl = (e) => this.setForm("syncUrl", e.target.value);
@@ -5048,7 +5106,26 @@ class Component extends DCLogic {
     vals.weightSumInk = total === 100 ? ink.up : ink.down;
     vals.saveSettingsForm = () => this.saveSettingsForm();
     vals.resetSettings = () => this.resetSettings();
-    vals.openListsFromSettings = () => this.setState({ settingsOpen: false, listsOpen: true });
+    vals.openListsFromSettings = () => this.requestCloseSettings("lists");
+    /* Save / Cancel appear only once something has actually changed — with a
+       clean form the footer stays the plain "Done" it always was. */
+    const dirty = this.settingsDirty();
+    vals.settingsDirty = dirty;
+    vals.dirtyNote = dirty ? "Unsaved changes" : "Saved · synced to the alerts";
+    vals.dirtyInk = dirty ? "var(--color-accent)" : "var(--color-neutral-600)";
+    vals.footBorder = dirty ? "var(--color-accent)" : "var(--color-neutral-900)";
+    vals.saveLabel = dirty ? "Save changes" : "Done";
+    vals.saveBg = dirty ? "var(--color-accent)" : "transparent";
+    vals.saveInk = dirty ? "var(--color-bg)" : "var(--color-accent)";
+    vals.cancelSettings = () => this.cancelSettings();
+    vals.confirmCloseOpen = !!s.confirmClose;
+    vals.confirmCloseNote = s.confirmClose === "lists"
+      ? "Your settings changes are not saved yet. Save them before opening the list manager, or discard them."
+      : "Your settings changes are not saved yet. Closing now discards them.";
+    vals.discardInk = ink.down;
+    vals.keepEditing = () => this.setState({ confirmClose: null });
+    vals.discardChanges = () => this.discardChanges();
+    vals.saveAndClose = () => this.saveAndClose();
 
     /* ---- add-to-list modal ---- */
     vals.addModalOpen = s.addModalOpen;
