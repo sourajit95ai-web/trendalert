@@ -279,9 +279,13 @@
     <sc-for list="{{ sectorChips }}" as="s" hint-placeholder-count="9">
       <button type="button" onClick="{{ s.onClick }}" style="font-size:13.5px; color:{{ s.ink }}; background:transparent; border:0; border-bottom:1px solid {{ s.underline }}; padding:6px 2px; cursor:pointer; white-space:nowrap">{{ s.label }}</button>
     </sc-for>
-    <span style="margin-left:auto; display:flex; gap:14px">
-      <button type="button" onClick="{{ toggleBull }}" style="font-size:13px; color:{{ bullInk }}; background:transparent; border:0; padding:6px 2px; cursor:pointer">{{ bullLabel }}</button>
-      <button type="button" onClick="{{ toggleBear }}" style="font-size:13px; color:{{ bearInk }}; background:transparent; border:0; padding:6px 2px; cursor:pointer">{{ bearLabel }}</button>
+    <span style="margin-left:auto; display:flex; gap:8px">
+      <button type="button" onClick="{{ toggleBull }}" aria-pressed="{{ bullOn }}" title="{{ bullTitle }}" style="display:flex; align-items:center; gap:7px; font-size:12.5px; color:{{ bullInk }}; background:{{ bullBg }}; border:1px solid {{ bullBorder }}; border-radius:999px; padding:5px 13px; cursor:pointer; white-space:nowrap">
+        <span aria-hidden="true" style="font-size:10px; line-height:1; color:{{ bullIcon }}">▲</span>Uptrend
+      </button>
+      <button type="button" onClick="{{ toggleBear }}" aria-pressed="{{ bearOn }}" title="{{ bearTitle }}" style="display:flex; align-items:center; gap:7px; font-size:12.5px; color:{{ bearInk }}; background:{{ bearBg }}; border:1px solid {{ bearBorder }}; border-radius:999px; padding:5px 13px; cursor:pointer; white-space:nowrap">
+        <span aria-hidden="true" style="font-size:10px; line-height:1; color:{{ bearIcon }}">▼</span>Downtrend
+      </button>
     </span>
   </div>
 
@@ -1554,10 +1558,26 @@ class Component extends DCLogic {
       ink: tabInk(s.sector === sec), underline: line(s.sector === sec),
       onClick: () => this.setState({ sector: sec, restLimit: 8 }),
     }));
-    vals.bullLabel = s.trendToggles.bull ? "Uptrend ✓" : "Uptrend";
-    vals.bearLabel = s.trendToggles.bear ? "Downtrend ✓" : "Downtrend";
-    vals.bullInk = s.trendToggles.bull ? "var(--color-text)" : "var(--color-neutral-600)";
-    vals.bearInk = s.trendToggles.bear ? "var(--color-text)" : "var(--color-neutral-600)";
+    /* Filter chips, not checkboxes: the arrow says which trend the chip is for
+       and is always there, while ON/OFF is carried by the chip's own fill and
+       border. A tick had to appear and disappear to say the same thing, which
+       left the two buttons looking identical apart from a glyph. */
+    const trendChip = (on, col) => ({
+      ink: on ? "var(--color-text)" : "var(--color-neutral-600)",
+      icon: on ? col : "var(--color-neutral-700)",
+      bg: on ? `color-mix(in srgb, ${col} 13%, transparent)` : "transparent",
+      border: on ? `color-mix(in srgb, ${col} 55%, transparent)` : "var(--color-neutral-800)",
+    });
+    const bullChip = trendChip(s.trendToggles.bull, ink.up);
+    const bearChip = trendChip(s.trendToggles.bear, ink.down);
+    vals.bullOn = s.trendToggles.bull ? "true" : "false";
+    vals.bearOn = s.trendToggles.bear ? "true" : "false";
+    vals.bullInk = bullChip.ink; vals.bullIcon = bullChip.icon;
+    vals.bullBg = bullChip.bg; vals.bullBorder = bullChip.border;
+    vals.bearInk = bearChip.ink; vals.bearIcon = bearChip.icon;
+    vals.bearBg = bearChip.bg; vals.bearBorder = bearChip.border;
+    vals.bullTitle = s.trendToggles.bull ? "Hide names in an uptrend" : "Show names in an uptrend";
+    vals.bearTitle = s.trendToggles.bear ? "Hide names in a downtrend" : "Show names in a downtrend";
     vals.toggleBull = () => this.setState(st => ({ trendToggles: { ...st.trendToggles, bull: !st.trendToggles.bull } }));
     vals.toggleBear = () => this.setState(st => ({ trendToggles: { ...st.trendToggles, bear: !st.trendToggles.bear } }));
 
