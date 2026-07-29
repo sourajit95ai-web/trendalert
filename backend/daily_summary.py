@@ -446,8 +446,10 @@ GREEN_TXT = "#46602A"   # up (type) — 6.0:1 on BG
 ORANGE_TXT = "#9E3F16"  # down (type) — 6.3:1 on BG
 TRACK = "#E1D7C7"       # 1-day move capsule
 RAIL = "#CFC5B4"        # 52-week rail
+ZERO_TICK = "#A2977F"   # the zero mark at the centre of the move track
 GREEN_CARD = "#EAF1D8"
 IDX_PILL = "#DCE7C4"    # the INDEXES chip on the green panel
+IDX_ROW = "#F2F7E7"     # banded index row inside that panel
 AMBER_CARD = "#FBEEDB"
 PINK_CARD = "#FBE4DB"
 GREEN_TINT = "#DEE9CC"  # best circle
@@ -534,6 +536,11 @@ class _Sheet:
         self.ax.plot([x0, x1], [y, y], color=color, lw=lw,
                      solid_capstyle="round", zorder=2)
 
+    def vline(self, x, y0, y1, color, lw=1.0):
+        if self.ax is None:
+            return
+        self.ax.plot([x, x], [y0, y1], color=color, lw=lw, zorder=3)
+
     def dot(self, x, y, r, fc, ec):
         if self.ax is None:
             return
@@ -548,28 +555,47 @@ class _Sheet:
 
 
 def _paint_tape(sh, top, rows, meta, left, right, band=None):
-    """One line per name: ticker, value chip, then its 52-week range.
+    """Two columns, one row per name: today's move | where the year leaves it.
 
-    Both halves of the row are the same height and read left to right — what
-    moved, and where that leaves it inside the year. The chip is sized by its
-    own text rather than by the move, so a long number never squeezes the
-    range; magnitude is what the number says. -> the block's height.
+    The row splits in half. LEFT is a capsule track with a zero tick at its
+    centre and the bar growing right (up) or left (down), on ONE symmetric
+    scale set by the day's largest absolute move, so the bars are comparable
+    down the column and against each other. RIGHT is that name's 52-week range
+    — low, rail, a dot at the last close, high — which is a different question
+    about the same name and so gets its own column rather than its own row.
+    A band spans both halves so the eye tracks straight across.
+    -> the block's height.
     """
+    mx = max((abs(m[1]) for m in rows), default=1) or 1
+    tx0, tx1 = left + 72, left + 252              # move track
+    zx = (tx0 + tx1) / 2                          # zero, dead centre
+    half = (tx1 - tx0) / 2 - 4
+    px = left + 316                               # % value, right-aligned
+    rx0, rx1 = left + 368, right - 56             # 52-week rail
+
     y = top
-    for m in rows:
+    for i, m in enumerate(rows):
         sym, v = m[0], m[1]
         mid = y + TAPE_H / 2
-        sh.box(left, y + 2, right - left, TAPE_H - 5, 8, band or ROW_BG)
+        if i % 2 == 0:
+            sh.box(left, y + 1, right - left, TAPE_H - 3, 8, band or ROW_BG)
         sh.txt(left + 14, mid, sym, 12.5, INK, SERIF, "bold")
-        sh.pill(left + 62, mid, f"{v:+.1f}%".replace("-", "−"), 9,
-                GREEN if v >= 0 else ORANGE, "#FFFFFF")
 
+        # ---- left: 1-day move ----
+        sh.box(tx0, mid - 6.5, tx1 - tx0, 13, 6.5, TRACK)
+        sh.vline(zx, mid - 7.5, mid + 7.5, ZERO_TICK, 1.2)
+        span = max(abs(v) / mx * half, 3.0)
+        sh.box(zx if v >= 0 else zx - span, mid - 6.5, span, 13, 6.5,
+               GREEN if v >= 0 else ORANGE)
+        sh.txt(px, mid, f"{v:+.1f}%".replace("-", "−"), 11.5,
+               GREEN_TXT if v >= 0 else ORANGE_TXT, SANS, "bold", ha="right")
+
+        # ---- right: 52-week range ----
         mm = meta.get(sym, {})
         lo, hi, c = mm.get("lo"), mm.get("hi"), mm.get("close")
         ph, pl = mm.get("pfh"), mm.get("pfl")
         near_hi = ph is not None and ph >= -2
         near_lo = pl is not None and pl <= 2
-        rx0, rx1 = left + 176, right - 62
         sh.line(rx0, rx1, mid, RAIL, 3.0)
         frac = (c - lo) / (hi - lo) if (hi and lo and hi > lo and c) else 0.5
         sh.dot(rx0 + min(max(frac, 0), 1) * (rx1 - rx0), mid, 4.2,
@@ -648,21 +674,19 @@ def _paint(sh, s):
             ry += SIG_H
         y += h + 24
 
-    # ---- movers: top N up, worst N down, each with its 52-week range ----
+    # ---- movers: two columns, 1-day move | 52-week range ----
     if movers:
-        sh.txt(PAD + 14, y, _spaced(f"TOP {len(s['up'])} · WORST {len(s['down'])}"),
-               9.5, RUST, SANS, "bold")
-        sh.txt(W - PAD - 14, y, _spaced("52-WEEK RANGE"), 9.5, RUST, SANS,
-               "bold", ha="right")
+        sh.txt(PAD + 14, y, _spaced("1-DAY MOVE"), 9.5, RUST, SANS, "bold")
+        sh.txt(PAD + 332, y, _spaced("52-WEEK RANGE"), 9.5, RUST, SANS, "bold")
         y += 18
         y += _paint_tape(sh, y, movers, meta, PAD, W - PAD) + 16
 
-    # ---- indexes, same row format, on their own panel ----
+    # ---- indexes, same two columns, on their own panel ----
     if idx:
         h = 40 + len(idx) * TAPE_H + 8
         sh.box(PAD, y, COL, h, 14, GREEN_CARD)
         sh.pill(PAD + 30, y + 22, _spaced("INDEXES"), 8.5, IDX_PILL, INK)
-        _paint_tape(sh, y + 38, idx, meta, PAD + 12, W - PAD - 12)
+        _paint_tape(sh, y + 38, idx, meta, PAD, W - PAD, band=IDX_ROW)
         y += h + 18
 
     sh.txt(PAD, y + 8, "Dot marks the last price inside the 52-week range. "
@@ -675,10 +699,10 @@ def render_chart_png(s):
 
     Masthead and session badge, a spelled-out headline over the standfirst,
     three stat circles (best / worst / breadth), one card per signal group with
-    a verdict chip on each row, then every mover and index as a 1-day move
-    capsule above its 52-week rail — the dot glows green near the 52w high and
-    orange near the low. Height is computed from the content by painting the
-    layout once with a null canvas.
+    a verdict chip on each row, then the movers and the index panel as two
+    columns — today's move against a centred zero on the left, the 52-week
+    range on the right, one row per name. Height is computed from the content
+    by painting the layout once with a null canvas.
     """
     import matplotlib
     matplotlib.use("Agg")                   # headless; imported lazily so the pure
