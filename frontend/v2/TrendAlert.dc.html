@@ -28,6 +28,11 @@
   .ta-scroll::-webkit-scrollbar { width: 9px; height: 9px; }
   .ta-scroll::-webkit-scrollbar-thumb { background: var(--ta-scrollbar); border-radius: 5px; }
   .ta-scroll::-webkit-scrollbar-track { background: transparent; }
+  /* A row that scrolls must never squeeze its own items instead: these labels
+     are nowrap, so a shrunk button spills its text over the next one rather
+     than clipping. Belt and braces against any engine that does not give a
+     flex item its content-based minimum. */
+  .ta-scroll > button { flex: 0 0 auto; }
   </style>
 <template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#161826"/><g fill="none" stroke="#9184d9" stroke-width="3.2" stroke-linecap="round"><path d="M30 66 L42 54 L52 60 L70 36"/></g><circle cx="70" cy="36" r="3.4" fill="#9184d9"/><path d="M30 74 H70" stroke="#3f424d" stroke-width="2" stroke-linecap="round"/></svg></template>
 <style>
@@ -53,6 +58,14 @@
        above the 24px WCAG 2.5.8 floor at 36. */
     .ta-scroll > button, .ta-summary-row {
       min-height: 36px;
+    }
+    /* …and they must opt out of the min-width floor above, not just the
+       height. A flex item's automatic minimum is min-width:auto, so setting
+       44px REPLACES the content-based minimum: the index tape's buttons need
+       ~128px, were allowed to shrink to 44, and their nowrap labels spilled on
+       top of each other. Their real hit area is the label, ~120px wide. */
+    .ta-scroll > button {
+      min-width: auto;
     }
   }
 </style>
