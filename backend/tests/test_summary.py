@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from daily_summary import (compute_summary, summary_text, standfirst,
                            edges_line, _badge,
                            _crosses, _cross_scope, _callout_groups, _words,
-                           _long_date, session_label, MAX_ROWS)
+                           _long_date, session_label, MAX_ROWS, DASHBOARD_URL)
 
 
 def rec(sym, sec, chg, close=100.0, hi=None, lo=None):
@@ -49,6 +49,16 @@ def test_index_box_pins_and_picks():
     assert "QQQ" not in idx[3:]                         # pinned excluded from pick
 
 
+def test_nasdaq_stat_circle_reads_off_the_pinned_index():
+    """QQQ rides the poster's stat circles as NASDAQ, not just the index panel."""
+    s = compute_summary(RECORDS, CORE, "L")
+    assert s["nasdaq"] == ("QQQ", -1.9, "")        # (sym, change_pct, 52w badge)
+    assert s["nasdaq"] in s["idx"]                 # same number the panel draws
+    # no QQQ quote -> the circle falls back to a dash rather than breaking
+    recs = [r for r in RECORDS if r["symbol"] != "QQQ"]
+    assert compute_summary(recs, CORE, "L")["nasdaq"] is None
+
+
 def test_breadth_over_core_holdings():
     s = compute_summary(RECORDS, CORE, "L")
     # Core: AAA/BBB/CCC/DDD up (4), EEE/FFF/GGG down (3)
@@ -70,14 +80,15 @@ def test_too_few_holdings_returns_none():
     assert compute_summary([rec("AAA", "Technology", 1)], ["AAA"], "L") is None
 
 
-def test_summary_text_drops_the_chart_transcript():
-    """Caption carries signals only — movers/index/52w live in the PNG."""
-    txt = summary_text(compute_summary(RECORDS, CORE, "Jul 23", session="MARKET CLOSE"))
-    for gone in ("TOP UP", "TOP DOWN", "INDEX", "52w"):
-        assert gone not in txt
-    assert txt.startswith("TrendAlert Daily · Market Close")
-    # nothing actionable in this fixture -> says so rather than going silent
-    assert "No action, re-entry or cross signals today." in txt
+def test_summary_text_is_only_the_dashboard_link():
+    """The poster carries the reading; the caption is just the way in."""
+    s = compute_summary(RECORDS, CORE, "Jul 23", session="MARKET CLOSE")
+    assert summary_text(s) == DASHBOARD_URL
+    # signal-laden days say no more than quiet ones — the image says it instead
+    loud = compute_summary(RECORDS, CORE, "Jul 23", session="MARKET CLOSE",
+                           alerts=[{"symbol": "AAA", "dir": "bull", "type": "x"}])
+    assert summary_text(loud) == DASHBOARD_URL
+    assert summary_text() == DASHBOARD_URL          # s is optional and ignored
 
 
 def test_r52_context_and_caption_range():
@@ -115,9 +126,9 @@ def test_action_and_reentry_selection():
     # reason text carries the rationale
     assert "from 52w high" in dict(s["action"])["HIGH"]
     assert "off low" in dict(s["reentry"])["LOWZ"]
-    txt = summary_text(s)
-    assert "⚡ ACTION (2)" in txt and "◎ RE-ENTRY (1)" in txt
-    assert "HIGH" in txt and "LOWZ" in txt
+    # the poster draws one card per group, with the true total in its header
+    assert [(tag, total) for tag, _r, _c, total in _callout_groups(s)] \
+        == [("⚡ ACTION", 2), ("◎ RE-ENTRY", 1)]
 
 
 # ----------------------------------------------------------------------
@@ -156,16 +167,16 @@ def test_crosses_split_by_direction():
     assert g and not d
 
 
-def test_cross_alerts_reach_summary_and_caption():
+def test_cross_alerts_reach_summary_and_poster():
     alerts = [{"symbol": "AAA", "dir": "bull",
                "type": "EMA 50 crossed above EMA 150", "detail": "Golden cross"}]
     s = compute_summary(RECORDS, CORE, "Jul 24", alerts=alerts, session="MARKET CLOSE")
     assert s["golden"] == [("AAA", "EMA 50 crossed above EMA 150")]
     assert s["death"] == []
-    txt = summary_text(s)
-    assert "▲ GOLDEN CROSS (1)" in txt
-    assert "AAA" in txt and "EMA 50 crossed above EMA 150" in txt
-    assert "DEATH CROSS" not in txt          # empty groups are omitted entirely
+    groups = _callout_groups(s)
+    assert [(tag, total) for tag, _r, _c, total in groups] == [("▲ GOLDEN CROSS", 1)]
+    assert groups[0][1] == [("AAA", "EMA 50 crossed above EMA 150")]
+    # empty groups are omitted entirely, so no blank DEATH CROSS card is drawn
 
 
 def test_cross_scope_is_core_plus_the_index_tape():
@@ -186,9 +197,6 @@ def test_crosses_are_scoped_but_keep_indexes():
     s = compute_summary(RECORDS, CORE, "L", alerts=alerts)
     assert s["golden"] == [("AAA", "EMA 50 crossed above EMA 150")]   # HHH dropped
     assert s["death"] == [("SPY", "EMA 150 crossed below EMA 50")]    # index KEPT
-    txt = summary_text(s)
-    assert "▼ DEATH CROSS (1)" in txt and "SPY" in txt
-    assert "HHH" not in txt
     # case-insensitive; BTC/USD is labelled BTC to match the chart
     assert _crosses([{"symbol": "aaa", "dir": "bull", "type": "x"}], ["AAA"])[0]
     assert _crosses([{"symbol": "BTC/USD", "dir": "bull", "type": "x"}],
@@ -198,7 +206,7 @@ def test_crosses_are_scoped_but_keep_indexes():
     # a cross on an out-of-scope name must not leave an empty group behind
     s2 = compute_summary(RECORDS, CORE, "L",
                          alerts=[{"symbol": "HHH", "dir": "bull", "type": "x"}])
-    assert s2["golden"] == [] and "GOLDEN CROSS" not in summary_text(s2)
+    assert s2["golden"] == [] and _callout_groups(s2) == []
 
 
 def test_callout_groups_one_tag_each_and_caps_long_groups():
@@ -212,10 +220,6 @@ def test_callout_groups_one_tag_each_and_caps_long_groups():
     assert total == MAX_ROWS + 3                     # header reports the true total
     assert len(shown) == MAX_ROWS + 1                # capped rows + the overflow line
     assert shown[-1] == ("", "+3 more")
-    # the caption reads off the same grouping, so the two cannot drift
-    txt = summary_text(s)
-    assert txt.count("◎ RE-ENTRY") == 1
-    assert "+3 more" in txt
 
 
 # ----------------------------------------------------------------------
@@ -250,8 +254,6 @@ def test_standfirst_reads_the_days_worst_and_the_re_entry_bench():
     # the same reason line no longer carries the verdict — that is a chip now
     assert dict(s["reentry"])["BASE"] == "10.0% off low · base forming 3/5"
     assert s["status"]["BASE"] == "WAIT"
-    # …and the caption still says it, so a text-only reader loses nothing
-    assert "[WAIT]" in summary_text(s)
 
 
 def test_standfirst_session_wording_and_cross_clause():
@@ -279,12 +281,11 @@ def test_edges_line_replaces_the_per_row_52w_rails():
     # three or more reads as a list
     assert edges_line({"up": [(c, 1.0, "lo") for c in "ABC"]}).startswith(
         "A, B and C sit near 52-week lows")
-    # and the caption carries it, so a text-only reader still gets the context
+    # and compute_summary carries it on the summary the poster paints from
     s2 = compute_summary(RECORDS + [rec("EDGE", "Technology", 9.9, close=100,
                                         hi=101, lo=40)],
                          CORE + ["EDGE"], "L")
     assert s2["edges"] == "EDGE near its high"
-    assert "At the edges: EDGE near its high" in summary_text(s2)
 
 
 def test_force_flag_bypasses_the_trading_day_gate():

@@ -39,6 +39,8 @@ GOLD_COL = ("#146B4A", "#4FB286", "#E7F5EE")  # golden cross (green)
 DEATH_COL = ("#A32B27", "#E8827E", "#FDECEB")  # death cross (red)
 MAX_ROWS = 6                                  # per panel, so the PNG can't run away
 TOP_N = 3                                     # movers shown per side: TOP 3 · WORST 3
+# the whole caption — the poster carries the reading, this carries the way in
+DASHBOARD_URL = "https://storage.googleapis.com/trendalert-data-rattle/dashboard.html"
 
 
 # ----------------------------------------------------------------------
@@ -316,6 +318,9 @@ def compute_summary(records, core_syms, label, core_name="Core",
         "breadth": f"{up_n} up · {down_n} down"
                    + (f" · {ext} at 52-week extremes" if ext else ""),
     }
+    # the market's own read, next to the book's: QQQ rides the poster's stat
+    # circles as NASDAQ, not just as another row in the index panel
+    s["nasdaq"] = next((m for m in s["idx"] if m[0] == "QQQ"), None)
     s["headline"] = f"{_cap(_words(up_n))} up, {_words(down_n)} down."
     s["standfirst"] = standfirst(s)
     s["edges"] = edges_line(s)
@@ -394,37 +399,22 @@ def edges_line(s):
     return " · ".join(bits)
 
 
-def summary_text(s):
-    """Telegram caption + email text fallback.
+def summary_text(s=None):
+    """Telegram caption + email text: the dashboard link, nothing else.
 
-    Deliberately NOT a transcript of the chart: the movers / index / 52-week
-    numbers are already legible in the PNG, so the text carries only what needs
-    reading and reasoning about — the grouped action, re-entry and cross
-    signals, under one header per group.
+    Everything worth reading — headline, standfirst, the signal cards and both
+    tapes — is already in the poster, and the text under it was a second copy
+    of the same thing. So the caption is now just the way through to the live
+    dashboard. `s` is accepted (and ignored) so the call sites stay unchanged.
     """
-    head = (s.get("session") or "").title()
-    st = s.get("status") or {}
-    lines = [f"TrendAlert Daily · {head}" if head else "TrendAlert Daily",
-             f"{s['core_name']} · {s['label']}"]
-    if s.get("standfirst"):
-        lines += ["", s["standfirst"]]
-    if s.get("edges"):
-        lines += ["", f"At the edges: {s['edges']}"]
-    groups = _callout_groups(s)
-    for tag, rows, _col, total in groups:
-        lines += ["", f"{tag} ({total})"]
-        lines += [f"  {sym:<5} {why}" + (f"  [{st[sym]}]" if st.get(sym) else "")
-                  if sym else f"  {why}" for sym, why in rows]
-    if not groups:
-        lines += ["", "No action, re-entry or cross signals today."]
-    return "\n".join(lines)
+    return DASHBOARD_URL
 
 
 # ----------------------------------------------------------------------
 # render (matplotlib -> PNG bytes)
 # ----------------------------------------------------------------------
 # The alert is laid out as a poster, not a chart: a headline that reads as a
-# sentence, three stat circles, the signal cards, then the movers and the index
+# sentence, four stat circles, the signal cards, then the movers and the index
 # panel as one-line rows carrying a value chip and a 52-week range. Everything
 # is drawn on a single axis in LAYOUT UNITS where 1 unit == 1 point == 1 px at 72 dpi, so
 # the numbers below are the pixel geometry of the design at its 580-wide
@@ -636,22 +626,33 @@ def _paint(sh, s):
            10.5, INK_FAINT)
     y += 30
 
-    # ---- three stat circles: best, worst, breadth ----
+    # ---- four stat circles: best, worst, Nasdaq, breadth ----
+    # the book's own best and worst, then the tape it is being judged against,
+    # then breadth. Nasdaq takes its tint from its sign, so the row reads as
+    # three verdicts and a count without anyone having to read the numbers.
     best = movers[0] if movers else None
     worst = movers[-1] if movers else None
+    nas = s.get("nasdaq")
+    nas_up = bool(nas) and nas[1] >= 0
     for cx, cy, r, fc, val, lab, vc in (
-            (PAD + 79, y + 78, 78, GREEN_TINT,
+            (PAD + 70, y + 72, 70, GREEN_TINT,
              f"{best[1]:+.1f}%" if best else "—",
              f"{best[0]} · BEST" if best else "BEST", "#3E4A22"),
-            (PAD + 243, y + 101, 86, PINK_TINT,
+            (PAD + 216, y + 96, 78, PINK_TINT,
              f"{worst[1]:+.1f}%" if worst else "—",
              f"{worst[0]} · WORST" if worst else "WORST", "#8E2F14"),
-            (PAD + 390, y + 71, 57, GREY_TINT,
+            (PAD + 348, y + 66, 54,
+             GREY_TINT if not nas else GREEN_TINT if nas_up else PINK_TINT,
+             f"{nas[1]:+.1f}%" if nas else "—", "NASDAQ",
+             INK if not nas else "#3E4A22" if nas_up else "#8E2F14"),
+            (PAD + 464, y + 104, 50, GREY_TINT,
              f"{s.get('up_n', 0)} / {s.get('down_n', 0)}", "UP / DOWN", INK)):
+        big = r >= 70
         sh.circle(cx, cy, r, fc)
-        sh.txt(cx, cy - 6, val.replace("-", "−"), 23, vc, SERIF, "bold",
-               ha="center")
-        sh.txt(cx, cy + 18, _spaced(lab), 7.5, vc, SANS, "bold", ha="center")
+        sh.txt(cx, cy - (6 if big else 4), val.replace("-", "−"),
+               23 if big else 18, vc, SERIF, "bold", ha="center")
+        sh.txt(cx, cy + (18 if big else 14), _spaced(lab), 7.5, vc, SANS,
+               "bold", ha="center")
     y += CIRCLES_H + 30
 
     # ---- signal cards (action / re-entry / crosses) ----
@@ -698,7 +699,7 @@ def render_chart_png(s):
     """The daily summary as a single-column poster PNG.
 
     Masthead and session badge, a spelled-out headline over the standfirst,
-    three stat circles (best / worst / breadth), one card per signal group with
+    four stat circles (best / worst / Nasdaq / breadth), one card per signal with
     a verdict chip on each row, then the movers and the index panel as two
     columns — today's move against a centred zero on the left, the 52-week
     range on the right, one row per name. Height is computed from the content
