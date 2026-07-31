@@ -165,7 +165,8 @@ def run_morning_brief(bucket, symbols, sectors, headers):
 
         status = fan_out(cfg, (
             ("telegram", lambda: send_telegram_text(body)),
-            ("email", lambda: send_email_text(f"TrendAlert Morning Brief {today}", body)),
+            ("email", lambda: send_email_text(f"TrendAlert Morning Brief {today}",
+                                              body, cfg)),
         ))
         return {"ok": True, "brief": status, "symbols": len(snaps)}
     except Exception as e:

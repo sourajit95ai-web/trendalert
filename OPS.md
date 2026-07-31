@@ -169,6 +169,27 @@ the trading day fires them:
 | `brief` | Morning brief | `trendalert-morning-brief` | 9:50 ET |
 | `summary_close` | Market-close summary chart | `trendalert-summary-close` | 16:50 ET |
 
+**The text under the poster (Settings > Alerts > Text summary).** The daily
+summary's caption is the dashboard link and nothing else. Switching this on
+writes `captionText: true` into `settings.json` and puts the written signals
+(action / re-entry / crosses, the same grouping the poster cards draw) above
+the link, in the Telegram caption and the email body alike. Unlike the alert
+switches this one fails CLOSED — `caption_text_on` treats a missing key as
+off, because the poster already says it. Telegram truncates a caption at 1024
+characters; long signal days are cut there, the image is unaffected.
+
+**Extra email recipients (Settings > Alerts > Also email).** `alertEmails` in
+`settings.json` — up to 5 addresses, added to the env-configured `ALERT_TO`
+for every emailed alert (summary, morning brief, EOD). Telegram is unaffected.
+The list is additive and the owner's own address always stays in, so a bad or
+emptied list can only fail to add someone. Addresses are validated and capped
+in the browser AND again in the notes function (`clean_emails`) — that
+endpoint is unauthenticated, so anything stored has to be safe to hand to
+smtplib. NOTE the consequence: anyone who can reach the notes function can
+subscribe an address to these alerts, the same exposure the alert thresholds
+already have. Never hand out the live dashboard URL for review — use
+`python frontend/make_review_copy.py`.
+
 **Retired 2026-07-28: the bloodbath alarm and the end-of-day rule signals.**
 They have no switch and never send — `RETIRED_ALERTS` in `alerts_email.py`
 makes `alert_on` refuse them whatever `settings.json` holds, so they cannot be

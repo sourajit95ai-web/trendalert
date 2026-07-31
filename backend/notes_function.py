@@ -163,6 +163,18 @@ def notes(request):
                 known = {k: bool(types[k]) for k in ALERT_KEYS if k in types}
                 if known:
                     clean["alertTypes"] = known
+            # the written signals under the poster — absent means off, so this
+            # only ever stores the switch when it is deliberately turned on
+            if cfg.get("captionText") is True:
+                clean["captionText"] = True
+            # extra summary recipients. Validated and capped HERE as well as in
+            # the browser: this endpoint is unauthenticated, so the stored list
+            # has to be safe to hand straight to smtplib.
+            if "alertEmails" in cfg:
+                from alerts_email import clean_emails
+                addrs = clean_emails(cfg.get("alertEmails"))
+                if addrs:
+                    clean["alertEmails"] = addrs
             w = cfg.get("weights")
             if isinstance(w, dict):
                 try:

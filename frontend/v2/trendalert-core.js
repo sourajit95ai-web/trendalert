@@ -99,9 +99,32 @@
   /* trendFast/trendSlow default to EMA 50 / EMA 150 — the SAME pair main.py
      calls a golden or death cross. One trend definition across the product:
      what the table calls an uptrend is what the alerts call a golden cross. */
+  /* captionText: the summary alert's written signals under the poster. OFF by
+     default — the poster already says it, so the text is opt-in (and the
+     backend's caption_text_on agrees: absent means off, unlike the alert
+     switches, which fail open). alertEmails: extra recipients on top of the
+     configured inbox, capped and re-validated server-side. */
+  const MAX_EXTRA_EMAILS = 5;
+  TA.MAX_EXTRA_EMAILS = MAX_EXTRA_EMAILS;
+  /* Mirrors clean_emails in alerts_email.py — deliberately loose, its job is
+     to refuse anything that could read as a second recipient or header. */
+  TA.cleanEmails = (v) => {
+    const out = [];
+    const list = Array.isArray(v) ? v : String(v == null ? "" : v).split(/[,\s]+/);
+    for (const raw of list) {
+      const a = String(raw == null ? "" : raw).trim().toLowerCase();
+      const at = a.lastIndexOf("@");
+      const dom = at > 0 ? a.slice(at + 1) : "";
+      if (a && a.length <= 254 && (a.match(/@/g) || []).length === 1 && dom.includes(".")
+        && !dom.startsWith(".") && !/[\s,;<>"]/.test(a) && !out.includes(a)) out.push(a);
+      if (out.length >= MAX_EXTRA_EMAILS) break;
+    }
+    return out;
+  };
   const DEFAULT_SETTINGS = {
     gainPct: 20, highZonePct: 2, lowZonePct: 10, horizon: "long", reEntryMode: "base", view: "cards",
     trendFast: 50, trendSlow: 150, alertChannel: "both", alertTypes: ALL_ALERTS(),
+    captionText: false, alertEmails: [],
     sv: SETTINGS_VERSION,
     weights: { trend: 30, momentum: 20, participation: 20, relStrength: 20, risk: 10 }
   };

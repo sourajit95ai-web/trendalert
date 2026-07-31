@@ -8,8 +8,10 @@ channel off must not stop the other one from sending.
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from alerts_email import (ALERT_KEYS, ALERT_KINDS, RETIRED_ALERTS,
-                          alert_channel, alert_on, channel_on, fan_out)
+from alerts_email import (ALERT_KEYS, ALERT_KINDS, MAX_EXTRA_EMAILS,
+                          RETIRED_ALERTS, alert_channel, alert_on,
+                          caption_text_on, channel_on, clean_emails,
+                          email_recipients, fan_out)
 
 
 def test_default_is_both_for_missing_or_junk():
@@ -97,6 +99,61 @@ def test_summary_run_picks_its_switch_from_the_clock():
         assert ds.run_daily_summary("b")["summary"] == "error(no-data.json)"
     finally:
         ds._eastern_now, ds.is_trading_day, ds._read_json = orig
+
+
+# ----------------------------------------------------------------------
+# Settings > Alerts: the text under the poster, and who else gets the email
+# ----------------------------------------------------------------------
+def test_caption_text_is_off_until_it_is_asked_for():
+    """The inverse of alert_on's fail-open rule, and deliberately so."""
+    for cfg in ({}, None, "not-a-dict", {"captionText": False},
+                {"captionText": "yes"}, {"captionText": 1}):
+        assert caption_text_on(cfg) is False
+    assert caption_text_on({"captionText": True}) is True
+
+
+def test_caption_carries_the_signals_only_when_switched_on():
+    from daily_summary import summary_text, signal_text, DASHBOARD_URL
+    s = {"core_name": "Core", "label": "L", "session": "MARKET CLOSE",
+         "action": [("AAA", "1.0% from 52w high")], "status": {"AAA": "AT HIGH"}}
+    assert summary_text(s) == DASHBOARD_URL                 # default
+    verbose = summary_text(s, True)
+    assert verbose.startswith("TrendAlert Daily · Market Close")
+    assert "⚡ ACTION (1)" in verbose and "[AT HIGH]" in verbose
+    assert verbose.endswith(DASHBOARD_URL)                  # link still rides along
+    assert signal_text(s) in verbose
+    assert summary_text(None, True) == DASHBOARD_URL        # nothing to say -> link
+
+
+def test_extra_email_addresses_are_cleaned_and_capped():
+    assert clean_emails(["A@B.com", "a@b.com", " c@d.co "]) == ["a@b.com", "c@d.co"]
+    # anything that could smuggle a second recipient or header is dropped
+    for bad in ("nope", "@b.com", "a@b", "a@.com", "a b@c.com", "a@b.com, e@f.com",
+                "a@b.com\nBcc: x@y.com", "a@b@c.com", "<a@b.com>", "", "  "):
+        assert clean_emails([bad]) == [], bad
+    assert clean_emails("a@b.com") == []            # a string is not a list
+    assert clean_emails([None, 5, {}]) == []
+    assert len(clean_emails([f"a{i}@b.com" for i in range(20)])) == MAX_EXTRA_EMAILS
+
+
+def test_recipients_are_the_owner_plus_the_settings_list():
+    orig = dict(os.environ)
+    os.environ["SMTP_USER"] = "me@example.com"
+    os.environ["ALERT_TO"] = "me@example.com"
+    try:
+        assert email_recipients(None) == ["me@example.com"]
+        assert email_recipients({}) == ["me@example.com"]
+        # additive: a junk or empty list can only fail to add, never cut the owner
+        assert email_recipients({"alertEmails": "junk"}) == ["me@example.com"]
+        assert email_recipients({"alertEmails": []}) == ["me@example.com"]
+        assert email_recipients({"alertEmails": ["you@example.com"]}) \
+            == ["me@example.com", "you@example.com"]
+        # and the owner is never mailed twice
+        assert email_recipients({"alertEmails": ["ME@example.com"]}) \
+            == ["me@example.com"]
+    finally:
+        os.environ.clear()
+        os.environ.update(orig)
 
 
 def test_one_channel_failing_does_not_stop_the_other():

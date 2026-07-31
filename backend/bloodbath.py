@@ -235,7 +235,7 @@ def run_bloodbath_check(bucket, symbols, sectors, headers):
             ("email", lambda: send_email_text(
                 f"🩸 TrendAlert {a['tier']} {today} — "
                 f"SPY {quotes['SPY']['pct']:+.1f}% QQQ {quotes['QQQ']['pct']:+.1f}%",
-                body)),
+                body, cfg)),
         ))
         return {"ok": True, "bloodbath": status, "tier": a["tier"]}
     except Exception as e:

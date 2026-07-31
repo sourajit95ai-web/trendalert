@@ -18,7 +18,7 @@ inlined (alerts_email.send_telegram_photo / send_email_image). Never raises.
 
 import io
 
-from alerts_email import (_read_json, alert_on, fan_out,
+from alerts_email import (_read_json, alert_on, caption_text_on, fan_out,
                           send_telegram_photo, send_email_image)
 from trading_calendar import is_trading_day, _eastern_now
 
@@ -399,14 +399,43 @@ def edges_line(s):
     return " · ".join(bits)
 
 
-def summary_text(s=None):
-    """Telegram caption + email text: the dashboard link, nothing else.
+def signal_text(s):
+    """The written read: the grouped action, re-entry and cross signals.
+
+    Deliberately NOT a transcript of the poster: the movers / index / 52-week
+    numbers are already legible in the PNG, so this carries only what needs
+    reading and reasoning about, under one header per group. Off by default —
+    see Settings > Alerts, and summary_text below.
+    """
+    head = (s.get("session") or "").title()
+    st = s.get("status") or {}
+    lines = [f"TrendAlert Daily · {head}" if head else "TrendAlert Daily",
+             f"{s['core_name']} · {s['label']}"]
+    if s.get("standfirst"):
+        lines += ["", s["standfirst"]]
+    if s.get("edges"):
+        lines += ["", f"At the edges: {s['edges']}"]
+    groups = _callout_groups(s)
+    for tag, rows, _col, total in groups:
+        lines += ["", f"{tag} ({total})"]
+        lines += [f"  {sym:<5} {why}" + (f"  [{st[sym]}]" if st.get(sym) else "")
+                  if sym else f"  {why}" for sym, why in rows]
+    if not groups:
+        lines += ["", "No action, re-entry or cross signals today."]
+    return "\n".join(lines)
+
+
+def summary_text(s=None, verbose=False):
+    """Telegram caption + email text: the dashboard link, and by default only that.
 
     Everything worth reading — headline, standfirst, the signal cards and both
     tapes — is already in the poster, and the text under it was a second copy
-    of the same thing. So the caption is now just the way through to the live
-    dashboard. `s` is accepted (and ignored) so the call sites stay unchanged.
+    of the same thing. `verbose` (Settings > Alerts -> settings.json
+    "captionText") puts the written signals back above the link for anyone who
+    wants to read rather than look.
     """
+    if verbose and s:
+        return f"{signal_text(s)}\n\n{DASHBOARD_URL}"
     return DASHBOARD_URL
 
 
@@ -777,12 +806,13 @@ def run_daily_summary(bucket, force=False):
             return {"ok": True, "summary": "skipped(too-few-core-holdings)"}
 
         png = render_chart_png(s)
-        caption = summary_text(s)
+        caption = summary_text(s, caption_text_on(cfg))
         subject = f"TrendAlert Daily {raw or ''} — {session.title()}".strip()
 
         status = fan_out(cfg, (
             ("telegram", lambda: send_telegram_photo(png, caption)),
-            ("email", lambda: send_email_image(subject, caption, png)),
+            ("email", lambda: send_email_image(subject, caption, png,
+                                               settings=cfg)),
         ))
         return {"ok": True, "summary": status,
                 "movers": len(s["up"]) + len(s["down"])}

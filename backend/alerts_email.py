@@ -38,6 +38,7 @@ DEFAULT_GAIN_PCT = 20.0
 DEFAULT_HIGH_ZONE_PCT = 2.0
 CHANNELS = ("telegram", "email", "both")
 DEFAULT_CHANNEL = "both"
+MAX_EXTRA_EMAILS = 5     # Settings > Alerts extra recipients, also enforced server-side
 
 # Every alert this project sends, in the order the trading day fires them.
 # (key, dashboard label, when it runs) — the dashboard renders this list as the
@@ -67,6 +68,55 @@ def alert_channel(settings):
     """
     v = (settings or {}).get("alertChannel") if isinstance(settings, dict) else None
     return v if v in CHANNELS else DEFAULT_CHANNEL
+
+
+def clean_emails(values):
+    """-> at most MAX_EXTRA_EMAILS sane, lowercased, de-duplicated addresses.
+
+    Shared by the notes function (which stores them) and the senders (which
+    trust nothing they read back), so an address that survived an older or
+    laxer write still can't reach smtplib unchecked.
+    """
+    out = []
+    for v in (values if isinstance(values, (list, tuple)) else []):
+        a = str(v).strip().lower() if isinstance(v, str) else ""
+        # deliberately loose — one @, a dot in the domain, nothing that could
+        # be read as a second header line or a second recipient
+        if (a and len(a) <= 254 and a.count("@") == 1 and not a.startswith("@")
+                and "." in a.rsplit("@", 1)[1] and not a.rsplit("@", 1)[1].startswith(".")
+                and not any(c in a for c in " ,;\r\n\t<>\"")
+                and a not in out):
+            out.append(a)
+        if len(out) >= MAX_EXTRA_EMAILS:
+            break
+    return out
+
+
+def email_recipients(settings=None):
+    """Who this alert goes to: the configured inbox plus Settings > Alerts.
+
+    ALERT_TO (env) is the owner's own address and is always included — the
+    extra list is additive, so a bad or emptied setting can only ever fail to
+    add someone, never cut the user out of their own alerts.
+    """
+    user = os.environ.get("SMTP_USER", "")
+    to = [a.strip() for a in os.environ.get("ALERT_TO", user).split(",") if a.strip()]
+    extra = clean_emails((settings or {}).get("alertEmails")
+                         if isinstance(settings, dict) else None)
+    seen = {a.lower() for a in to}
+    return to + [a for a in extra if a not in seen]
+
+
+def caption_text_on(settings):
+    """Does the summary alert carry its text under the poster? Default NO.
+
+    The inverse of alert_on's fail-open rule, and on purpose: the text is a
+    transcript of a picture the reader already has, so a settings.json that
+    has never heard of the switch should stay quiet rather than start talking.
+    """
+    if not isinstance(settings, dict):
+        return False
+    return settings.get("captionText") is True
 
 
 def alert_on(settings, kind):
@@ -192,15 +242,19 @@ def transition_filter(events, cross_alerts, state):
 # ----------------------------------------------------------------------
 # send
 # ----------------------------------------------------------------------
-def send_email_text(subject, body):
-    """Generic email sender (EOD alerts + morning brief share the config)."""
+def send_email_text(subject, body, settings=None):
+    """Generic email sender (EOD alerts + morning brief share the config).
+
+    `settings` is the published settings.json — it only supplies the extra
+    recipients from Settings > Alerts; delivery itself is env-configured.
+    """
     user = os.environ.get("SMTP_USER", "")
     if not user:
         return "email:disabled"
     host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
     port = int(os.environ.get("SMTP_PORT", "587"))
     pw = os.environ.get("SMTP_PASS", "")
-    to = [a.strip() for a in os.environ.get("ALERT_TO", user).split(",") if a.strip()]
+    to = email_recipients(settings)
 
     msg = MIMEText(body, "plain", "utf-8")
     msg["Subject"] = subject
@@ -255,7 +309,18 @@ def send_telegram_photo(png_bytes, caption=""):
     return f"tg-photo:sent({sent}/{len(chat_ids)})" if not failed else f"tg-photo:sent({sent}/{len(chat_ids)},failed={failed})"
 
 
-def send_email_image(subject, body_text, png_bytes, filename="summary.png"):
+def _linkify(escaped):
+    """Turn bare URLs in already-escaped text into anchors.
+
+    The caption is mostly a dashboard link now, and a link nobody can click is
+    just a long word. Runs AFTER html.escape, so the input is trusted markup.
+    """
+    import re
+    return re.sub(r"(https?://[^\s<>\"]+)", r'<a href="\1">\1</a>', escaped)
+
+
+def send_email_image(subject, body_text, png_bytes, filename="summary.png",
+                     settings=None):
     """Email with the chart inlined via cid + a plain-text alternative."""
     user = os.environ.get("SMTP_USER", "")
     if not user:
@@ -263,7 +328,7 @@ def send_email_image(subject, body_text, png_bytes, filename="summary.png"):
     host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
     port = int(os.environ.get("SMTP_PORT", "587"))
     pw = os.environ.get("SMTP_PASS", "")
-    to = [a.strip() for a in os.environ.get("ALERT_TO", user).split(",") if a.strip()]
+    to = email_recipients(settings)
 
     from email.mime.multipart import MIMEMultipart
     from email.mime.image import MIMEImage
@@ -279,7 +344,7 @@ def send_email_image(subject, body_text, png_bytes, filename="summary.png"):
             '<img src="cid:chart" alt="TrendAlert daily summary" '
             'style="width:100%;border-radius:10px;border:1px solid #eee">'
             '<pre style="font-size:12px;line-height:1.5;color:#666;white-space:pre-wrap">'
-            + escape(body_text) + '</pre></div>')
+            + _linkify(escape(body_text)) + '</pre></div>')
     alt.attach(MIMEText(html, "html", "utf-8"))
     root.attach(alt)
     img = MIMEImage(png_bytes, "png")
@@ -300,9 +365,9 @@ def _eod_body(lines, asof):
             "Execution reference: next session's open.\n")
 
 
-def _send(lines, asof):
+def _send(lines, asof, settings=None):
     subject = f"TrendAlert EOD {asof}: {len(lines)} signal{'s' if len(lines) != 1 else ''}"
-    status = send_email_text(subject, _eod_body(lines, asof))
+    status = send_email_text(subject, _eod_body(lines, asof), settings)
     return f"email:sent({len(lines)})" if status == "email:sent" else status
 
 
@@ -329,6 +394,6 @@ def send_eod_alerts(records, cross_alerts, bucket, asof, trading_day=True):
         if not lines:
             return "alerts:none"
         return fan_out(settings, (("telegram", lambda: _send_telegram(lines, asof)),
-                                  ("email", lambda: _send(lines, asof))))
+                                  ("email", lambda: _send(lines, asof, settings))))
     except Exception as e:
         return f"alerts:error({type(e).__name__})"

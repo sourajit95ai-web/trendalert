@@ -823,9 +823,32 @@ const __ds_scope = {};
   /* trendFast/trendSlow default to EMA 50 / EMA 150 — the SAME pair main.py
      calls a golden or death cross. One trend definition across the product:
      what the table calls an uptrend is what the alerts call a golden cross. */
+  /* captionText: the summary alert's written signals under the poster. OFF by
+     default — the poster already says it, so the text is opt-in (and the
+     backend's caption_text_on agrees: absent means off, unlike the alert
+     switches, which fail open). alertEmails: extra recipients on top of the
+     configured inbox, capped and re-validated server-side. */
+  const MAX_EXTRA_EMAILS = 5;
+  TA.MAX_EXTRA_EMAILS = MAX_EXTRA_EMAILS;
+  /* Mirrors clean_emails in alerts_email.py — deliberately loose, its job is
+     to refuse anything that could read as a second recipient or header. */
+  TA.cleanEmails = (v) => {
+    const out = [];
+    const list = Array.isArray(v) ? v : String(v == null ? "" : v).split(/[,\s]+/);
+    for (const raw of list) {
+      const a = String(raw == null ? "" : raw).trim().toLowerCase();
+      const at = a.lastIndexOf("@");
+      const dom = at > 0 ? a.slice(at + 1) : "";
+      if (a && a.length <= 254 && (a.match(/@/g) || []).length === 1 && dom.includes(".")
+        && !dom.startsWith(".") && !/[\s,;<>"]/.test(a) && !out.includes(a)) out.push(a);
+      if (out.length >= MAX_EXTRA_EMAILS) break;
+    }
+    return out;
+  };
   const DEFAULT_SETTINGS = {
     gainPct: 20, highZonePct: 2, lowZonePct: 10, horizon: "long", reEntryMode: "base", view: "cards",
     trendFast: 50, trendSlow: 150, alertChannel: "both", alertTypes: ALL_ALERTS(),
+    captionText: false, alertEmails: [],
     sv: SETTINGS_VERSION,
     weights: { trend: 30, momentum: 20, participation: 20, relStrength: 20, risk: 10 }
   };
@@ -2038,6 +2061,21 @@ const __ds_scope = {};
                 </div>
               </div>
             </sc-for>
+            <div style="display:flex; align-items:center; gap:12px; margin-top:4px">
+              <span style="flex:1; min-width:0; font-size:13px; color:var(--color-text)">Text summary<span style="display:block; font-size:11px; color:var(--color-neutral-600)">under the daily poster</span></span>
+              <div style="display:flex; border:1px solid var(--color-neutral-800); border-radius:8px; overflow:hidden">
+                <button type="button" onClick="{{ setCapOn }}" style="font-size:12.5px; color:{{ capOnInk }}; background:{{ capOnBg }}; border:0; padding:6px 12px; cursor:pointer">On</button>
+                <button type="button" onClick="{{ setCapOff }}" style="font-size:12.5px; color:{{ capOffInk }}; background:{{ capOffBg }}; border:0; border-left:1px solid var(--color-neutral-800); padding:6px 12px; cursor:pointer">Off</button>
+              </div>
+            </div>
+            <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">{{ captionNote }}</p>
+
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:4px">
+              <span style="width:120px; font-size:13px; color:var(--color-neutral-400)">Also email</span>
+              <input type="text" value="{{ form.alertEmails }}" onChange="{{ onFormEmails }}" placeholder="name@example.com, other@example.com" style="flex:1; min-width:0; font-size:12px; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:8px 10px; outline:0" />
+            </div>
+            <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">{{ emailNote }}</p>
+
             <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">Switch one off and that scheduler run does nothing but read this setting — the job still fires, it just returns without sending. The two summaries are the same chart at two times of day, so pre-market and market-close are separate switches. The pre-open bloodbath alarm and the end-of-day rule signals were retired and no longer send.</p>
           </div>
 
@@ -4282,6 +4320,9 @@ class Component extends DCLogic {
       trendFast: s.trendFast || 50, trendSlow: s.trendSlow || 150,
       alertChannel: s.alertChannel || "both",
       alertTypes: { ...(s.alertTypes || {}) },
+      captionText: s.captionText === true,
+      /* edited as one comma-separated field; parsed back to a list on save */
+      alertEmails: (s.alertEmails || []).join(", "),
       trend: s.weights.trend, momentum: s.weights.momentum, participation: s.weights.participation,
       relStrength: s.weights.relStrength, risk: s.weights.risk,
     };
@@ -4294,7 +4335,8 @@ class Component extends DCLogic {
     if (!f) return false;
     const was = this.formOf(this.state.settings);
     const fields = ["dataUrl", "syncUrl", "horizon", "reEntryMode", "gainPct", "highZonePct",
-      "lowZonePct", "trendFast", "trendSlow", "alertChannel", "trend", "momentum",
+      "lowZonePct", "trendFast", "trendSlow", "alertChannel", "captionText",
+      "alertEmails", "trend", "momentum",
       "participation", "relStrength", "risk"];
     /* compared as strings: number inputs hand back "20" where the setting holds 20 */
     if (fields.some(k => String(f[k]) !== String(was[k]))) return true;
@@ -4339,6 +4381,16 @@ class Component extends DCLogic {
       this.flash(`Trend EMAs: the fast one must be shorter than the slow one (got ${f.trendFast} and ${f.trendSlow}).`);
       return;
     }
+    /* A bad address must not be swallowed: cleanEmails would just drop it and
+       the user would think the alert was going somewhere it never went. */
+    const typedEmails = String(f.alertEmails || "").split(/[,\s]+/).filter(Boolean);
+    const goodEmails = T.cleanEmails(f.alertEmails);
+    if (typedEmails.length > T.MAX_EXTRA_EMAILS) {
+      this.flash(`At most ${T.MAX_EXTRA_EMAILS} extra email addresses (got ${typedEmails.length}).`);
+      return;
+    }
+    const badEmail = typedEmails.find(a => !goodEmails.includes(a.trim().toLowerCase()));
+    if (badEmail) { this.flash(`That does not look like an email address: ${badEmail}`); return; }
     const settings = {
       ...this.state.settings,
       gainPct: Math.max(5, Math.min(200, +f.gainPct || 20)),
@@ -4348,6 +4400,8 @@ class Component extends DCLogic {
       horizon: f.horizon, reEntryMode: f.reEntryMode,
       alertChannel: ["telegram", "email", "both"].includes(f.alertChannel) ? f.alertChannel : "both",
       alertTypes: Object.fromEntries(T.ALERT_KINDS.map(a => [a.key, (f.alertTypes || {})[a.key] !== false])),
+      captionText: f.captionText === true,
+      alertEmails: T.cleanEmails(f.alertEmails),
       weights: {
         trend: +f.trend, momentum: +f.momentum, participation: +f.participation,
         relStrength: +f.relStrength, risk: +f.risk
@@ -5122,6 +5176,23 @@ class Component extends DCLogic {
     const live = T.ALERT_KINDS.filter(a => onOf(a.key)).length;
     vals.alertCount = `${live} / ${T.ALERT_KINDS.length} on`;
     vals.alertCountInk = live ? "var(--color-neutral-500)" : ink.down;
+    /* The written signals under the poster — off by default, because the
+       poster is the alert and the text was a second copy of it. */
+    const capOn = f.captionText === true;
+    vals.capOnInk = tabInk(capOn); vals.capOnBg = segBg(capOn);
+    vals.capOffInk = tabInk(!capOn); vals.capOffBg = segBg(!capOn);
+    vals.setCapOn = () => this.setForm("captionText", true);
+    vals.setCapOff = () => this.setForm("captionText", false);
+    vals.captionNote = capOn
+      ? "The summary alert carries the action, re-entry and cross signals as text above the dashboard link."
+      : "The summary alert is the poster and a link to the dashboard — nothing else.";
+    /* Extra recipients. The configured inbox always gets the alert; this list
+       only adds to it, and the notes function re-validates and caps it. */
+    vals.onFormEmails = (e) => this.setForm("alertEmails", e.target.value);
+    const extraN = T.cleanEmails(f.alertEmails).length;
+    vals.emailNote = extraN
+      ? `Emailed alerts also go to ${extraN} extra address${extraN === 1 ? "" : "es"}. Telegram is unaffected.`
+      : `Comma-separated, up to ${T.MAX_EXTRA_EMAILS}. Leave empty and email goes only to the configured inbox.`;
 
     /* "Profit trigger" (gainPct) was removed with entry tracking -- it only
        ever fed the booking rule, which needed an entry price to compare against. */
