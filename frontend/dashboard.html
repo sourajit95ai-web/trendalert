@@ -1385,6 +1385,15 @@ const __ds_scope = {};
      than clipping. Belt and braces against any engine that does not give a
      flex item its content-based minimum. */
   .ta-scroll > button { flex: 0 0 auto; }
+  /* The search field is a filled well, so the focus ring belongs on the
+     wrapper -- the input itself has no border to light up. Border and icon
+     colour live HERE rather than inline: an inline style wins on specificity
+     and would stop :focus-within from ever repainting them. */
+  .ta-search { border: 1px solid var(--color-neutral-800); }
+  .ta-search .ta-search-icon { color: var(--color-neutral-500); }
+  .ta-search:focus-within { border-color: var(--color-accent); }
+  .ta-search:focus-within .ta-search-icon { color: var(--color-accent); }
+  .ta-search input:focus-visible { outline: none; }
   </style>
 <template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#161826"/><g fill="none" stroke="#9184d9" stroke-width="3.2" stroke-linecap="round"><path d="M30 66 L42 54 L52 60 L70 36"/></g><circle cx="70" cy="36" r="3.4" fill="#9184d9"/><path d="M30 74 H70" stroke="#3f424d" stroke-width="2" stroke-linecap="round"/></svg></template>
 <style>
@@ -1613,7 +1622,10 @@ const __ds_scope = {};
       <p style="font-size:14px; color:var(--color-neutral-500); margin:0">{{ restSub }}</p>
     </div>
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
-      <input type="text" value="{{ q }}" onChange="{{ onSearch }}" placeholder="Search symbol" style="font-size:13px; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:8px 12px; outline:0; width:150px" />
+      <div class="ta-search" style="display:flex; align-items:center; gap:8px; background:var(--color-neutral-900); border-radius:8px; padding:0 10px; width:190px">
+        <svg class="ta-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex:none" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+        <input type="text" value="{{ q }}" onChange="{{ onSearch }}" placeholder="Search symbol" aria-label="Search symbol" style="flex:1; min-width:0; font-size:13px; color:var(--color-text); background:transparent; border:0; padding:8px 0; outline:0" />
+      </div>
       <select value="{{ trendF }}" onChange="{{ onTrendFilter }}" style="font-size:13px; color:var(--color-text); background:var(--color-bg); border:1px solid var(--color-neutral-800); border-radius:8px; padding:8px 10px; outline:0">
         <option value="all">All trends</option>
         <option value="bull">Bullish only</option>
