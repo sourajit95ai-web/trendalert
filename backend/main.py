@@ -268,16 +268,16 @@ def main(request):
     mode = request.args.get("mode") if request is not None \
         and getattr(request, "args", None) else None
     if mode in ("brief", "bloodbath", "summary"):
+        # &force=1 -> ignore the trading-day gate (manual off-hours check)
+        force = str(request.args.get("force", "")).lower() in ("1", "true", "yes")
         if mode == "brief":
             from morning_brief import run_morning_brief
-            res = run_morning_brief(BUCKET, SYMBOLS, SECTORS, _HEADERS)
+            res = run_morning_brief(BUCKET, SYMBOLS, SECTORS, _HEADERS, force=force)
         elif mode == "bloodbath":
             from bloodbath import run_bloodbath_check
             res = run_bloodbath_check(BUCKET, SYMBOLS, SECTORS, _HEADERS)
         else:
             from daily_summary import run_daily_summary
-            # &force=1 -> ignore the trading-day gate (manual off-hours check)
-            force = str(request.args.get("force", "")).lower() in ("1", "true", "yes")
             res = run_daily_summary(BUCKET, force=force)
         return (json.dumps(res), 200 if res.get("ok") else 500,
                 {"Content-Type": "application/json"})

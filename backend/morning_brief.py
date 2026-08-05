@@ -4,27 +4,32 @@ morning_brief.py — market-open snapshot pushed 20 min into the session.
 Triggered by a dedicated Cloud Scheduler job hitting the pipeline function
 with ?mode=brief at 9:50 AM America/New_York (Mon-Fri). Unlike the EOD
 pipeline it does NOT recompute scores or overwrite data.json — it reads
-intraday snapshots and paints the whole picture of the day so far:
+intraday snapshots and reports the day so far.
 
-  INDEXES   how the day started — opening gap vs yesterday's close, drift
-            since the open, and the running day move
-  SECTORS   average first-20-min move per sector across the universe, with
-            the best / worst name called out per sector
-  YOUR STOCKS  tracked positions (positions.json) with today's move, sector,
-            and gain since entry — the "how are MY names doing" line
+PRESENTATION: identical to the market-close alert. This module does not draw
+anything of its own — it shapes intraday snapshots into the record form
+daily_summary.compute_summary already expects, then hands them to the SAME
+compute + render + deliver path. The two alerts therefore cannot drift: any
+change to the poster shows up in both, and the only difference is the session
+badge (MORNING SESSION vs MARKET CLOSE) and the numbers behind it.
 
-Delivery reuses the EOD channels (alerts_email.py): one email + one Telegram
-message per configured recipient. Either channel can be disabled the same
-way as EOD alerts. Never raises — the scheduler must always get a 200.
+It previously composed its own plain-text body with three sections. That is
+gone: the text wall looked nothing like the poster alerts, its sector block
+spanned the whole universe while the summary was scoped to Core (so the two
+could disagree about the same morning), and its "YOUR STOCKS" section read
+positions.json — a file no longer written since entry-price tracking was
+removed, so every brief ended by pointing at a dashboard feature that does
+not exist.
+
+Never raises — the scheduler must always get a 200.
 """
-
-import json
-from datetime import datetime
 
 import requests
 
-from alerts_email import (_read_json, alert_on, fan_out, send_email_text,
-                          send_telegram_text)
+from alerts_email import (_read_json, alert_on, caption_text_on, fan_out,
+                          send_email_image, send_telegram_photo)
+from daily_summary import (compute_summary, load_core, render_chart_png,
+                           session_label, summary_text)
 from trading_calendar import is_trading_day, _eastern_now
 
 SNAPSHOT_URL = "https://data.alpaca.markets/v2/stocks/snapshots"
@@ -68,83 +73,64 @@ def _pct(a, b):
     return (a - b) / b * 100.0 if b else 0.0
 
 
-def _fmt_line(sym, q):
-    gap = _pct(q["open"], q["prev_close"])
-    drift = _pct(q["last"], q["open"])
-    day = _pct(q["last"], q["prev_close"])
-    return (f"{sym}  ${q['last']:,.2f} · opened {gap:+.2f}% "
-            f"· since open {drift:+.2f}% · day {day:+.2f}%")
+def brief_records(snaps, data_records):
+    """Intraday snapshots -> the record shape compute_summary consumes.
 
+    The poster needs `symbol`, `change_pct`, `sector` and the 52-week trio
+    (`close`, `low_252`, `high_252`). Only the first two come from the live
+    snapshot; sector and the 52-week bounds are carried over from data.json,
+    which the EOD pipeline already maintains and which does not move
+    intraday. `close` is deliberately the LIVE price, not data.json's settled
+    one, so the range gauge marks where the name is trading right now.
 
-def compose_brief(snaps, sector_of, positions, now_label):
-    """-> multi-line text: indexes, sector behaviour, tracked positions."""
-    day_of = {s: _pct(q["last"], q["prev_close"]) for s, q in snaps.items()}
+    change_pct is the move against yesterday's settled close — the same
+    quantity the close alert plots, measured at a different hour.
 
-    idx = sorted(s for s in snaps if sector_of.get(s) == "Index")
-    equities = [s for s in snaps if sector_of.get(s, "Other") not in ("Index", "Crypto")]
-
-    lines = [f"TrendAlert Morning Brief — {now_label}",
-             "(20 min into the session — IEX intraday, not settled closes)", ""]
-
-    lines.append("INDEXES — how the day started")
-    if idx:
-        lines += [_fmt_line(s, snaps[s]) for s in idx]
-    else:
-        lines.append("no index snapshots available")
-    lines.append("")
-
-    lines.append("SECTORS — first 20 minutes, across your universe")
-    by = {}
-    for s in equities:
-        by.setdefault(sector_of.get(s, "Other"), []).append(s)
-    for sec in sorted(by, key=lambda k: -sum(day_of[s] for s in by[k]) / len(by[k])):
-        syms = by[sec]
-        avg = sum(day_of[s] for s in syms) / len(syms)
-        up = sum(1 for s in syms if day_of[s] >= 0)
-        best = max(syms, key=lambda s: day_of[s])
-        worst = min(syms, key=lambda s: day_of[s])
-        line = (f"{sec}: {avg:+.2f}% avg · {up} up / {len(syms) - up} down "
-                f"· best {best} {day_of[best]:+.2f}%")
-        if worst != best:
-            line += f" · worst {worst} {day_of[worst]:+.2f}%"
-        lines.append(line)
-    lines.append("")
-
-    lines.append("YOUR STOCKS — tracked positions")
-    tracked = [s for s in positions if s in snaps and positions[s].get("entry")]
-    if tracked:
-        for s in sorted(tracked, key=lambda x: -day_of[x]):
-            q = snaps[s]
-            since = _pct(q["last"], float(positions[s]["entry"]))
-            booked = " · ⅓ booked" if positions[s].get("booked") else ""
-            lines.append(f"{s}  ${q['last']:,.2f} · day {day_of[s]:+.2f}% "
-                         f"· {sector_of.get(s, 'Other')} "
-                         f"· {since:+.1f}% since entry ${float(positions[s]['entry']):,.2f}{booked}")
-    else:
-        lines.append("no tracked positions (set entries in the dashboard to see them here)")
-
-    return "\n".join(lines)
+    Symbols in data.json without a snapshot are dropped rather than carried
+    at yesterday's price: a stale row next to live ones is worse than a
+    missing one.
+    """
+    meta = {r.get("symbol"): r for r in (data_records or []) if r.get("symbol")}
+    out = []
+    for sym, q in snaps.items():
+        base = meta.get(sym, {})
+        out.append({
+            "symbol": sym,
+            "change_pct": _pct(q["last"], q["prev_close"]),
+            "sector": base.get("sector", "Other"),
+            "close": q["last"],
+            "low_252": base.get("low_252"),
+            "high_252": base.get("high_252"),
+        })
+    return out
 
 
 # ----------------------------------------------------------------------
 # orchestrator
 # ----------------------------------------------------------------------
-def run_morning_brief(bucket, symbols, sectors, headers):
-    """Never raises. -> dict for the HTTP response."""
+def run_morning_brief(bucket, symbols, sectors, headers, force=False):
+    """Never raises. -> dict for the HTTP response.
+
+    Deliberately the same shape as run_daily_summary, including force: it
+    bypasses the trading-day gate so the alert can be fired by hand outside
+    market hours to eyeball the real output. Schedulers never pass it.
+    """
     try:
         et = _eastern_now()
-        if not is_trading_day(et.date()):
+        if not is_trading_day(et.date()) and not force:
             return {"ok": True, "brief": "skipped(non-trading-day)"}
         cfg = _read_json(bucket, "settings.json", {}) or {}
         if not alert_on(cfg, "brief"):
             return {"ok": True, "brief": "skipped(off:brief)"}
 
-        # universe = core + UI-added equities; sector falls back to data.json
+        data = _read_json(bucket, "data.json", {}) or {}
+        data_records = data.get("symbols", [])
+
+        # fetch the union of the pipeline's universe and the UI-added extras,
+        # then let compute_summary scope the poster to Core — same as the
+        # close alert, so the two can no longer disagree about a morning
         extras = _read_json(bucket, "universe.json", []) or []
-        sector_of = dict(sectors)
-        for rec in (_read_json(bucket, "data.json", {}) or {}).get("symbols", []):
-            sector_of.setdefault(rec.get("symbol"), rec.get("sector", "Other"))
-        wanted = sorted({s.strip().upper() for s in symbols + list(extras)
+        wanted = sorted({s.strip().upper() for s in list(symbols) + list(extras)
                          if isinstance(s, str) and s.strip() and "/" not in s})
 
         snaps = fetch_snapshots(wanted, headers)
@@ -156,17 +142,29 @@ def run_morning_brief(bucket, symbols, sectors, headers):
         if not snaps:
             return {"ok": True, "brief": "skipped(no-intraday-bars-yet)"}
 
-        positions = _read_json(bucket, "positions.json", {}) or {}
-        if isinstance(positions, dict) and "positions" in positions:
-            positions = positions["positions"]
+        # sectors arg is the pipeline's static map; data.json fills the rest
+        records = brief_records(snaps, data_records)
+        for r in records:
+            if r["sector"] == "Other" and r["symbol"] in sectors:
+                r["sector"] = sectors[r["symbol"]]
 
-        now_label = et.strftime("%a %b %d, %H:%M ET")
-        body = compose_brief(snaps, sector_of, positions, now_label)
+        session = session_label(et)
+        f = lambda k, d: float(cfg.get(k, d)) if isinstance(cfg, dict) else d
+        s = compute_summary(records, load_core(bucket), today,
+                            hz=f("highZonePct", 2.0), lz=f("lowZonePct", 10.0),
+                            gain_pct=f("gainPct", 20.0),
+                            alerts=data.get("alerts"), session=session)
+        if s is None:
+            return {"ok": True, "brief": "skipped(too-few-core-holdings)"}
+
+        png = render_chart_png(s)
+        caption = summary_text(s, caption_text_on(cfg))
+        subject = f"TrendAlert Daily {today} — {session.title()}"
 
         status = fan_out(cfg, (
-            ("telegram", lambda: send_telegram_text(body)),
-            ("email", lambda: send_email_text(f"TrendAlert Morning Brief {today}",
-                                              body, cfg)),
+            ("telegram", lambda: send_telegram_photo(png, caption)),
+            ("email", lambda: send_email_image(subject, caption, png,
+                                               settings=cfg)),
         ))
         return {"ok": True, "brief": status, "symbols": len(snaps)}
     except Exception as e:
