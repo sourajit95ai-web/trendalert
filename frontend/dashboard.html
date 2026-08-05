@@ -907,6 +907,11 @@ const __ds_scope = {};
       body: JSON.stringify({ kind, data })
     }).catch(() => { });
   };
+  /* Bars live one object per symbol so a page load fetches none of them.
+     Must match chart_backend.chart_object_name exactly -- BTC/USD would
+     otherwise become a nested path the URL cannot address. */
+  TA.chartObject = (sym) => "chart/" + String(sym).replace(/\//g, "-") + ".json";
+
   TA.pull = async (syncUrl, kind) => {
     if (!syncUrl) return null;
     try {
@@ -4200,8 +4205,10 @@ class Component extends DCLogic {
     this.teardownCharts();
   }
   componentDidUpdate() {
-    if (this.state.drawer && this.state.drawerTab === "chart") this.syncCharts();
-    else if (this.charts) this.teardownCharts();
+    if (this.state.drawer && this.state.drawerTab === "chart") {
+      this.ensureChart(this.state.selected);
+      this.syncCharts();
+    } else if (this.charts) this.teardownCharts();
   }
 
   /* ---------------- theme ----------------
@@ -4238,15 +4245,44 @@ class Component extends DCLogic {
     } catch (e) {
       this.setState({ payload: T.demoData(this.state.lists), mode: "error", statusText: "Fetch failed — demo data" });
     }
-    this.loadChart();
+    /* Bars are no longer pulled here. The 5-minute refresh timer calls load(),
+       and re-fetching every symbol's decade of history on each tick would be
+       far more traffic than the old combined file ever was. Cached bars are
+       dropped instead, so the next chart opened re-fetches once. */
+    this.chartPending = {};
+    this.setState({ chartStore: null });
   }
-  async loadChart() {
-    const url = (this.state.dataUrl || "").replace(/data\.json(\?.*)?$/, "chart.json");
-    if (!url || url === this.state.dataUrl) { this.setState({ chartStore: null }); return; }
-    try {
-      const r = await fetch(url + (url.includes("?") ? "&" : "?") + "t=" + Date.now());
-      this.setState({ chartStore: r.ok ? await r.json() : null });
-    } catch (e) { this.setState({ chartStore: null }); }
+  /* Bars are fetched per symbol, the first time a chart for it is opened, and
+     kept in chartStore for the rest of the session. Nothing is fetched on
+     page load: a combined file at 10 years of daily bars would be ~11MB
+     against a no-cache header, paid on every visit to look at one chart.
+
+     chartStore doubles as the cache and the in-flight guard -- componentDidUpdate
+     fires repeatedly while a drawer is open, so without `pending` the same
+     symbol would be requested on every render. */
+  chartUrlFor(sym) {
+    const base = (this.state.dataUrl || "").replace(/data\.json(\?.*)?$/, "");
+    return base && base !== this.state.dataUrl
+      ? base + window.TA.chartObject(sym) : null;
+  }
+  ensureChart(sym) {
+    if (!sym) return;
+    const store = this.state.chartStore || {};
+    if (store[sym] !== undefined) return;            // cached, or known-missing
+    this.chartPending = this.chartPending || {};
+    if (this.chartPending[sym]) return;
+    const url = this.chartUrlFor(sym);
+    if (!url) return;
+    this.chartPending[sym] = true;
+    fetch(url + "?t=" + Date.now())
+      .then(r => r.ok ? r.json() : null)
+      .catch(() => null)
+      /* null is cached too: a symbol with no published bars must not be
+         re-requested on every render for the rest of the session. */
+      .then(bars => this.setState(s => ({
+        chartStore: Object.assign({}, s.chartStore, { [sym]: bars })
+      })))
+      .then(() => { delete this.chartPending[sym]; });
   }
   publish() {
     const T = window.TA, { syncUrl, lists } = this.state;

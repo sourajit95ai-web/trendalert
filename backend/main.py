@@ -2,12 +2,12 @@
 main.py — TrendAlert data pipeline (Cloud Function, entry point: main).
 
 Flow (every 30 min via Cloud Scheduler -> HTTP trigger):
-  1. Fetch ~420 daily bars for all SYMBOLS (Alpaca stocks) + BTC/USD (Alpaca crypto)
+  1. Fetch ~10 years of daily bars for all SYMBOLS (Alpaca stocks) + BTC/USD (Alpaca crypto)
   2. Apply published settings.json if present (weights / horizon -> scoring)
   3. Compute composite scores (scoring.py) + indicators per symbol
   4. Detect EMA50/150 cross alerts (golden / death cross)
   5. Enrich with 52w fields, zones, base formation (chart_backend.py)
-  6. Publish data.json + chart.json to GCS — guarded: aborts without
+  6. Publish data.json + one chart/<sym>.json per symbol — guarded: aborts without
      overwriting if the fetch or schema looks broken
 
 Env (deploy.yml sets these):
@@ -31,6 +31,7 @@ from chart_backend import (
     fetch_crypto_bars,
     enrich_summary_records,
     build_chart_json,
+    chart_object_name,
     load_published_settings,
 )
 
@@ -65,7 +66,7 @@ SECTORS = {
 
 MAX_EXTRA_EQUITY = 50       # dynamic-universe caps — one batched request stays one request
 MAX_EXTRA_CRYPTO = 10
-HISTORY_DAYS = 420          # calendar span requested (>=252 trading days needed)
+HISTORY_DAYS = 3650         # calendar span requested — 10 years for the chart's Max view
 TIMEFRAME = "1Day"
 MIN_FETCH_RATIO = 0.9       # publish guard: abort if <90% of symbols fetched
 BUCKET = os.environ.get("GCS_BUCKET", "")
@@ -81,7 +82,10 @@ _HEADERS = {"APCA-API-KEY-ID": ALPACA_KEY, "APCA-API-SECRET-KEY": ALPACA_SECRET}
 # ----------------------------------------------------------------------
 def fetch_equity_bars(symbols, days=HISTORY_DAYS):
     """Multi-symbol daily bars -> {symbol: OHLCV DataFrame, ascending index}."""
-    start = (pd.Timestamp.utcnow() - pd.Timedelta(days=int(days * 1.5))).date().isoformat()
+    # `days` is already a calendar span, so no padding multiplier: at 10 years
+    # the old 1.5x asked for 15 years of history that does not exist on the
+    # free IEX feed (it starts around 2016) and only slowed the request.
+    start = (pd.Timestamp.utcnow() - pd.Timedelta(days=int(days))).date().isoformat()
     params = {
         "symbols": ",".join(symbols),
         "timeframe": TIMEFRAME,
@@ -343,7 +347,11 @@ def main(request):
                 500, {"Content-Type": "application/json"})
 
     _publish(payload, "data.json")
-    _publish(chart, "chart.json")
+    # one object per symbol, fetched only when a chart is opened. data.json
+    # goes out FIRST: a dashboard that loads mid-publish then sees current
+    # records and merely waits on bars, rather than charting stale prices.
+    for sym, bars in chart.items():
+        _publish(bars, chart_object_name(sym))
 
     # EOD alert email — transition-deduped, never fatal, only when the shown
     # closes are the settled closes of an actual trading day

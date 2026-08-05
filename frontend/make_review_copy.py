@@ -11,10 +11,10 @@ Handing someone the live URL has two problems:
   2. The data moves under them. Feedback gathered against a shifting dashboard
      is hard to act on, and reviewers report stale prices as bugs.
 
-So this snapshots data.json and chart.json into the page and installs a fetch
-shim that answers them locally, refuses every non-GET, and blocks the notes
-endpoint outright. The result is one self-contained file: no network calls, no
-writes home, same UI.
+So this snapshots data.json and every chart/<sym>.json into the page and
+installs a fetch shim that answers them locally, refuses every non-GET, and
+blocks the notes endpoint outright. The result is one self-contained file: no
+network calls, no writes home, same UI.
 
 The shim matches on URL rather than origin, which matters -- the copy is
 usually served from storage.googleapis.com, the same origin as the real
@@ -55,6 +55,30 @@ def grab(name: str) -> dict:
         return json.loads(r.read().decode("utf-8"))
 
 
+def grab_charts(symbols) -> dict:
+    """Per-symbol bars -> {object_name: bars}, keyed as the page will ask.
+
+    Bars moved to one object per symbol, fetched on demand. The live page
+    therefore never requests chart.json, so a copy that snapshots only
+    chart.json shows empty charts for every name. Fetch each one and key the
+    snapshot by the same object path the shim matches on.
+
+    A symbol whose object is missing is skipped rather than fatal: the copy is
+    for review, and one dead chart is better than no copy at all.
+    """
+    out, missing = {}, []
+    for sym in symbols:
+        name = f"chart/{str(sym).replace('/', '-')}.json"
+        try:
+            out[name] = grab(name)
+        except Exception:
+            missing.append(sym)
+    if missing:
+        print(f"  no bars for {len(missing)}: {', '.join(missing[:8])}"
+              + (" ..." if len(missing) > 8 else ""))
+    return out
+
+
 def embed(obj) -> str:
     """JSON safe to sit inside a <script> block."""
     return json.dumps(obj, separators=(",", ":")).replace("<", "\\u003c")
@@ -64,7 +88,9 @@ def build() -> None:
     if not SRC.is_file():
         sys.exit(f"make_review_copy: {SRC} not found -- run build_dashboard.py first")
 
-    data, chart = grab("data.json"), grab("chart.json")
+    data = grab("data.json")
+    charts = grab_charts([r.get("symbol") for r in data.get("symbols", [])
+                          if r.get("symbol")])
     stamp = data.get("generated_at") or data.get("as_of") or "unknown"
 
     shim = f"""<script>
@@ -74,7 +100,7 @@ def build() -> None:
    ---------------------------------------------------------------------- */
 (function () {{
   var DATA = {embed(data)};
-  var CHART = {embed(chart)};
+  var CHARTS = {embed(charts)};
   var STAMP = {embed(stamp)};
   var reply = function (obj) {{
     return Promise.resolve(new Response(JSON.stringify(obj), {{
@@ -87,7 +113,10 @@ def build() -> None:
     var method = ((init && init.method) || (input && input.method) || "GET").toUpperCase();
     if (method !== "GET") return reply({{}});             // never write anywhere
     if (url.indexOf("/notes") !== -1) return reply({{}});   // no sync pull either
-    if (url.indexOf("chart.json") !== -1) return reply(CHART);
+    // per-symbol bars: match on the chart/<name>.json tail, ignoring the
+    // cache-buster the page appends
+    var m = url.match(/chart\\/[^/?]+\\.json/);
+    if (m) return reply(CHARTS[m[0]] || []);
     if (url.indexOf("data.json") !== -1) return reply(DATA);
     return real.apply(this, arguments);
   }};
@@ -135,7 +164,7 @@ def build() -> None:
 
     OUT.write_text(html, encoding="utf-8", newline="")
     print(f"make_review_copy: wrote {OUT.name} ({OUT.stat().st_size / 1024:,.0f} KB) — snapshot {stamp}")
-    print(f"  {len(data.get('symbols', []))} symbols, {len(chart) if isinstance(chart, dict) else '?'} chart series")
+    print(f"  {len(data.get('symbols', []))} symbols, {len(charts)} chart series")
 
 
 if __name__ == "__main__":

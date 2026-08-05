@@ -91,3 +91,38 @@ def test_pipeline_rs_is_cross_sectional():
                if s["score"] is not None]
     # percentile ranks must actually spread across the universe
     assert max(rs_vals) > 80 and min(rs_vals) < 20
+
+
+# ----------------------------------------------------------------------
+# per-symbol chart objects
+# ----------------------------------------------------------------------
+def test_chart_object_name_escapes_slashes():
+    """BTC/USD must not become a nested path the fetch URL has to guess at.
+
+    trendalert-core.js TA.chartObject applies the identical transform; if this
+    changes without that changing, every crypto chart 404s.
+    """
+    from chart_backend import chart_object_name
+    assert chart_object_name("NVDA") == "chart/NVDA.json"
+    assert chart_object_name("BTC/USD") == "chart/BTC-USD.json"
+    assert "/" not in chart_object_name("BTC/USD").split("/", 1)[1]
+
+
+def test_chart_tail_covers_ten_years():
+    from chart_backend import CHART_TAIL
+    assert CHART_TAIL >= 252 * 10
+
+
+def test_build_chart_json_keeps_full_history_per_symbol():
+    """The cap bounds ONE symbol's file, so it can be generous."""
+    import pandas as pd
+    from chart_backend import build_chart_json
+    n = 3000
+    idx = pd.bdate_range("2014-01-01", periods=n)
+    df = pd.DataFrame({"open": 1.0, "high": 2.0, "low": 0.5, "close": 1.5,
+                       "volume": 100}, index=idx)
+    out = build_chart_json({"AAA": df})
+    from chart_backend import CHART_TAIL
+    assert len(out["AAA"]) == CHART_TAIL          # trimmed to the cap, not to 420
+    assert out["AAA"][0]["time"] < out["AAA"][-1]["time"]
+    assert "sr" in out["AAA"][-1]

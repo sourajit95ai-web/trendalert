@@ -183,6 +183,11 @@
       body: JSON.stringify({ kind, data })
     }).catch(() => { });
   };
+  /* Bars live one object per symbol so a page load fetches none of them.
+     Must match chart_backend.chart_object_name exactly -- BTC/USD would
+     otherwise become a nested path the URL cannot address. */
+  TA.chartObject = (sym) => "chart/" + String(sym).replace(/\//g, "-") + ".json";
+
   TA.pull = async (syncUrl, kind) => {
     if (!syncUrl) return null;
     try {

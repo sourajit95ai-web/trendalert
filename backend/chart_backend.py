@@ -5,7 +5,7 @@ Drop these into your existing main.py (or import them). They cover the three
 backend changes the chart needs:
   1. fetch_crypto_bars()        — BTC/USD via Alpaca crypto (daily bars)
   2. support_resistance()       — server-side swing-pivot S/R levels
-  3. build_chart_json()         — per-symbol OHLCV history -> chart.json on GCS
+  3. build_chart_json()         — per-symbol OHLCV history -> chart/<sym>.json
 
 Notes persistence is a separate HTTP function (see notes_function.py), since the
 browser writes to it directly.
@@ -109,16 +109,37 @@ def support_resistance(df, lookback=5, max_levels=4, tol_pct=0.012):
 # ----------------------------------------------------------------------
 # 3. Build chart.json — the OHLCV history the dashboard charts read
 # ----------------------------------------------------------------------
-def build_chart_json(frames, tail=420):
+CHART_PREFIX = "chart"        # per-symbol objects live at chart/<name>.json
+CHART_TAIL = 2600             # ~10 years of trading days
+
+
+def chart_object_name(symbol):
+    """Symbol -> bucket object path for its bars.
+
+    A symbol can contain '/' (BTC/USD), which would otherwise create a nested
+    folder and a second path segment the fetch URL has to guess at. Slashes
+    become '-', so BTC/USD lands at chart/BTC-USD.json. The dashboard applies
+    the identical transform in TA.chartObject -- change one, change both.
+    """
+    return f"{CHART_PREFIX}/{str(symbol).replace('/', '-')}.json"
+
+
+def build_chart_json(frames, tail=CHART_TAIL):
     """
     frames: {symbol: OHLCV DataFrame (ascending DatetimeIndex)}
-    Returns a dict the dashboard consumes directly:
+    Returns a dict keyed by symbol:
         { "AAPL": [ {time, open, high, low, close, volume, sr:[...]}, ... ], ... }
 
-    Only the last `tail` bars are emitted (keeps chart.json small; the chart's
-    default span is 6 months ~= 126 trading days, 1Y view still covered).
-    S/R is embedded on the LAST bar so the dashboard can render auto levels
-    without recomputing — it still supports manual override client-side.
+    The caller writes one object per symbol (chart/AAPL.json) rather than one
+    combined file: at 10 years of daily bars the combined file would be ~11MB
+    fetched on every dashboard load, against a no-cache header. Split and
+    fetched on demand, a page load carries none of it and each symbol still
+    gets full daily resolution.
+
+    `tail` bounds a single symbol's file rather than the whole payload, so it
+    can be generous. S/R is embedded on the LAST bar so the dashboard can
+    render auto levels without recomputing — manual override still works
+    client-side.
     """
     out = {}
     for sym, df in frames.items():
