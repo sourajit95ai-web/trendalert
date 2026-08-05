@@ -93,6 +93,7 @@ jobs:
             --gen2 --runtime python312 --region "$REGION" \
             --source backend --entry-point notes \
             --trigger-http --allow-unauthenticated \
+            --set-secrets "ADMIN_TOKEN=trendalert-admin-token:latest" \
             --set-env-vars "GCS_BUCKET=${{ secrets.GCS_BUCKET }},ALLOWED_ORIGIN=https://storage.googleapis.com"
 
       # ---- frontend: single-file dashboard to GCS ----

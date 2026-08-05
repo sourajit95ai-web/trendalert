@@ -19,7 +19,8 @@
   const PBRE_KEY = "trendalert_pbre_v1";
   const CH_KEY = "trendalert_chartcfg_v1";
   const GROUPS_KEY = "trendalert_groups_v1";
-  TA.keys = { LS_KEY, DATA_KEY, SET_KEY, SYNC_KEY, PBRE_KEY, CH_KEY, GROUPS_KEY };
+  const TOKEN_KEY = "trendalert_admin_token_v1";
+  TA.keys = { LS_KEY, DATA_KEY, SET_KEY, SYNC_KEY, PBRE_KEY, CH_KEY, GROUPS_KEY, TOKEN_KEY };
 
   const DEFAULT_DATA_URL = "https://storage.googleapis.com/trendalert-data-rattle/data.json";
   const DEFAULT_SYNC_URL = "https://us-central1-trendalert-prod.cloudfunctions.net/notes";
@@ -160,10 +161,25 @@
   TA.saveGroups = (g) => lsSet(GROUPS_KEY, JSON.stringify(g));
 
   /* ---------- sync (fire and forget, same endpoints) ---------- */
+  /* The write token. Held only in this browser's localStorage and sent as a
+     header on every POST; the backend is what actually enforces it, so a
+     viewer clearing this check in devtools still cannot write. Without a
+     token the dashboard is read-only: edits stay in the viewer's own
+     localStorage and never reach the bucket. */
+  TA.loadToken = () => lsGet(TOKEN_KEY) || "";
+  TA.saveToken = (t) => lsSet(TOKEN_KEY, String(t || "").trim());
+  TA.canWrite = () => !!TA.loadToken();
+
   TA.post = (syncUrl, kind, data) => {
     if (!syncUrl) return;
+    const token = TA.loadToken();
+    /* Skip rather than fire-and-fail. publish() runs 3s after ANY page load,
+       so without this every viewer would pile up 401s in their console on
+       every visit and make a read-only dashboard look broken. */
+    if (!token) return;
     fetch(syncUrl, {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-TA-Token": token },
       body: JSON.stringify({ kind, data })
     }).catch(() => { });
   };

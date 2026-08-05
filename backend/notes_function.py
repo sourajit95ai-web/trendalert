@@ -10,6 +10,14 @@ Stores in one function, selected by the `kind` param:
                     symbols; the pipeline merges it into its fetch universe
                     so UI-added tickers get data on the next cycle
 
+AUTH: GET is open (it returns what is already public in the bucket). Every
+POST must carry `X-TA-Token` matching the ADMIN_TOKEN env var, wired from
+Secret Manager at deploy time. Without it the function is read-only, so the
+dashboard can be handed to anyone without them being able to change lists,
+settings or alert thresholds. It is ONE shared password, not per-user auth:
+anyone holding it has full write access, and revoking means rotating the
+secret and re-entering it wherever you use the dashboard.
+
 GET  ?kind=positions              -> the whole positions map (dashboard loads once)
 GET  ?kind=notes&symbol=AAPL      -> notes for one symbol
 POST {kind:"positions", data:{...whole map...}}         -> overwrite positions.json
@@ -20,6 +28,7 @@ Deploy (Gen2, Python):
       --gen2 --runtime python312 --region us-central1 \
       --trigger-http --allow-unauthenticated \
       --set-env-vars GCS_BUCKET=YOUR_BUCKET \
+      --set-secrets ADMIN_TOKEN=trendalert-admin-token:latest \
       --entry-point notes
 
 requirements.txt:
@@ -29,12 +38,14 @@ requirements.txt:
 Concurrency: last-write-wins (single-user tool; acceptable, same as data.json).
 """
 
+import hmac
 import json
 import os
 import re
 from google.cloud import storage
 
 BUCKET = os.environ.get("GCS_BUCKET", "")
+TOKEN_HEADER = "X-TA-Token"
 OBJECTS = {"notes": "notes.json", "positions": "positions.json",
            "settings": "settings.json", "universe": "universe.json",
            "pbre": "pbre.json", "core": "core.json"}
@@ -98,10 +109,38 @@ _ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
 _CORS = {
     "Access-Control-Allow-Origin": _ORIGIN,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    # TOKEN_HEADER must be advertised here or the browser's preflight rejects
+    # the write before it is ever sent.
+    "Access-Control-Allow-Headers": f"Content-Type, {TOKEN_HEADER}",
     "Vary": "Origin",
 }
 _JSON = {**_CORS, "Content-Type": "application/json"}
+
+
+def _authorized(request):
+    """True if this request may WRITE.
+
+    Reads ADMIN_TOKEN from the environment on every call rather than at import
+    so a redeploy that rotates the secret takes effect without a cold start
+    (and so tests can set it per-case).
+
+    Fails CLOSED: with no ADMIN_TOKEN configured nothing can write. That is the
+    opposite of the alert switches' fail-open default, and deliberately so — a
+    misconfigured deploy should cost the owner a save, not leave the endpoint
+    open to the internet. GET is unaffected; the data it returns is already
+    public in the bucket.
+    """
+    # .strip() both sides: `echo secret | gcloud secrets create` stores a
+    # trailing newline, which would otherwise reject the correct password with
+    # an indistinguishable 401. The browser trims what it sends too, so a
+    # password can never meaningfully start or end with whitespace anyway.
+    expected = os.environ.get("ADMIN_TOKEN", "").strip()
+    if not expected:
+        return False
+    got = str(request.headers.get(TOKEN_HEADER, "") or "").strip()
+    # compare_digest to keep the comparison time-independent of how many
+    # leading characters a guess got right
+    return bool(got) and hmac.compare_digest(got, expected)
 
 
 def notes(request):
@@ -127,6 +166,15 @@ def notes(request):
         return (json.dumps({"positions": data}), 200, _JSON)
 
     if request.method == "POST":
+        # Gate FIRST: before the payload is parsed, before any bucket read or
+        # write. Every kind below is a write, so there is no unauthenticated
+        # POST path left.
+        if not _authorized(request):
+            if not os.environ.get("ADMIN_TOKEN", "").strip():
+                return (json.dumps({"error": "writes disabled: ADMIN_TOKEN not configured"}),
+                        503, _JSON)
+            return (json.dumps({"error": "unauthorized"}), 401, _JSON)
+
         payload = request.get_json(silent=True) or {}
 
         if kind in ("universe", "core"):

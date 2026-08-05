@@ -623,6 +623,19 @@
             <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">Pre-filled with the TrendAlert production bucket and Sync API. Edit only if the bucket or notes function moves.</p>
           </div>
 
+          <div style="display:flex; flex-direction:column; gap:10px">
+            <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">Access</span>
+            <label style="display:flex; align-items:center; gap:12px; font-size:13px; color:var(--color-neutral-400)">
+              <span style="width:86px">Password</span>
+              <input type="password" autocomplete="off" placeholder="{{ tokenPlaceholder }}" value="{{ form.adminToken }}" onChange="{{ onFormAdminToken }}" style="flex:1; min-width:0; font-size:12px; color:var(--color-text); background:transparent; border:1px solid var(--color-neutral-800); border-radius:8px; padding:8px 10px; outline:0" />
+            </label>
+            <div style="display:flex; align-items:center; gap:8px">
+              <span style="width:7px; height:7px; border-radius:50%; flex:none; background:{{ tokenDot }}"></span>
+              <span style="font-size:12px; color:{{ tokenInk }}">{{ tokenLabel }}</span>
+            </div>
+            <p style="font-size:11.5px; line-height:1.6; color:var(--color-neutral-600); margin:0">Without the password this dashboard is read-only: you can browse, filter and rearrange, but edits stay in this browser and never reach the shared data. Share the link freely; share the password only with people who should be able to change lists, holdings and alert settings.</p>
+          </div>
+
           <div style="display:flex; flex-direction:column; gap:12px">
             <span style="font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-neutral-500)">Appearance</span>
             <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap">
@@ -1065,6 +1078,10 @@ class Component extends DCLogic {
   formOf(s) {
     return {
       dataUrl: this.state.dataUrl, syncUrl: this.state.syncUrl,
+      /* browser-local like the URLs above, and deliberately NOT part of
+         `settings` -- settings get POSTed to the bucket, and the write
+         password must never be one of the things that travels there */
+      adminToken: window.TA.loadToken(),
       horizon: s.horizon || "long", reEntryMode: s.reEntryMode || "base",
       gainPct: s.gainPct, highZonePct: s.highZonePct, lowZonePct: s.lowZonePct,
       trendFast: s.trendFast || 50, trendSlow: s.trendSlow || 150,
@@ -1084,7 +1101,7 @@ class Component extends DCLogic {
     const f = this.state.form;
     if (!f) return false;
     const was = this.formOf(this.state.settings);
-    const fields = ["dataUrl", "syncUrl", "horizon", "reEntryMode", "gainPct", "highZonePct",
+    const fields = ["dataUrl", "syncUrl", "adminToken", "horizon", "reEntryMode", "gainPct", "highZonePct",
       "lowZonePct", "trendFast", "trendSlow", "alertChannel", "captionText",
       "alertEmails", "trend", "momentum",
       "participation", "relStrength", "risk"];
@@ -1161,6 +1178,9 @@ class Component extends DCLogic {
     const chCfg = { ...this.state.chCfg };
     if (horizonChanged) { chCfg.span = T.HORIZON_PRESETS[f.horizon].span; T.saveCh(chCfg, this.state.vis); }
     T.saveSettings(settings);
+    /* Persist the password BEFORE the POST below, so that the very save in
+       which someone first enters it is itself authorised. */
+    T.saveToken(f.adminToken);
     T.post(this.state.syncUrl, "settings", settings);
     const urlChanged = f.dataUrl !== this.state.dataUrl || f.syncUrl !== this.state.syncUrl;
     T.lsSet(T.keys.DATA_KEY, f.dataUrl); T.lsSet(T.keys.SYNC_KEY, f.syncUrl);
@@ -1863,11 +1883,22 @@ class Component extends DCLogic {
     /* ---- settings modal ---- */
     vals.settingsOpen = s.settingsOpen && !!s.form;
     vals.closeSettings = () => this.requestCloseSettings("close");
-    vals.form = s.form || { dataUrl: "", syncUrl: "" };
+    vals.form = s.form || { dataUrl: "", syncUrl: "", adminToken: "" };
     vals.onFormDataUrl = (e) => this.setForm("dataUrl", e.target.value);
     vals.onFormSyncUrl = (e) => this.setForm("syncUrl", e.target.value);
+    vals.onFormAdminToken = (e) => this.setForm("adminToken", e.target.value);
     vals.reconnect = () => this.reconnect();
     const f = s.form || {};
+    /* Reflects the SAVED token, not what is typed in the box -- the point of
+       the line is to answer "can this browser write right now?", and a typed
+       password has not been tested against the backend yet. */
+    const canWrite = !!window.TA.loadToken();
+    vals.tokenPlaceholder = canWrite ? "•••••••• saved" : "read-only without a password";
+    vals.tokenDot = canWrite ? "var(--color-positive, #4ea36b)" : "var(--color-neutral-600)";
+    vals.tokenInk = canWrite ? "var(--color-neutral-400)" : "var(--color-neutral-500)";
+    vals.tokenLabel = canWrite
+      ? "Editing enabled — your changes save to the shared data"
+      : "Read-only — changes stay in this browser only";
     /* Appearance — applied immediately rather than on Save, so the swatch you
        pick is the page you are looking at. Theme is a device preference, not
        part of the synced settings payload. */
