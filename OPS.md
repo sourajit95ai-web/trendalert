@@ -320,3 +320,30 @@ no NEAR HIGH off a 3-month high, no base call off a fake 52-week low. The
 dashboard shows a `NEW LISTING · Nd` chip and files them under Holding Steady.
 Symbols cross over automatically the day they reach 252 bars. Symbols with
 <60 bars are dropped from the payload entirely (existing guard).
+
+## Dashboard redesign — the `next` build (added 2026-08-07)
+
+The redesign lives at **https://storage.googleapis.com/trendalert-data-rattle/next/dashboard.html**
+and is built the same way the live dashboard is:
+
+    frontend/next/         source tree (index.html + next.css + next-app.js)
+    frontend/build_next.py inliner  ->  frontend/dashboard-next.html
+    CI runs `python frontend/build_next.py --check`, so a stale artifact fails the build
+
+It reuses `frontend/v2/trendalert-core.js` verbatim for every rule (zones, base
+status, scoring, trend, sector mix, staleness) plus v2's Nocturne tokens and
+`theme.css`. Only the presentation is new.
+
+Three things worth knowing:
+
+* **It cannot touch production.** The workflow publishes it to its own object on
+  every run, independent of the `target` input. Promotion means editing the
+  "Publish dashboard" step, never flipping a flag on "Publish redesign".
+* **It is read-only.** No `TA.post` call exists in the page, so unlike the live
+  dashboard it never republishes `universe.json` / `core.json` on load. Sharing
+  the link cannot change what the alerts fire on — that is why it is safe to
+  hand out while `frontend/make_review_copy.py` is still the tool for hiding the
+  numbers themselves.
+* **Scope is the Core portfolio.** List navigation, add-ticker, manage-lists,
+  the settings modal, the detail drawer, charts and the PB/RE marks are not
+  rebuilt yet; the live dashboard remains the only place to do any of that.

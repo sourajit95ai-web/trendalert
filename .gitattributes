@@ -6,3 +6,9 @@
 frontend/dashboard.html       text eol=lf
 frontend/v2/**                text eol=lf
 frontend/build_dashboard.py   text eol=lf
+
+# Same contract for the redesign: frontend/next/ -> frontend/dashboard-next.html
+# via frontend/build_next.py, checked byte-for-byte in CI.
+frontend/dashboard-next.html  text eol=lf
+frontend/next/**              text eol=lf
+frontend/build_next.py        text eol=lf

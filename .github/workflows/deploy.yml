@@ -10,6 +10,10 @@ name: deploy
 # frontend/dashboard.html is GENERATED from frontend/v2/ by
 # frontend/build_dashboard.py -- edit the source tree, never the artifact.
 #
+# Every run ALSO publishes the redesign (frontend/next/ -> dashboard-next.html)
+# to gs://BUCKET/next/dashboard.html. That object is independent of target:
+# the redesign cannot overwrite the live dashboard.
+#
 # Required repo secrets (Settings -> Secrets and variables -> Actions):
 #   GCP_SA_KEY   - key.json of the gh-deploy service account (README §3)
 #   GCP_PROJECT  - GCP project id
@@ -51,6 +55,8 @@ jobs:
       # dashboard.html is generated from frontend/v2/ -- fail if the
       # committed artifact no longer matches its source tree
       - run: python frontend/build_dashboard.py --check
+      # same contract for the redesign in frontend/next/
+      - run: python frontend/build_next.py --check
 
   deploy:
     needs: test
@@ -114,3 +120,14 @@ jobs:
           gsutil -h "Cache-Control:no-cache" -h "Content-Type:text/html" \
             cp -Z frontend/dashboard.html "$DEST"
           echo "Published frontend/dashboard.html to $DEST"
+
+      # ---- frontend: the redesign, always to its own object ----
+      # /next/dashboard.html is a THIRD object, independent of the dev/prod
+      # switch above: this step can never overwrite the live dashboard, whatever
+      # `target` is set to. Promotion, when the redesign is ready, is a
+      # deliberate change to the step above -- not a flag on this one.
+      - name: Publish redesign
+        run: |
+          gsutil -h "Cache-Control:no-cache" -h "Content-Type:text/html" \
+            cp -Z frontend/dashboard-next.html "gs://${{ secrets.GCS_BUCKET }}/next/dashboard.html"
+          echo "Published frontend/dashboard-next.html to gs://${{ secrets.GCS_BUCKET }}/next/dashboard.html"
