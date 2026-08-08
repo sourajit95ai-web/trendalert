@@ -339,11 +339,19 @@ Three things worth knowing:
 * **It cannot touch production.** The workflow publishes it to its own object on
   every run, independent of the `target` input. Promotion means editing the
   "Publish dashboard" step, never flipping a flag on "Publish redesign".
-* **It is read-only.** No `TA.post` call exists in the page, so unlike the live
-  dashboard it never republishes `universe.json` / `core.json` on load. Sharing
-  the link cannot change what the alerts fire on — that is why it is safe to
-  hand out while `frontend/make_review_copy.py` is still the tool for hiding the
-  numbers themselves.
-* **Scope is the Core portfolio.** List navigation, add-ticker, manage-lists,
-  the settings modal, the detail drawer, charts and the PB/RE marks are not
-  rebuilt yet; the live dashboard remains the only place to do any of that.
+* **It never publishes on load.** The live dashboard POSTs `universe` and `core`
+  3s after every page load, which is why its URL cannot be handed out — a
+  reviewer silently rewrites the universe by visiting it. Here a POST happens
+  only when someone actually edits a list, and writes still need the password
+  (`TA.post` skips without a token), so opening the link changes nothing.
+  `frontend/make_review_copy.py` is still the tool for hiding the numbers
+  themselves.
+* **Functionally at parity with the live dashboard**, with two known gaps: the
+  design's sparklines and the aged "Recent alerts" both need backend work
+  (a short series inside `data.json`; an alert-history object — `data.json`
+  carries only latest-bar crosses, so every alert row is labelled "today").
+  Everything else is there: portfolio/watchlist/index navigation with per-list
+  chips, add ticker, manage lists, the full settings modal including the write
+  password, the detail drawer, the three linked charts with their layer and
+  indicator controls, PB/RE marks, the awaiting-data group, search and the
+  sector filter.
