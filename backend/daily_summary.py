@@ -443,56 +443,59 @@ def summary_text(s=None, verbose=False):
 # render (matplotlib -> PNG bytes)
 # ----------------------------------------------------------------------
 # The alert is laid out as a poster, not a chart: a headline that reads as a
-# sentence, four stat circles, the signal cards, then the movers and the index
-# panel as one-line rows carrying a value chip and a 52-week range. Everything
+# sentence, four stat circles, the signal sections, then the movers and the
+# indexes as one-line rows carrying the move and a 52-week range. Everything
 # is drawn on a single axis in LAYOUT UNITS where 1 unit == 1 point == 1 px at 72 dpi, so
 # the numbers below are the pixel geometry of the design at its 580-wide
 # reference size.
 #
-# Inks are picked for contrast on the cream page, not for prettiness: every
-# text colour here clears WCAG AA (4.5:1) on BG, which is why the accents come
-# in two strengths — the saturated one fills bars and dots, the dark one is the
-# only one allowed to carry type.
-BG = "#F5EEE3"          # cream page
-ROW_BG = "#FBF7F0"      # card fill
-INK = "#241F1A"
-INK_SOFT = "#4F4740"    # body copy — 8.4:1 on BG
-INK_FAINT = "#776E62"   # meta / footnotes — 4.6:1 on BG
-RUST = "#8A4E1E"        # eyebrow + section labels — 6.1:1 on BG
-GREEN = "#6E8040"       # up (fills)
-ORANGE = "#BC5426"      # down (fills)
-GREEN_TXT = "#46602A"   # up (type) — 6.0:1 on BG
-ORANGE_TXT = "#9E3F16"  # down (type) — 6.3:1 on BG
-TRACK = "#E1D7C7"       # 1-day move capsule
-RAIL = "#CFC5B4"        # 52-week rail
-ZERO_TICK = "#A2977F"   # the zero mark at the centre of the move track
-GREEN_CARD = "#EAF1D8"
-IDX_PILL = "#DCE7C4"    # the INDEXES chip on the green panel
-IDX_ROW = "#F2F7E7"     # banded index row inside that panel
-AMBER_CARD = "#FBEEDB"
-PINK_CARD = "#FBE4DB"
-GREEN_TINT = "#DEE9CC"  # best circle
-PINK_TINT = "#F8DAD0"   # worst circle
-GREY_TINT = "#E4E1D9"   # breadth circle
-SESSION_BG = "#A8541F"
+# The page is dark, and the inks are picked for contrast on it rather than for
+# prettiness: every text colour here clears WCAG AA (4.5:1) on BG. Note the
+# direction flip from the light edition — on this ground the light tints are
+# fills that carry DARK type, and the saturated accents are what carry type on
+# the page itself.
+BG = "#2E2B24"          # warm near-black page
+CREAM = "#F2EBDD"       # headline, tickers, the loudest type — 11.5:1 on BG
+BODY = "#C9C1B2"        # standfirst and row reasons — 8.0:1 on BG
+FAINT = "#A09786"       # date, footnote — 4.9:1 on BG
+ORANGE = "#E8834F"      # section labels, the headline's closing line, down type
+GREEN_TXT = "#A9C48A"   # up type — 7.4:1 on BG
+RULE = "#46423A"        # row separators
+RAIL = "#514C43"        # the 52-week track
+# stat-circle fills are light discs on the dark page, so their type flips to ink
+GREEN_FILL, GREEN_INK = "#D9E7C4", "#33421C"
+PINK_FILL, PINK_INK = "#FAE0D2", "#8E2F14"
+GREY_FILL, GREY_INK = "#E6E2DA", "#2B2721"
 SERIF = "DejaVu Serif"  # matplotlib-bundled; no font install on the function
 SANS = "DejaVu Sans"
-STATUS_BG = {"WAIT": "#5C6640", "NOT YET": "#A03D16",
-             "READY": "#3A6335", "AT HIGH": "#8A5A00"}
-# one card skin per callout group: (poster title, card fill, label ink)
-GROUP_SKIN = {
-    "⚡ ACTION": ("ACTION", AMBER_CARD, "#8A5A00"),
-    "◎ RE-ENTRY": ("RE-ENTRY WATCH", GREEN_CARD, RUST),
-    "▲ GOLDEN CROSS": ("GOLDEN CROSS", GREEN_CARD, "#3F6B3A"),
-    "▼ DEATH CROSS": ("DEATH CROSS", PINK_CARD, "#A32B27"),
+# the verdict at the end of a signal row — plain caps, no chip
+STATUS_INK = {"WAIT": CREAM, "NOT YET": ORANGE,
+              "READY": GREEN_TXT, "AT HIGH": "#E8B45F"}
+# a callout group's poster title. The design only shows RE-ENTRY WATCH, because
+# that is what the day had; the other three keep the same row grammar.
+GROUP_TITLE = {
+    "⚡ ACTION": "ACTION",
+    "◎ RE-ENTRY": "RE-ENTRY WATCH",
+    "▲ GOLDEN CROSS": "GOLDEN CROSS",
+    "▼ DEATH CROSS": "DEATH CROSS",
+}
+# the masthead names the run rather than badging it. session_label's value is
+# still what the caption and the email subject carry.
+EDITION = {
+    "PRE-MARKET": "PRE-MARKET EDITION",
+    "30 MIN TO OPEN": "OPENING BELL EDITION",
+    "MORNING SESSION": "MORNING EDITION",
+    "MIDDAY": "MIDDAY EDITION",
+    "POWER HOUR": "POWER HOUR EDITION",
+    "MARKET CLOSE": "EVENING EDITION",
 }
 
 W = 580                 # page width in layout units
-PAD = 24
+PAD = 32
 COL = W - 2 * PAD
-TAPE_H = 36             # one name: ticker + value chip + 52-week range
-SIG_H = 53              # a signal row inside a callout card
-CIRCLES_H = 187
+TAPE_H = 40             # one name: ticker + move + 52-week range
+SIG_H = 40              # a signal row (ticker + reason + verdict)
+CIRCLES_H = 172
 
 
 def _spaced(t):
@@ -505,12 +508,16 @@ def _wrap(text, width):
     return textwrap.wrap(text, width) or [""]
 
 
-def _long_date(label):
-    """'2026-07-24' -> 'Friday 24 July 2026'; anything else passes through."""
+def _short_date(label):
+    """'2026-07-24' -> 'Fri 24 Jul'; anything else passes through.
+
+    Short because it sits opposite the masthead on one line, where the old
+    long form competed with the eyebrow for the same strip of page.
+    """
     from datetime import datetime
     try:
         return datetime.strptime(str(label)[:10], "%Y-%m-%d").strftime(
-            "%A %d %B %Y").replace(" 0", " ")
+            "%a %d %b").replace(" 0", " ")
     except (ValueError, TypeError):
         return str(label)
 
@@ -526,14 +533,6 @@ class _Sheet:
     def __init__(self, ax=None):
         self.ax = ax
 
-    def box(self, x, y, w, h, r, fc, ec="none"):
-        if self.ax is None:
-            return
-        from matplotlib.patches import FancyBboxPatch
-        self.ax.add_patch(FancyBboxPatch(
-            (x, y), w, h, boxstyle=f"round,pad=0,rounding_size={r}",
-            fc=fc, ec=ec, lw=0 if ec == "none" else 1.0, zorder=1))
-
     def txt(self, x, y, t, size, color, family=SANS, weight="normal",
             ha="left", va="center"):
         if self.ax is None:
@@ -541,87 +540,66 @@ class _Sheet:
         self.ax.text(x, y, t, fontsize=size, color=color, family=family,
                      fontweight=weight, ha=ha, va=va, zorder=4)
 
-    def pill(self, x, y, t, size, fc, tc, ha="left"):
-        if self.ax is None:
-            return
-        self.ax.text(x, y, t, fontsize=size, color=tc, family=SANS,
-                     fontweight="bold", ha=ha, va="center", zorder=4,
-                     bbox=dict(boxstyle="round,pad=0.5,rounding_size=1.4",
-                               fc=fc, ec="none"))
-
-    def line(self, x0, x1, y, color, lw=1.0):
+    def line(self, x0, x1, y, color, lw=1.0, dotted=False):
         if self.ax is None:
             return
         self.ax.plot([x0, x1], [y, y], color=color, lw=lw,
+                     linestyle=(0, (1, 3)) if dotted else "-",
                      solid_capstyle="round", zorder=2)
 
-    def vline(self, x, y0, y1, color, lw=1.0):
-        if self.ax is None:
-            return
-        self.ax.plot([x, x], [y0, y1], color=color, lw=lw, zorder=3)
-
-    def dot(self, x, y, r, fc, ec):
+    def dot(self, x, y, r, fc):
         if self.ax is None:
             return
         from matplotlib.patches import Circle
-        self.ax.add_patch(Circle((x, y), r, fc=fc, ec=ec, lw=1.4, zorder=5))
+        self.ax.add_patch(Circle((x, y), r, fc=fc, ec=BG, lw=1.4, zorder=5))
 
-    def circle(self, cx, cy, r, fc):
+    def circle(self, cx, cy, r, fc, ec="none"):
+        """Filled disc, or — with fc='none' — the outlined ring the design
+        gives the benchmark, so the tape reads as context and not as a verdict
+        the book earned."""
         if self.ax is None:
             return
         from matplotlib.patches import Circle
-        self.ax.add_patch(Circle((cx, cy), r, fc=fc, ec="none", zorder=2))
+        self.ax.add_patch(Circle((cx, cy), r, fc=fc, ec=ec,
+                                 lw=0 if ec == "none" else 1.8, zorder=2))
 
 
-def _paint_tape(sh, top, rows, meta, left, right, band=None):
-    """Two columns, one row per name: today's move | where the year leaves it.
+def _paint_tape(sh, top, rows, meta, dotted=True):
+    """One line per name: ticker · today's move · where the year leaves it.
 
-    The row splits in half. LEFT is a capsule track with a zero tick at its
-    centre and the bar growing right (up) or left (down), on ONE symmetric
-    scale set by the day's largest absolute move, so the bars are comparable
-    down the column and against each other. RIGHT is that name's 52-week range
-    — low, rail, a dot at the last close, high — which is a different question
-    about the same name and so gets its own column rather than its own row.
-    A band spans both halves so the eye tracks straight across.
+    The diverging capsule the previous poster drew is gone — the move is now
+    read as type, and the only drawn thing in the row is the 52-week track:
+    low, rail, a dot at the last close, high.
+
+    The dot takes the colour of the DAY's move, following the design. That is a
+    deliberate trade: the old poster coloured it by 52-week proximity, so a
+    name at its high showed green even on a red day. The extreme still gets
+    said in words — edges_line carries it into the caption.
     -> the block's height.
     """
-    mx = max((abs(m[1]) for m in rows), default=1) or 1
-    tx0, tx1 = left + 72, left + 252              # move track
-    zx = (tx0 + tx1) / 2                          # zero, dead centre
-    half = (tx1 - tx0) / 2 - 4
-    px = left + 316                               # % value, right-aligned
-    rx0, rx1 = left + 368, right - 56             # 52-week rail
+    px = PAD + 72                                 # % value
+    lx = PAD + 183                                # 52w low, right-aligned
+    rx0, rx1 = PAD + 192, W - PAD - 61            # the rail
+    hx = W - PAD - 50                             # 52w high
 
     y = top
     for i, m in enumerate(rows):
         sym, v = m[0], m[1]
         mid = y + TAPE_H / 2
-        if i % 2 == 0:
-            sh.box(left, y + 1, right - left, TAPE_H - 3, 8, band or ROW_BG)
-        sh.txt(left + 14, mid, sym, 12.5, INK, SERIF, "bold")
-
-        # ---- left: 1-day move ----
-        sh.box(tx0, mid - 6.5, tx1 - tx0, 13, 6.5, TRACK)
-        sh.vline(zx, mid - 7.5, mid + 7.5, ZERO_TICK, 1.2)
-        span = max(abs(v) / mx * half, 3.0)
-        sh.box(zx if v >= 0 else zx - span, mid - 6.5, span, 13, 6.5,
-               GREEN if v >= 0 else ORANGE)
+        if i:
+            sh.line(PAD, W - PAD, y, RULE, 0.9, dotted=dotted)
+        sh.txt(PAD, mid, sym, 13, CREAM, SERIF, "bold")
         sh.txt(px, mid, f"{v:+.1f}%".replace("-", "−"), 11.5,
-               GREEN_TXT if v >= 0 else ORANGE_TXT, SANS, "bold", ha="right")
+               GREEN_TXT if v >= 0 else ORANGE, SANS, "bold")
 
-        # ---- right: 52-week range ----
         mm = meta.get(sym, {})
         lo, hi, c = mm.get("lo"), mm.get("hi"), mm.get("close")
-        ph, pl = mm.get("pfh"), mm.get("pfl")
-        near_hi = ph is not None and ph >= -2
-        near_lo = pl is not None and pl <= 2
-        sh.line(rx0, rx1, mid, RAIL, 3.0)
+        sh.txt(lx, mid, _money(lo), 9.5, BODY, SANS, ha="right")
+        sh.line(rx0, rx1, mid, RAIL, 3.4)
         frac = (c - lo) / (hi - lo) if (hi and lo and hi > lo and c) else 0.5
-        sh.dot(rx0 + min(max(frac, 0), 1) * (rx1 - rx0), mid, 4.2,
-               GREEN if near_hi else ORANGE if near_lo else "#3F3A33",
-               band or ROW_BG)
-        sh.txt(rx0 - 10, mid, _money(lo), 9.5, INK_SOFT, SANS, ha="right")
-        sh.txt(rx1 + 10, mid, _money(hi), 9.5, INK_SOFT, SANS)
+        sh.dot(rx0 + min(max(frac, 0), 1) * (rx1 - rx0), mid, 4.6,
+               GREEN_TXT if v >= 0 else ORANGE)
+        sh.txt(hx, mid, _money(hi), 9.5, BODY, SANS)
         y += TAPE_H
     return y - top
 
@@ -635,104 +613,112 @@ def _paint(sh, s):
 
     # ---- masthead ----
     y = 34
-    sh.txt(PAD, y, _spaced(f"TRENDALERT · {s['core_name'].upper()}"), 10,
-           RUST, SANS, "bold")
-    if s.get("session"):
-        sh.pill(W - PAD, y, _spaced(s["session"]), 9, SESSION_BG, "#FFF6EA",
-                ha="right")
-    y += 34
+    edition = EDITION.get(s.get("session") or "", s.get("session") or "")
+    sh.txt(PAD, y, _spaced("TRENDALERT" + (f" · {edition}" if edition else "")),
+           9.5, ORANGE, SANS, "bold")
+    sh.txt(W - PAD, y, _short_date(s["label"]), 9.5, FAINT, SANS, ha="right")
+    y += 40
 
-    for line in _wrap(s.get("headline") or "", 26):
-        sh.txt(PAD, y + 14, line, 27, INK, SERIF, "bold")
-        y += 37
-    y += 4
-    for line in _wrap(s.get("standfirst") or "", 58):
-        sh.txt(PAD, y + 9, line, 12.5, INK_SOFT)
-        y += 20
+    # The headline is a sentence and it breaks at its own comma, not at a
+    # measured width: "Twelve up," in cream sits over "eighteen down." in
+    # orange, so the accent always lands on the whole closing clause. Wrapping
+    # by width instead put the break mid-clause on longer counts
+    # ("Twenty-one up, ten" / "down.").
+    head, sep, tail = (s.get("headline") or "").partition(", ")
+    lines = ([(l, False) for l in _wrap(head + ",", 18)]
+             + [(l, True) for l in _wrap(tail, 18)]) if sep \
+        else [(l, False) for l in _wrap(head, 18)]
+    for line, accent in lines:
+        sh.txt(PAD, y + 15, line, 30, ORANGE if accent else CREAM, SERIF, "bold")
+        y += 42
     y += 6
-    sh.txt(PAD, y + 8, f"{_long_date(s['label'])} · {s.get('watched', 0)} "
-                       f"ticker{'s' if s.get('watched') != 1 else ''} watched",
-           10.5, INK_FAINT)
-    y += 30
+    for line in _wrap(s.get("standfirst") or "", 58):
+        sh.txt(PAD, y + 9, line, 12.5, BODY)
+        y += 21
+    y += 20
 
-    # ---- four stat circles: best, worst, Nasdaq, breadth ----
-    # the book's own best and worst, then the tape it is being judged against,
-    # then breadth. Nasdaq takes its tint from its sign, so the row reads as
-    # three verdicts and a count without anyone having to read the numbers.
+    # ---- four stat circles: best, worst, breadth, Nasdaq ----
+    # the book's own best and worst as filled discs, the count as a neutral
+    # one, and the tape it is being judged against as an outlined ring — the
+    # benchmark is context, not something the book did.
     best = movers[0] if movers else None
     worst = movers[-1] if movers else None
     nas = s.get("nasdaq")
-    nas_up = bool(nas) and nas[1] >= 0
-    for cx, cy, r, fc, val, lab, vc in (
-            (PAD + 70, y + 72, 70, GREEN_TINT,
+    nas_ink = GREY_INK if not nas else GREEN_TXT if nas[1] >= 0 else ORANGE
+    for cx, cy, r, fc, ec, val, lab, vc in (
+            (PAD + 70, y + 74, 67, GREEN_FILL, "none",
              f"{best[1]:+.1f}%" if best else "—",
-             f"{best[0]} · BEST" if best else "BEST", "#3E4A22"),
-            (PAD + 216, y + 96, 78, PINK_TINT,
+             f"{best[0]} · BEST" if best else "BEST", GREEN_INK),
+            (PAD + 219, y + 88, 76, PINK_FILL, "none",
              f"{worst[1]:+.1f}%" if worst else "—",
-             f"{worst[0]} · WORST" if worst else "WORST", "#8E2F14"),
-            (PAD + 348, y + 66, 54,
-             GREY_TINT if not nas else GREEN_TINT if nas_up else PINK_TINT,
-             f"{nas[1]:+.1f}%" if nas else "—", "NASDAQ",
-             INK if not nas else "#3E4A22" if nas_up else "#8E2F14"),
-            (PAD + 464, y + 104, 50, GREY_TINT,
-             f"{s.get('up_n', 0)} / {s.get('down_n', 0)}", "UP / DOWN", INK)):
-        big = r >= 70
-        sh.circle(cx, cy, r, fc)
-        sh.txt(cx, cy - (6 if big else 4), val.replace("-", "−"),
-               23 if big else 18, vc, SERIF, "bold", ha="center")
-        sh.txt(cx, cy + (18 if big else 14), _spaced(lab), 7.5, vc, SANS,
+             f"{worst[0]} · WORST" if worst else "WORST", PINK_INK),
+            (PAD + 353, y + 70, 55, GREY_FILL, "none",
+             f"{s.get('up_n', 0)} / {s.get('down_n', 0)}", "UP / DOWN", GREY_INK),
+            (PAD + 467, y + 90, 41, "none", nas_ink,
+             f"{nas[1]:+.1f}%" if nas else "—", "NASDAQ", nas_ink)):
+        sh.circle(cx, cy, r, fc, ec)
+        size = 22 if r >= 67 else 17 if r >= 55 else 14
+        sh.txt(cx, cy - (6 if r >= 55 else 4), val.replace("-", "−"),
+               size, vc, SERIF, "bold", ha="center")
+        sh.txt(cx, cy + (18 if r >= 55 else 13), _spaced(lab), 7, vc, SANS,
                "bold", ha="center")
-    y += CIRCLES_H + 30
+    y += CIRCLES_H + 26
 
-    # ---- signal cards (action / re-entry / crosses) ----
+    # ---- signal sections (action / re-entry / crosses) ----
+    # No cards any more: a label, then rows, then air. The verdict rides at the
+    # end of its own row as plain caps.
     for tag, rows, _col, total in _callout_groups(s):
-        title, fill, ink = GROUP_SKIN.get(tag, (tag, GREEN_CARD, RUST))
-        sh.txt(PAD, y, _spaced(f"{title} · {total}"), 10, ink, SANS, "bold")
-        y += 20
-        h = len(rows) * SIG_H + 12
-        sh.box(PAD, y, COL, h, 14, fill)
-        ry = y + 6
+        title = GROUP_TITLE.get(tag, tag)
+        # the count is only worth saying when the panel is showing fewer names
+        # than there are, which is exactly when a '+N more' row was added
+        capped = total > MAX_ROWS
+        sh.txt(PAD, y, _spaced(title + (f" · {total}" if capped else "")),
+               9.5, ORANGE, SANS, "bold")
+        y += 24
         for i, (sym, why) in enumerate(rows):
             if i:
-                sh.line(PAD + 18, PAD + COL - 18, ry, "#FFFFFF", 1.2)
-            mid = ry + SIG_H / 2
-            sh.txt(PAD + 18, mid, sym, 14, INK, SERIF, "bold")
-            sh.txt(PAD + 92, mid, why, 11.5, INK_SOFT)
+                sh.line(PAD, W - PAD, y, RULE, 0.9)
+            mid = y + SIG_H / 2
+            sh.txt(PAD, mid, sym, 13, CREAM, SERIF, "bold")
+            sh.txt(PAD + 86, mid, why, 11.5, BODY)
             if status.get(sym):
-                sh.pill(PAD + COL - 18, mid, status[sym], 8.5,
-                        STATUS_BG.get(status[sym], RUST), "#FDF8F1", ha="right")
-            ry += SIG_H
-        y += h + 24
+                sh.txt(W - PAD, mid, _spaced(status[sym]), 9.5,
+                       STATUS_INK.get(status[sym], ORANGE), SANS, "bold",
+                       ha="right")
+            y += SIG_H
+        y += 26
 
-    # ---- movers: two columns, 1-day move | 52-week range ----
+    # ---- movers, then the indexes below them ----
     if movers:
-        sh.txt(PAD + 14, y, _spaced("1-DAY MOVE"), 9.5, RUST, SANS, "bold")
-        sh.txt(PAD + 332, y, _spaced("52-WEEK RANGE"), 9.5, RUST, SANS, "bold")
-        y += 18
-        y += _paint_tape(sh, y, movers, meta, PAD, W - PAD) + 16
+        sh.txt(PAD, y, _spaced(f"TOP {TOP_N} · WORST {TOP_N}"), 9.5, ORANGE,
+               SANS, "bold")
+        sh.txt(W - PAD, y, _spaced("52-WEEK RANGE"), 9.5, ORANGE, SANS, "bold",
+               ha="right")
+        y += 22
+        y += _paint_tape(sh, y, movers, meta) + 26
 
-    # ---- indexes, same two columns, on their own panel ----
     if idx:
-        h = 40 + len(idx) * TAPE_H + 8
-        sh.box(PAD, y, COL, h, 14, GREEN_CARD)
-        sh.pill(PAD + 30, y + 22, _spaced("INDEXES"), 8.5, IDX_PILL, INK)
-        _paint_tape(sh, y + 38, idx, meta, PAD, W - PAD, band=IDX_ROW)
-        y += h + 18
+        sh.txt(PAD, y, _spaced("INDEXES"), 9.5, FAINT, SANS, "bold")
+        y += 22
+        # solid separators here, dotted above: the indexes are one continuous
+        # block, the movers are two halves of a list
+        y += _paint_tape(sh, y, idx, meta, dotted=False) + 18
 
-    sh.txt(PAD, y + 8, "Dot marks the last price inside the 52-week range. "
-                       "Not advice.", 9.5, INK_FAINT)
-    return y + 30
+    sh.line(PAD, W - PAD, y, RULE, 0.9)
+    sh.txt(PAD, y + 20, "Dot marks last price in the 52-week range · Not advice",
+           9.5, FAINT)
+    return y + 42
 
 
 def render_chart_png(s):
-    """The daily summary as a single-column poster PNG.
+    """The daily summary as a single-column poster PNG, dark edition.
 
-    Masthead and session badge, a spelled-out headline over the standfirst,
-    four stat circles (best / worst / Nasdaq / breadth), one card per signal with
-    a verdict chip on each row, then the movers and the index panel as two
-    columns — today's move against a centred zero on the left, the 52-week
-    range on the right, one row per name. Height is computed from the content
-    by painting the layout once with a null canvas.
+    Masthead naming the run and the date, a spelled-out headline whose closing
+    line takes the accent, the standfirst, four stat circles (best / worst /
+    breadth as discs, the Nasdaq as a ring), then a section per signal group
+    with the verdict at the end of each row, then TOP N · WORST N and the
+    indexes as one-line rows carrying the move and the 52-week range. Height is
+    computed from the content by painting the layout once with a null canvas.
     """
     import matplotlib
     matplotlib.use("Agg")                   # headless; imported lazily so the pure

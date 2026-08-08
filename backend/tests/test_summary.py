@@ -9,7 +9,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from daily_summary import (compute_summary, summary_text, standfirst,
                            edges_line, _badge,
                            _crosses, _cross_scope, _callout_groups, _words,
-                           _long_date, session_label, MAX_ROWS, DASHBOARD_URL)
+                           _short_date, session_label, EDITION,
+                           MAX_ROWS, DASHBOARD_URL)
 
 
 def rec(sym, sec, chg, close=100.0, hi=None, lo=None):
@@ -231,8 +232,17 @@ def test_headline_and_meta_are_spelled_out():
     assert (s["up_n"], s["down_n"], s["watched"]) == (4, 3, 7)
     assert _words(0) == "zero" and _words(12) == "twelve" and _words(30) == "thirty"
     assert _words(21) == "twenty-one" and _words(1000) == "1000"
-    assert _long_date("2026-07-24") == "Friday 24 July 2026"
-    assert _long_date("close") == "close"               # non-ISO labels pass through
+    assert _short_date("2026-07-24") == "Fri 24 Jul"
+    assert _short_date("close") == "close"              # non-ISO labels pass through
+
+
+def test_every_session_has_an_edition_name():
+    """The masthead names the run, so a session with no entry would print the
+    raw badge text mid-sentence. session_label is the only producer."""
+    from datetime import datetime
+    seen = {session_label(datetime(2026, 7, 24, h, m))
+            for h, m in ((8, 0), (9, 15), (10, 0), (13, 0), (15, 30), (16, 50))}
+    assert seen == set(EDITION)
 
 
 def test_standfirst_reads_the_days_worst_and_the_re_entry_bench():
@@ -301,3 +311,44 @@ def test_force_flag_bypasses_the_trading_day_gate():
         assert ds.run_daily_summary("b", force=True)["summary"] == "error(no-data.json)"
     finally:
         ds.is_trading_day, ds._read_json = orig_trading, orig_read
+
+
+# ----------------------------------------------------------------------
+# poster render — a smoke test, because the painter has no other coverage
+# ----------------------------------------------------------------------
+def test_poster_renders_for_a_bare_summary_and_a_full_one():
+    """render_chart_png paints branches the composition tests never reach.
+
+    The painter is ~200 lines of layout that nothing else exercises, and its
+    failure mode is a NameError at 08:35 in production rather than a red test.
+    Two shapes: the sparse day (no indexes, no Nasdaq, no signal groups) and
+    the loud one (every group, a capped group, every verdict).
+    """
+    from daily_summary import render_chart_png
+
+    bare = {
+        "core_name": "Core", "label": "2026-07-24", "session": "MARKET CLOSE",
+        "headline": "One up, two down.", "standfirst": "Nothing is sitting at its lows.",
+        "up": [("AAA", 1.2, "")], "down": [("BBB", -2.0, "")], "idx": [],
+        "action": [], "reentry": [], "status": {}, "r52": {}, "golden": [], "death": [],
+        "up_n": 1, "down_n": 2, "watched": 3, "nasdaq": None,
+    }
+    png = render_chart_png(bare)
+    assert png[:8] == b"\x89PNG\r\n\x1a\n" and len(png) > 5000
+
+    full = dict(bare, session="PRE-MARKET", nasdaq=("QQQ", -1.4, ""),
+                idx=[("QQQ", -1.4, ""), ("SPY", 0.1, "hi")],
+                action=[(f"A{i}", "2.0% from 52w high") for i in range(MAX_ROWS + 2)],
+                reentry=[("RE1", "9.3% off low · base forming 4/5"),
+                         ("RE2", "7.7% off low · no base — still falling"),
+                         ("RE3", "1.0% off low · base confirmed")],
+                golden=[("GLD", "EMA 50 crossed above EMA 150")],
+                death=[("DTH", "EMA 150 crossed below EMA 50")],
+                status={"RE1": "WAIT", "RE2": "NOT YET", "RE3": "READY",
+                        **{f"A{i}": "AT HIGH" for i in range(MAX_ROWS + 2)}},
+                r52={"AAA": {"lo": 10, "hi": 20, "close": 15, "pfh": -25, "pfl": 50},
+                     "BBB": {"lo": None, "hi": None, "close": None,
+                             "pfh": None, "pfl": None},      # a name with no 52w range
+                     "QQQ": {"lo": 400, "hi": 615, "close": 590, "pfh": -4, "pfl": 47}})
+    png = render_chart_png(full)
+    assert png[:8] == b"\x89PNG\r\n\x1a\n" and len(png) > 5000
