@@ -1401,7 +1401,7 @@ class Component extends DCLogic {
     if (!c || !this.state.selected) return;
     const bars = this.barsFor(this.state.selected);
     if (!bars.length) return;
-    const days = { "1M": 21, "3M": 63, "6M": 126, "1Y": 252, "Max": bars.length }[this.state.chCfg.span];
+    const days = window.TA.spanDays(this.state.chCfg.span, bars.length);
     const from = Math.max(0, bars.length - days);
     c.price.timeScale().setVisibleRange({ from: bars[from].time, to: bars[bars.length - 1].time });
   }

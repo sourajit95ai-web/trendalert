@@ -72,7 +72,6 @@
     IAUM: "Gold", IGV: "Software", IHAK: "Cybersecurity", SPGI: "S&P Global",
   };
   const TAPE_ORDER = ["SPY", "VOO", "QQQ", "DIA", "IWM", "SOXX", "BTC/USD"];
-  const TAPE_MAX = 4;
   const TYPES = [["portfolio", "Portfolios"], ["watchlist", "Watchlists"], ["index", "Indexes"]];
 
   /* ---------------- helpers ---------------- */
@@ -192,24 +191,75 @@
   }
 
   /* ---------------- PB / RE ---------------- */
+  /* pb is a COUNT of open bookings, not a flag: booking a third tranche makes it
+     3, and each re-entry gives one back. The count reaching zero is what ends
+     the cycle and clears the pair, which is the same moment the old flag pair
+     used to reset on.
+     RE keeps its old standalone meaning when there is nothing to give back —
+     re-entering a name you exited before you ever marked a booking still just
+     highlights RE — so the two rules are spelled out in the dialog rather than
+     left for the reader to infer from the button. */
+  const pbCount = (sym) => Math.max(0, +((s.pbre[sym] || {}).pb) || 0);
+  const reCount = (sym) => Math.max(0, +((s.pbre[sym] || {}).re) || 0);
+  const hasMarks = (sym) => pbCount(sym) > 0 || reCount(sym) > 0;
+
   function askPbre(sym, k) {
-    const st = s.pbre[sym] || {}, marking = !st[k];
+    const pb = pbCount(sym), re = reCount(sym);
+    let msg;
+    if (k === "pb") {
+      msg = pb
+        ? `Book another tranche of ${sym}? The PB counter goes ${pb} → ${pb + 1}.`
+        : `Have you booked profit on ${sym}? OK highlights PB with a count of 1.`;
+    } else if (pb > 0) {
+      msg = pb === 1
+        ? `Re-entered ${sym}? That gives back the last booking — the counter goes 1 → 0 and the cycle closes.`
+        : `Re-entered ${sym}? The PB counter goes ${pb} → ${pb - 1}.`;
+    } else {
+      msg = re
+        ? `Remove the RE (re-entered) mark on ${sym}?`
+        : `Have you re-entered ${sym}? There is no open booking to give back, so OK just highlights RE.`;
+    }
     s.confirm = {
       title: (k === "pb" ? "Profit booking" : "Re-entry") + " — " + sym,
-      msg: k === "pb"
-        ? (marking ? `Have you booked profit on ${sym}? OK highlights PB.` : `Remove the PB (profit booked) mark on ${sym}?`)
-        : (marking ? `Have you re-entered ${sym}? OK highlights RE.` : `Remove the RE (re-entered) mark on ${sym}?`),
-      ok: () => applyPbre(sym, k, marking),
+      msg,
+      ok: () => applyPbre(sym, k),
     };
     render();
   }
-  function applyPbre(sym, k, marking) {
+  function applyPbre(sym, k) {
     const pbre = { ...s.pbre };
-    pbre[sym] = { ...(pbre[sym] || {}) };
-    pbre[sym][k] = marking ? 1 : 0;
+    const pb = pbCount(sym), re = reCount(sym);
     let msg = "";
-    if (pbre[sym].pb && pbre[sym].re) { delete pbre[sym]; msg = `${sym}: profit booked → re-entered — cycle complete, PB/RE reset.`; }
-    else if (!pbre[sym].pb && !pbre[sym].re) delete pbre[sym];
+    if (k === "pb") {
+      pbre[sym] = { pb: pb + 1, re };
+      msg = `${sym}: booking ${pb + 1} recorded.`;
+    } else if (pb > 0) {
+      if (pb === 1) { delete pbre[sym]; msg = `${sym}: profit booked → re-entered — cycle complete, PB/RE reset.`; }
+      else { pbre[sym] = { pb: pb - 1, re: re + 1 }; msg = `${sym}: re-entered — ${pb - 1} booking${pb - 1 === 1 ? "" : "s"} still open.`; }
+    } else if (re) {
+      delete pbre[sym];
+    } else {
+      pbre[sym] = { pb: 0, re: 1 };
+    }
+    if (pbre[sym] && !pbre[sym].pb && !pbre[sym].re) delete pbre[sym];
+    savePbre(pbre, msg);
+  }
+  function askResetPbre(sym) {
+    const pb = pbCount(sym), re = reCount(sym);
+    s.confirm = {
+      title: "Reset PB / RE — " + sym,
+      msg: `Clear the PB and RE marks on ${sym}? ${pb
+        ? `${pb} open booking${pb === 1 ? "" : "s"}`
+        : "The RE mark"} and ${re ? `${re} recorded re-entr${re === 1 ? "y" : "ies"}` : "no re-entries"} will be forgotten. It does not undo any trade — only the marks.`,
+      ok: () => {
+        const pbre = { ...s.pbre };
+        delete pbre[sym];
+        savePbre(pbre, `${sym}: PB/RE marks cleared.`);
+      },
+    };
+    render();
+  }
+  function savePbre(pbre, msg) {
     s.pbre = pbre;
     T.savePbre(pbre);
     T.post(s.syncUrl, "pbre", pbre);
@@ -372,20 +422,24 @@
     const LWC = window.LightweightCharts;
     if (!LWC || !paneEl.price || !paneEl.price.isConnected) return;
     const CT = T.chartTheme;
-    const opts = (h, showTime) => ({
+    /* Every pane carries its own date axis. It used to be on the MACD pane
+       alone, so switching RSI and MACD off left the price chart with no dates
+       at all, and even with them on the reader had to trace a column down two
+       panes to find out when a candle happened. */
+    const opts = (h) => ({
       height: h, layout: { background: { color: "transparent" }, textColor: CT.text, fontSize: 11 },
       grid: { vertLines: { color: CT.grid }, horzLines: { color: CT.grid } },
       rightPriceScale: { borderColor: CT.border, minimumWidth: 72 },
-      timeScale: { borderColor: CT.border, timeVisible: false, visible: showTime !== false },
+      timeScale: { borderColor: CT.border, timeVisible: false, secondsVisible: false, visible: true },
       crosshair: {
         vertLine: { color: CT.cross, labelBackgroundColor: CT.accent },
         horzLine: { color: CT.cross, labelBackgroundColor: CT.accent },
       },
     });
     if (!charts) {
-      const price = LWC.createChart(pane("price"), opts(340, false));
-      const rsi = LWC.createChart(pane("rsi"), opts(150, false));
-      const macd = LWC.createChart(pane("macd"), opts(150, true));
+      const price = LWC.createChart(pane("price"), opts(340));
+      const rsi = LWC.createChart(pane("rsi"), opts(150));
+      const macd = LWC.createChart(pane("macd"), opts(150));
       const candle = price.addCandlestickSeries({
         upColor: CT.up, downColor: CT.down, wickUpColor: CT.up, wickDownColor: CT.down, borderVisible: false,
       });
@@ -396,7 +450,7 @@
       });
       link(price, [rsi, macd]); link(rsi, [price, macd]); link(macd, [price, rsi]);
       [price, rsi, macd].forEach(c => c.subscribeCrosshairMove(onCross));
-      charts = { price, rsi, macd, candle, ema: [], lines: [], rsiSeries: [], macdSeries: [] };
+      charts = { price, rsi, macd, candle, ema: [], lines: [], chan: [], rsiSeries: [], macdSeries: [] };
       chartedSym = null;
     }
     [["price", 340], ["rsi", 150], ["macd", 150]].forEach(([k, h]) => {
@@ -433,9 +487,12 @@
       c.ema.push(line);
     });
 
+    /* One markers array for the whole series: setMarkers REPLACES, so the
+       crossover arrows and the channel entries have to be merged and sorted by
+       time rather than set from two places. */
+    const mk = [];
     if (vis.cross !== false) {
       const visE = cfg.ema.filter(e => vis[e.key]).sort((a, b) => a.period - b.period);
-      const mk = [];
       if (visE.length === 2 && visE[0].period !== visE[1].period) {
         const eA = T.emaArr(closes, visE[0].period), eB = T.emaArr(closes, visE[1].period);
         for (let i = 1; i < bars.length; i++) {
@@ -446,8 +503,29 @@
             mk.push({ time: bars[i].time, position: "aboveBar", color: CT.down, shape: "arrowDown", text: visE[0].period + "↓" + visE[1].period });
         }
       }
-      c.candle.setMarkers(mk);
-    } else c.candle.setMarkers([]);
+    }
+
+    /* ---- regression channel ---- */
+    c.chan.forEach(x => { try { c.price.removeSeries(x); } catch (e) { } }); c.chan = [];
+    const ch = channelFor(sym);
+    if (ch) {
+      /* rails solid, the fit itself dashed: the mid-line is a description, not
+         a level anything trades off */
+      [[ch.upper, 1, LWC.LineStyle.Solid], [ch.mid, 1, LWC.LineStyle.Dashed],
+       [ch.lower, 1, LWC.LineStyle.Solid]].forEach(([data, w, style]) => {
+        const line = c.price.addLineSeries({
+          color: CT.chan, lineWidth: w, lineStyle: style,
+          priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+        });
+        line.setData(data);
+        c.chan.push(line);
+      });
+      ch.entries.forEach(e => mk.push({
+        time: e.time, position: "belowBar", color: CT.up, shape: "circle", text: "entry",
+      }));
+    }
+    mk.sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
+    c.candle.setMarkers(mk);
 
     c.lines.forEach(l => { try { c.candle.removePriceLine(l); } catch (e) { } }); c.lines = [];
     if (vis.sr) {
@@ -512,9 +590,19 @@
     if (!charts || !s.selected) return;
     const bars = barsFor(s.selected);
     if (!bars.length) return;
-    const days = { "1M": 21, "3M": 63, "6M": 126, "1Y": 252, "Max": bars.length }[s.chCfg.span];
-    const from = Math.max(0, bars.length - days);
+    const from = Math.max(0, bars.length - T.spanDays(s.chCfg.span, bars.length));
     charts.price.timeScale().setVisibleRange({ from: bars[from].time, to: bars[bars.length - 1].time });
+  }
+  /* The bars the regression channel is fitted to: the visible span, so the
+     channel describes the window you are actually looking at. */
+  function spanBars(bars) {
+    return bars.slice(Math.max(0, bars.length - T.spanDays(s.chCfg.span, bars.length)));
+  }
+  function channelFor(sym) {
+    if (!sym || !s.vis.regch) return null;
+    const bars = barsFor(sym);
+    if (!bars.length) return null;
+    return T.regChannel(spanBars(bars), s.chCfg.regch);
   }
   /* Written straight into the DOM rather than through render(): the crosshair
      fires on every mouse move, and repainting the drawer that often would
@@ -563,20 +651,24 @@
       const i = TAPE_ORDER.indexOf(sym);
       return i === -1 ? TAPE_ORDER.length + idxSyms.indexOf(sym) : i;
     };
-    /* SPY and VOO both track the S&P; whichever ranks first wins, so the tape
-       never quotes the same index twice under two tickers. */
-    const seen = new Set();
-    const tape = idxSyms.map(bySym).filter(Boolean)
-      .sort((a, b) => rank(a.symbol) - rank(b.symbol))
-      .filter(d => {
-        const label = PROXY[d.symbol] || d.symbol;
-        if (seen.has(label)) return false;
-        seen.add(label); return true;
-      })
-      .slice(0, TAPE_MAX).map(d => ({
-        name: PROXY[d.symbol] || d.symbol.replace(/\/USD$/, ""), sym: d.symbol,
+    /* Every index in the list is quoted — the tape scrolls sideways rather than
+       truncating, because a tape that silently drops holdings is worse than one
+       that needs a swipe. SPY and VOO share a proxy name, so a name claimed by
+       more than one ticker carries its ticker to keep the two rows apart. */
+    const held = idxSyms.map(bySym).filter(Boolean)
+      .sort((a, b) => rank(a.symbol) - rank(b.symbol));
+    const nameCount = {};
+    held.forEach(d => {
+      const n = PROXY[d.symbol] || d.symbol.replace(/\/USD$/, "");
+      nameCount[n] = (nameCount[n] || 0) + 1;
+    });
+    const tape = held.map(d => {
+      const n = PROXY[d.symbol] || d.symbol.replace(/\/USD$/, "");
+      return {
+        name: nameCount[n] > 1 ? n + " " + d.symbol : n, sym: d.symbol,
         close: T.fmt(d.close), chg: pct(d.change_pct, 1), ink: T.dirColor(d.change_pct),
-      }));
+      };
+    });
 
     const gen = s.payload && s.payload.generated_at;
     const at = gen && gen !== "demo" ? new Date(gen) : null;
@@ -646,14 +738,26 @@
 
   /* ---------------- cards ---------------- */
   const markBtn = (sym, k) => {
-    const m = s.pbre[sym] || {};
-    const set = k === "pb" ? !!m.pb : !!m.re;
+    const n = k === "pb" ? pbCount(sym) : reCount(sym);
+    const set = n > 0;
     const ink = k === "pb" ? "var(--ta-warn)" : "var(--color-accent-300)";
     const bd = k === "pb" ? "var(--ta-warn)" : "var(--color-accent)";
+    /* the count rides the corner of the button rather than sitting inside the
+       label, so PB and RE keep the same width whatever the tally */
+    const badge = k === "pb" && n > 0
+      ? `<i class="mark-n" style="background:${ink}">${n}</i>` : "";
+    const title = k === "pb"
+      ? (set ? `${n} open booking${n === 1 ? "" : "s"} — click to book another` : "Profit booked")
+      : (pbCount(sym) > 0 ? "Re-entered — gives back one booking" : "Re-entered");
     return `<button class="mark" data-act="pbre" data-sym="${esc(sym)}" data-k="${k}"
       ${set ? `style="color:${ink};border-color:${bd}"` : ""}
-      title="${k === "pb" ? "Profit booked" : "Re-entered"}">${k.toUpperCase()}</button>`;
+      title="${esc(title)}">${k.toUpperCase()}${badge}</button>`;
   };
+  /* The reset only appears once there is something to reset — a third button on
+     every row would be noise on the 40-odd names that carry no marks. */
+  const marks = (sym) => markBtn(sym, "pb") + markBtn(sym, "re") + (hasMarks(sym)
+    ? `<button class="mark reset" data-act="pbreset" data-sym="${esc(sym)}"
+        title="Reset PB / RE on ${esc(sym)}" aria-label="Reset PB and RE on ${esc(sym)}">↺</button>` : "");
 
   function cardHTML(d, kind) {
     const score = T.scoreOf(d, s.settings);
@@ -683,7 +787,7 @@
           <button class="btn sm" data-act="open" data-sym="${esc(d.symbol)}">Detail</button>
           <button class="btn sm" data-act="chart" data-sym="${esc(d.symbol)}">Chart</button>
           <span class="spacer"></span>
-          ${markBtn(d.symbol, "pb")}${markBtn(d.symbol, "re")}
+          ${marks(d.symbol)}
         </div>
       </div>`;
   }
@@ -711,7 +815,7 @@
           <button class="btn sm" data-act="open" data-sym="${esc(d.symbol)}">Detail</button>
           <button class="btn sm" data-act="chart" data-sym="${esc(d.symbol)}">Chart</button>
           <span class="spacer"></span>
-          ${markBtn(d.symbol, "pb")}${markBtn(d.symbol, "re")}
+          ${marks(d.symbol)}
         </div>
       </div>`;
   }
@@ -764,7 +868,7 @@
         <td class="num hide-s" style="color:${zone === "high" ? T.ink.warn : zone === "low" ? "var(--color-accent-300)" : "var(--color-neutral-500)"}">${
           ph == null ? "—" : esc(T.fmt(Math.abs(ph) < 0.05 ? 0 : ph, 1)) + "%"}</td>
         <td><span class="trend" style="color:${trendInk(tr)}">${TREND_GLYPH[tr]} ${esc(TREND_STATE[tr])}</span></td>
-        <td><span class="marks">${markBtn(d.symbol, "pb")}${markBtn(d.symbol, "re")}</span></td>
+        <td><span class="marks">${marks(d.symbol)}</span></td>
       </tr>`;
     }).join("");
     return `<div style="overflow-x:auto"><table class="tbl"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
@@ -926,11 +1030,60 @@
       </div>`;
   }
 
+  /* The channel's reading, in words and one number.
+     It names the fit window on purpose: the channel is fitted to the visible
+     span, so the same day can sit low in a 3Y channel and mid-way up a Max one.
+     Saying "fitted to 756 bars · 3Y" is what stops that being a trap. */
+  function chanPanel(d) {
+    if (!s.vis.regch) return "";
+    const ch = channelFor(d.symbol);
+    if (!ch) return `
+      <div>
+        <div class="block-label">Regression channel</div>
+        <p class="rail-note">Needs at least 30 bars in the span to fit a channel.</p>
+      </div>`;
+    const z = T.regZone(ch);
+    const pos = ch.posNow;
+    /* the marker is clamped to the track; the number below it is not, so a
+       breakout still reads as 112% rather than pinning silently at 100% */
+    const clamped = Math.max(0, Math.min(1, pos));
+    const last = ch.entries.length ? ch.entries[ch.entries.length - 1] : null;
+    const stats = [
+      ["Position in channel", T.fmt(pos * 100, 0) + "%", z.ink],
+      ["Trend rate", (ch.annualPct >= 0 ? "+" : "−") + T.fmt(Math.abs(ch.annualPct), 1) + "% / yr",
+        ch.rising ? T.ink.up : T.ink.down],
+      ["Entries in window", String(ch.entries.length), "var(--color-text)"],
+      ["Last entry", last ? last.time : "—", last ? "var(--color-accent-300)" : "var(--color-neutral-600)"],
+    ];
+    return `
+      <div>
+        <div class="block-label">Regression channel · fitted to ${ch.bars} bars · ${esc(s.chCfg.span)}</div>
+        <div class="tag" style="display:inline-block;color:${z.ink};border-color:${z.ink}">${esc(z.label)}</div>
+        <div class="range" style="margin-top:14px">
+          <div class="range-track">
+            <i style="left:calc(${(clamped * 100).toFixed(1)}% - 1.5px);background:${z.ink}"></i>
+          </div>
+          <div class="range-ends">
+            <span>$${esc(T.fmt(ch.lowerNow))} lower rail</span>
+            <span>$${esc(T.fmt(ch.upperNow))} upper rail</span>
+          </div>
+        </div>
+        <div class="stats" style="margin-top:16px">${stats.map(([k, v, ink]) =>
+          `<div class="stat"><div class="k">${esc(k)}</div><div class="v num" style="color:${ink}">${esc(v)}</div></div>`).join("")}</div>
+        <p class="rail-note" style="margin-top:12px">Entry when price is in the lowest
+          ${esc(T.fmt(s.chCfg.regch.entryPct, 0))}% of a rising channel, at most once per
+          ${esc(String(s.chCfg.regch.cooldown))} bars. Rails sit ${esc(T.fmt(s.chCfg.regch.k, 1))}
+          standard deviations either side of the fit, so the width is this symbol's own
+          dispersion — not a fixed percentage.</p>
+      </div>`;
+  }
+
   function chartHTML(d) {
     const cfg = s.chCfg;
     const eyes = [
       { key: "candles", label: "Candles", swatch: T.chartTheme.up },
       ...cfg.ema.map(e => ({ key: e.key, label: e.label, swatch: e.color })),
+      { key: "regch", label: "Reg. channel", swatch: T.chartTheme.chan },
       { key: "sr", label: "S/R", swatch: T.chartTheme.sr },
       { key: "w52", label: "52W H/L", swatch: T.chartTheme.gold },
       { key: "pline", label: "Last price", swatch: "var(--color-neutral-600)" },
@@ -944,6 +1097,8 @@
     const cfgRows = [
       ...cfg.ema.map((e, i) => ({ label: e.label, color: e.color, ck: "ema" + i,
         nums: [["period", e.period, "emaP" + i]] })),
+      { label: "Channel", color: T.chartTheme.chan, ck: "regch", noColor: true,
+        nums: [["± s.d.", cfg.regch.k, "rcK"], ["entry %", cfg.regch.entryPct, "rcE"], ["cooldown", cfg.regch.cooldown, "rcC"]] },
       { label: "RSI", color: cfg.rsi.color, ck: "rsi", nums: [["period", cfg.rsi.period, "rsiP"]] },
       { label: "MACD", color: cfg.macd.macdColor, color2: cfg.macd.signalColor, ck: "macd",
         nums: [["fast", cfg.macd.fast, "mF"], ["slow", cfg.macd.slow, "mS"], ["signal", cfg.macd.signal, "mG"]] },
@@ -963,12 +1118,18 @@
         ${s.chartCfgOpen ? cfgRows.map(r => `
           <div class="cfg-row">
             <span class="nm">${esc(r.label)}</span>
-            <input type="color" value="${esc(r.color)}" data-act="color" data-k="${r.ck}">
+            ${r.noColor
+              /* the channel draws in the theme's own colour, so there is no
+                 stored colour for a picker to write to */
+              ? `<i class="cfg-swatch" style="background:${r.color}" aria-hidden="true"></i>`
+              : `<input type="color" value="${esc(r.color)}" data-act="color" data-k="${r.ck}">`}
             ${r.color2 ? `<input type="color" value="${esc(r.color2)}" data-act="color2" data-k="${r.ck}">` : ""}
             ${r.nums.map(([lbl, val, key]) =>
-              `<label>${esc(lbl)}<input class="field" type="number" value="${esc(val)}" data-act="cfgnum" data-k="${key}"></label>`).join("")}
+              `<label>${esc(lbl)}<input class="field" type="number" step="${key === "rcK" ? "0.1" : "1"}" value="${esc(val)}" data-act="cfgnum" data-k="${key}"></label>`).join("")}
           </div>`).join("") : ""}
       </div>
+
+      ${chanPanel(d)}
 
       <div>
         <div class="pane">
@@ -1011,7 +1172,7 @@
         </div>
         <div class="dr-body">${isChart ? chartHTML(d) : detailHTML(d)}</div>
         <div class="dr-foot">
-          ${markBtn(d.symbol, "pb")}${markBtn(d.symbol, "re")}
+          ${marks(d.symbol)}
           <span style="margin-left:auto;font-size:12.5px;color:var(--color-neutral-600)">
             ${isChart ? "Hover any pane for OHLC, RSI and MACD — all three scroll and zoom together." : ""}</span>
         </div>
@@ -1299,13 +1460,6 @@
           <span class="brand-name">TrendAlert</span>
         </div>
         <span class="chip-scope" title="${esc(m.scope)}">US market</span>
-        <div class="tape">
-          ${m.tape.map(t => `<span class="tape-item" title="${esc(t.sym)}">
-            <span class="tape-name">${esc(t.name)}</span>
-            <span class="tape-val num">${esc(t.close)}</span>
-            <span class="tape-chg num" style="color:${t.ink}">${esc(t.chg)}</span>
-          </span>`).join("")}
-        </div>
         <div class="mast-right">
           ${m.stale ? `<span class="stale" style="color:${m.stale.level === "bad" ? T.ink.down : T.ink.warn}">${esc(m.stale.text)}</span>` : ""}
           <span class="status"><i class="status-dot" style="background:${m.dot}"></i>${esc(m.status)}</span>
@@ -1316,6 +1470,16 @@
           </button>
         </div>
       </header>
+
+      <div class="tapebar">
+        <div class="tape">
+          ${m.tape.map(t => `<button class="tape-item" data-act="open" data-sym="${esc(t.sym)}" title="${esc(t.sym)} — open detail">
+            <span class="tape-name">${esc(t.name)}</span>
+            <span class="tape-val num">${esc(t.close)}</span>
+            <span class="tape-chg num" style="color:${t.ink}">${esc(t.chg)}</span>
+          </button>`).join("")}
+        </div>
+      </div>
 
       <div class="page">
         <div class="col">
@@ -1463,6 +1627,7 @@
     if (a === "dtab") { s.drawerTab = k; return render(); }
     if (a === "closedrawer") { s.drawerOpen = false; return render(); }
     if (a === "pbre") return askPbre(sym, t.dataset.k);
+    if (a === "pbreset") return askResetPbre(sym);
     if (a === "member") return toggleMembership(sym, id);
     if (a === "drop") {
       const l = activeList();
@@ -1568,6 +1733,9 @@
         else if (key === "mF") c.macd.fast = Math.max(2, n || 12);
         else if (key === "mS") c.macd.slow = Math.max(3, n || 26);
         else if (key === "mG") c.macd.signal = Math.max(1, n || 9);
+        else if (key === "rcK") c.regch.k = Math.max(0.5, Math.min(4, n || 1.8));
+        else if (key === "rcE") c.regch.entryPct = Math.max(2, Math.min(50, n || 18));
+        else if (key === "rcC") c.regch.cooldown = Math.max(0, Math.min(252, n == null || isNaN(n) ? 60 : n));
         else {
           const i = +key.slice(4);
           c.ema[i].period = Math.max(2, Math.min(400, n || c.ema[i].period));

@@ -6,7 +6,8 @@ Stores in one function, selected by the `kind` param:
   kind=positions -> positions.json  { "AAPL": {entry, date, booked, bookedDate}, ... }
   kind=settings  -> settings.json   scoring weights / thresholds / alert channel
   kind=universe  -> universe.json   [ "AAPL", ... ] — union of dashboard list
-  kind=pbre      -> pbre.json       { "AAPL": {pb:1, re:1}, ... } — booked/re-entered markers
+  kind=pbre      -> pbre.json       { "AAPL": {pb:3, re:1}, ... } — pb/re are COUNTS
+                    of open booked tranches and recorded re-entries, not flags
                     symbols; the pipeline merges it into its fetch universe
                     so UI-added tickers get data on the next cycle
 
@@ -98,6 +99,42 @@ def merge_universe(existing, incoming, cap=250):
         if s and _SYM_RE.match(s) and s not in seen:
             seen.add(s)
             out.append(s)
+    return out
+
+
+PBRE_MAX = 99
+
+
+def clean_pbre(incoming, cap=500):
+    """Sanitize the PB/RE marker map, preserving pb/re as COUNTS.
+
+    pb is the number of profit-booked tranches still open and re the number of
+    re-entries recorded against them, so a name the user booked three times
+    posts pb=3. This used to coerce both to 1, which silently threw the tally
+    away on the round trip: the dashboard pulls pbre.json on load, so the next
+    refresh reset every counter to one.
+
+    Counts are floored at 0 and capped at PBRE_MAX; anything unparseable reads
+    as 0, and a symbol left with nothing on either side is dropped rather than
+    stored as an empty entry. A 0/1 map written by the shipped dashboard still
+    loads unchanged — 1 is just a count of one."""
+    out = {}
+    if not isinstance(incoming, dict):
+        return out
+    for sym, st in list(incoming.items())[:cap]:
+        if not isinstance(st, dict):
+            continue
+        e = {}
+        for k in ("pb", "re"):
+            try:
+                n = int(st.get(k) or 0)
+            except (TypeError, ValueError):
+                n = 0
+            n = max(0, min(PBRE_MAX, n))
+            if n:
+                e[k] = n
+        if e:
+            out[str(sym)[:16]] = e
     return out
 
 
@@ -260,17 +297,7 @@ def notes(request):
             m = payload.get("data")
             if not isinstance(m, dict):
                 return (json.dumps({"error": "data{} required"}), 400, _JSON)
-            clean = {}
-            for sym, st in list(m.items())[:500]:
-                if not isinstance(st, dict):
-                    continue
-                e = {}
-                if st.get("pb"):
-                    e["pb"] = 1
-                if st.get("re"):
-                    e["re"] = 1
-                if e:
-                    clean[str(sym)[:16]] = e
+            clean = clean_pbre(m)
             _write("pbre", clean)
             return (json.dumps({"ok": True, "count": len(clean)}), 200, _JSON)
 

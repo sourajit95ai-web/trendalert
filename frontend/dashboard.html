@@ -831,6 +831,73 @@ const __ds_scope = {};
     cl.sort((a, b) => b.n - a.n);
     return cl.slice(0, maxLevels);
   };
+  /* Log-regression channel — the long-horizon entry rule.
+   *
+   * A least-squares line through log10(close) with rails at ±k standard
+   * deviations of the residuals. Log price is what makes it honest over years:
+   * on a linear axis the same percentage pullback looks bigger the higher the
+   * price got, so a straight channel would fan out and the early years would
+   * read as permanently cheap.
+   *
+   * The channel is fitted to the bars it is HANDED, not to the whole history —
+   * the caller passes the visible span, so a 3Y and a Max channel are genuinely
+   * different descriptions of the same stock. `pos` is the reading that matters:
+   * 0 at the lower rail, 1 at the upper, and comparable across symbols because
+   * the width is each symbol's own dispersion rather than a fixed percentage.
+   */
+  TA.regChannel = (bars, opts) => {
+    const o = Object.assign({ k: 1.8, entryPct: 18, cooldown: 60 }, opts || {});
+    if (!bars || bars.length < 30) return null;
+    const n = bars.length;
+    const ys = bars.map(b => Math.log10(Math.max(b.close, 1e-6)));
+    const mx = (n - 1) / 2, my = ys.reduce((a, v) => a + v, 0) / n;
+    let sxx = 0, sxy = 0;
+    for (let i = 0; i < n; i++) { const dx = i - mx; sxx += dx * dx; sxy += dx * (ys[i] - my); }
+    const slope = sxx ? sxy / sxx : 0, icpt = my - slope * mx;
+    const fit = new Array(n), res = new Array(n);
+    let ss = 0;
+    for (let i = 0; i < n; i++) { fit[i] = slope * i + icpt; res[i] = ys[i] - fit[i]; ss += res[i] * res[i]; }
+    const sd = Math.sqrt(ss / n);
+    if (!(sd > 0)) return null;
+    const half = o.k * sd;
+    const at = (i, off) => +Math.pow(10, fit[i] + off).toFixed(4);
+    const line = (off) => bars.map((b, i) => ({ time: b.time, value: at(i, off) }));
+    /* 0 at the lower rail, 1 at the upper. Deliberately NOT clamped: price
+       breaking out above the channel reads as 1.2, which is information. */
+    const pos = res.map(r => (r + half) / (2 * half));
+    const rising = slope > 0;
+    const entries = [];
+    let cool = -1e9;
+    for (let i = 0; i < n; i++) {
+      if (rising && pos[i] < o.entryPct / 100 && i - cool >= o.cooldown) {
+        entries.push({ time: bars[i].time, price: bars[i].close, pos: pos[i] });
+        cool = i;
+      }
+    }
+    return {
+      slope, sd, rising, pos, entries, k: o.k,
+      mid: line(0), upper: line(half), lower: line(-half),
+      posNow: pos[n - 1],
+      lowerNow: at(n - 1, -half), midNow: at(n - 1, 0), upperNow: at(n - 1, half),
+      /* compounded over 252 trading days, so it reads as a trend rate rather
+         than a slope in log units nobody can picture */
+      annualPct: (Math.pow(10, slope * 252) - 1) * 100,
+      bars: n, from: bars[0].time, to: bars[n - 1].time,
+    };
+  };
+  /* How a channel position should be read. The bands are the same ones the
+     entry rule uses, so the words and the ring can never disagree. */
+  TA.regZone = (ch) => {
+    if (!ch) return null;
+    const p = ch.posNow;
+    if (!ch.rising) return { label: "Channel falling — no entry", ink: TA.ink.down, act: false };
+    if (p < 0) return { label: "Below the channel", ink: TA.ink.warn, act: false };
+    if (p < 0.18) return { label: "Lower rail — entry zone", ink: TA.ink.up, act: true };
+    if (p < 0.45) return { label: "Below mid-channel", ink: "var(--color-accent-300)", act: false };
+    if (p <= 0.82) return { label: "Upper half of channel", ink: "var(--color-neutral-500)", act: false };
+    if (p <= 1) return { label: "Upper rail — stretched", ink: TA.ink.warn, act: false };
+    return { label: "Above the channel", ink: TA.ink.down, act: false };
+  };
   TA.genBars = (seedStr, start) => {
     let s = 0; for (const ch of seedStr) s = (s * 31 + ch.charCodeAt(0)) % 233280;
     const rnd = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
@@ -856,12 +923,24 @@ const __ds_scope = {};
       { key: "ema200", period: 200, color: "#75798c", label: "EMA 200" },
     ],
     rsi: { period: 14, color: "#e9e9ed", ob: 70, os: 30 },
+    /* k: rail width in standard deviations of the fit's residuals.
+       entryPct: how far down the channel counts as the entry zone, in percent.
+       cooldown: bars before the rule may speak again, so one long trough at the
+       lower rail is one entry rather than forty. */
+    regch: { k: 1.8, entryPct: 18, cooldown: 60 },
     macd: { fast: 12, slow: 26, signal: 9, macdColor: "#9184d9", signalColor: "#b2b6ca" },
   };
   /* default chart: the two EMAs that drive the rule, their crossovers, and the last
      price. Candles, the other EMAs, S/R and the 52w bands stay off until asked for. */
-  TA.DEFAULT_VIS = { candles: false, ema20: false, ema50: true, ema150: true, ema200: false, rsi: true, macd: true, sr: false, w52: false, cross: true, chart: true, pline: true };
-  TA.SPANS = ["1M", "3M", "6M", "1Y", "Max"];
+  TA.DEFAULT_VIS = { candles: false, ema20: false, ema50: true, ema150: true, ema200: false, rsi: true, macd: true, sr: false, w52: false, cross: true, chart: true, pline: true, regch: true };
+  /* 3Y and 5Y exist for the regression channel: it needs years to describe a
+     trend, and 1Y was the longest window on offer. */
+  TA.SPANS = ["1M", "3M", "6M", "1Y", "3Y", "5Y", "Max"];
+  TA.SPAN_DAYS = { "1M": 21, "3M": 63, "6M": 126, "1Y": 252, "3Y": 756, "5Y": 1260 };
+  /* The single source for span -> bar count. Both dashboards used to carry their
+     own copy of this map inline, so adding a span here would have left the other
+     one resolving `undefined` days and indexing bars[NaN]. */
+  TA.spanDays = (span, n) => span === "Max" ? n : Math.min(n, TA.SPAN_DAYS[span] || TA.SPAN_DAYS["6M"]);
   TA.EMA_KEYS = ["ema20", "ema50", "ema150", "ema200"];
   TA.loadCh = (k, d) => {
     try { const v = JSON.parse(lsGet(k)); return v ? Object.assign(JSON.parse(JSON.stringify(d)), v) : JSON.parse(JSON.stringify(d)); }
@@ -888,12 +967,14 @@ const __ds_scope = {};
       text: "#9397ab", grid: "rgba(233,233,237,.05)", border: "#3f424d", cross: "#595d6c",
       accent: "#9184d9", up: "#63c69b", down: "#e0798a", upA: "rgba(99,198,155,.5)", downA: "rgba(224,121,138,.5)",
       histUp: "rgba(99,198,155,.55)", histDown: "rgba(224,121,138,.55)", sr: "#b2b6ca", gold: "#d9c58a",
+      chan: "#8a7fd0",
       obZone: "rgba(224,121,138,.10)", osZone: "rgba(99,198,155,.10)",
     },
     light: {
       text: "#585d70", grid: "rgba(20,22,29,.07)", border: "#d5d8e6", cross: "#a9adbe",
       accent: "#5b4fa0", up: "#1d7d55", down: "#b03b52", upA: "rgba(29,125,85,.5)", downA: "rgba(176,59,82,.5)",
       histUp: "rgba(29,125,85,.55)", histDown: "rgba(176,59,82,.55)", sr: "#343845", gold: "#8a6d1f",
+      chan: "#6b5fc0",
       obZone: "rgba(176,59,82,.09)", osZone: "rgba(29,125,85,.09)",
     },
   };
@@ -4672,7 +4753,7 @@ class Component extends DCLogic {
     if (!c || !this.state.selected) return;
     const bars = this.barsFor(this.state.selected);
     if (!bars.length) return;
-    const days = { "1M": 21, "3M": 63, "6M": 126, "1Y": 252, "Max": bars.length }[this.state.chCfg.span];
+    const days = window.TA.spanDays(this.state.chCfg.span, bars.length);
     const from = Math.max(0, bars.length - days);
     c.price.timeScale().setVisibleRange({ from: bars[from].time, to: bars[bars.length - 1].time });
   }
