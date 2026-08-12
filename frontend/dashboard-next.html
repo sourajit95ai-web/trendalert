@@ -732,13 +732,14 @@ h1.headline {
 .syms button:hover { border-color: var(--ta-down); color: var(--ta-down); }
 
 /* ---------------- drawer ---------------- */
-/* One third of the viewport, not the half that min(720px,…) gave on a laptop.
-   The floor keeps the three chart panes and their price axis legible on a small
-   screen, where a literal third would be ~330px; the cap stops it sprawling on
-   an ultra-wide. Below 760px it goes full-bleed (see the responsive block). */
+/* Half the viewport. There is no upper cap on purpose — half of the page is the
+   brief, so it stays half on a wide monitor rather than reverting to a third.
+   The floor only matters under ~920px, where a literal half would leave the
+   three chart panes too narrow to read; below 760px it goes full-bleed (see the
+   responsive block). */
 .drawer {
   position: fixed; z-index: 50; top: 0; right: 0; bottom: 0;
-  width: clamp(400px, 33.33vw, 680px); display: flex; flex-direction: column;
+  width: max(460px, 50vw); display: flex; flex-direction: column;
   background: var(--color-bg); border-left: 1px solid var(--color-neutral-800);
   box-shadow: var(--shadow-lg);
 }
