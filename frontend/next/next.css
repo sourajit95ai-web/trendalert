@@ -77,7 +77,11 @@ input, select, textarea { font: inherit; color: inherit; }
 .tape-val { font-size: 13.5px; font-weight: 600; }
 .tape-chg { font-size: 12.5px; font-weight: 500; }
 
-.mast-right { display: flex; align-items: center; gap: 16px; flex: none; }
+/* margin-left:auto is what holds this in the right corner. The tape used to sit
+   between the scope chip and here with flex:1 1 auto, doing that job as a side
+   effect; when the tape moved to its own strip below, this group was left
+   stranded mid-header. */
+.mast-right { display: flex; align-items: center; gap: 16px; flex: none; margin-left: auto; }
 .status { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--color-neutral-500); }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-neutral-600); }
 .stale { font-size: 12px; padding: 3px 9px; border-radius: 7px; border: 1px solid currentColor; }
@@ -417,6 +421,13 @@ h1.headline {
 }
 @media (max-width: 760px) {
   .mast { padding: 12px 18px; gap: 12px; flex-wrap: wrap; }
+  /* Once the masthead wraps this group onto its own row, holding it right just
+     pushes it past the edge — the pill, the timestamp and Settings together are
+     wider than a phone. It aligns left and wraps internally instead.
+     flex must be 1 1 100% and not the desktop `none`: `flex: none` sizes the
+     group to its own content, so it stayed 360px wide in a 339px row and
+     overflowed instead of wrapping. Bounding the width is what lets wrap work. */
+  .mast-right { margin-left: 0; flex: 1 1 100%; flex-wrap: wrap; gap: 10px 14px; }
   .tapebar { padding: 9px 18px; }
   .tape { gap: 18px; }
   .page { padding: 22px 18px 8px; }
