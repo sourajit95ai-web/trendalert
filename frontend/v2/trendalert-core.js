@@ -636,12 +636,15 @@
       chan: "#8a7fd0",
       obZone: "rgba(224,121,138,.10)", osZone: "rgba(99,198,155,.10)",
     },
+    /* Mirrors theme.css's light block token for token — LWC needs literals, so
+       this is the one place a light colour is repeated. Grid stays rgba so it
+       reads on either the panel white or the page ground. */
     light: {
-      text: "#585d70", grid: "rgba(20,22,29,.07)", border: "#d5d8e6", cross: "#a9adbe",
-      accent: "#5b4fa0", up: "#1d7d55", down: "#b03b52", upA: "rgba(29,125,85,.5)", downA: "rgba(176,59,82,.5)",
-      histUp: "rgba(29,125,85,.55)", histDown: "rgba(176,59,82,.55)", sr: "#343845", gold: "#8a6d1f",
-      chan: "#6b5fc0",
-      obZone: "rgba(176,59,82,.09)", osZone: "rgba(29,125,85,.09)",
+      text: "#55596b", grid: "rgba(26,27,38,.09)", border: "#dedee8", cross: "#8b8fa4",
+      accent: "#5c4fb0", up: "#197d5b", down: "#b03b52", upA: "rgba(25,125,91,.5)", downA: "rgba(176,59,82,.5)",
+      histUp: "rgba(25,125,91,.55)", histDown: "rgba(176,59,82,.55)", sr: "#363a4a", gold: "#9a6512",
+      chan: "#7e73c4",
+      obZone: "rgba(176,59,82,.09)", osZone: "rgba(25,125,91,.09)",
     },
   };
   /* Kept as a property so the two `const CT = T.chartTheme` call sites in the
