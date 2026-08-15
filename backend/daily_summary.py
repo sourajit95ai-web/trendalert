@@ -40,7 +40,7 @@ DEATH_COL = ("#A32B27", "#E8827E", "#FDECEB")  # death cross (red)
 MAX_ROWS = 6                                  # per panel, so the PNG can't run away
 TOP_N = 3                                     # movers shown per side: TOP 3 · WORST 3
 # the whole caption — the poster carries the reading, this carries the way in
-DASHBOARD_URL = "https://storage.googleapis.com/trendalert-data-rattle/dashboard.html"
+DASHBOARD_URL = "https://storage.googleapis.com/trendalert-data-rattle/next/dashboard.html"
 
 
 # ----------------------------------------------------------------------

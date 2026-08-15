@@ -1,18 +1,25 @@
 name: deploy
 
 # Two ways to deploy:
-#   1. Push to main            -> tests, then FULL prod deploy (both functions + dashboard)
+#   1. Push to main            -> tests, then FULL deploy (both functions + dashboard)
 #   2. Actions tab -> "deploy" -> "Run workflow" on ANY branch:
-#        target=dev  (default) -> dashboard to gs://BUCKET/dev/dashboard.html (staging)
-#        target=prod           -> dashboard to gs://BUCKET/dashboard.html
 #        deploy_backend=true   -> also redeploy both Cloud Functions from that branch
 #
-# frontend/dashboard.html is GENERATED from frontend/v2/ by
-# frontend/build_dashboard.py -- edit the source tree, never the artifact.
+# THE DASHBOARD IS frontend/next/ (-> dashboard-next.html by frontend/build_next.py),
+# published to gs://BUCKET/next/dashboard.html. It is the only dashboard this
+# workflow publishes, and it is what the alert posters link to
+# (DASHBOARD_URL in backend/daily_summary.py).
 #
-# Every run ALSO publishes the redesign (frontend/next/ -> dashboard-next.html)
-# to gs://BUCKET/next/dashboard.html. That object is independent of target:
-# the redesign cannot overwrite the live dashboard.
+# FROZEN 2026-08-15 -- the older v2 dashboard is no longer built, checked or
+# published. frontend/dashboard.html and its generator frontend/build_dashboard.py
+# stay in the repo as the record, but nothing runs them, so the committed artifact
+# WILL drift from frontend/v2/ and must not be trusted or redeployed as-is.
+# These bucket objects are frozen in place, still live but never updated again:
+#   gs://BUCKET/dashboard.html      (v2 build of 2026-08-13)
+#   gs://BUCKET/dev/dashboard.html  (v2 staging build of 2026-08-12)
+# NOTE frontend/v2/ itself is NOT dead: frontend/next/index.html reaches back
+# into ../v2/ for trendalert-core.js, theme.css, the Nocturne tokens, Inter and
+# lightweight-charts. It is the redesign's library -- keep editing it.
 #
 # Required repo secrets (Settings -> Secrets and variables -> Actions):
 #   GCP_SA_KEY   - key.json of the gh-deploy service account (README §3)
@@ -27,11 +34,6 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      target:
-        description: "Where to publish the dashboard"
-        type: choice
-        options: [dev, prod]
-        default: dev
       deploy_backend:
         description: "Also deploy both Cloud Functions from this branch"
         type: boolean
@@ -52,10 +54,12 @@ jobs:
           python-version: "3.12"
       - run: pip install -r backend/requirements.txt pytest
       - run: python -m pytest backend/tests -q
-      # dashboard.html is generated from frontend/v2/ -- fail if the
-      # committed artifact no longer matches its source tree
-      - run: python frontend/build_dashboard.py --check
-      # same contract for the redesign in frontend/next/
+      # dashboard-next.html is generated from frontend/next/ -- fail if the
+      # committed artifact no longer matches its source tree.
+      # (The matching --check for the frozen v2 dashboard was dropped on
+      # 2026-08-15: frontend/v2/trendalert-core.js is still edited because the
+      # redesign imports it, so the check would fail on every core change and
+      # demand a rebuild of an artifact nobody publishes any more.)
       - run: python frontend/build_next.py --check
 
   deploy:
@@ -102,30 +106,19 @@ jobs:
             --set-secrets "ADMIN_TOKEN=trendalert-admin-token:latest" \
             --set-env-vars "GCS_BUCKET=${{ secrets.GCS_BUCKET }},ALLOWED_ORIGIN=https://storage.googleapis.com"
 
-      # ---- frontend: single-file dashboard to GCS ----
+      # ---- frontend: the dashboard to GCS ----
       # no-cache so a refresh always shows the newest deploy (GCS defaults to 1h caching).
-      # The dashboard is ~730KB of inlined runtime, design tokens and vendored
-      # libraries, and no-cache means every load pays it, so it uploads with -Z
-      # (Content-Encoding: gzip, ~290KB on the wire). -Z also stamps no-transform
+      # The page inlines its runtime, design tokens and vendored libraries, and
+      # no-cache means every load pays it, so it uploads with -Z
+      # (Content-Encoding: gzip, ~230KB on the wire). -Z also stamps no-transform
       # onto Cache-Control, so the object is only ever served gzipped -- fine for
       # browsers, which all send Accept-Encoding: gzip.
       # -h is a top-level gsutil flag; -Z belongs to the cp subcommand.
-      - name: Publish dashboard
-        run: |
-          if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.target }}" = "prod" ]; then
-            DEST="gs://${{ secrets.GCS_BUCKET }}/dashboard.html"
-          else
-            DEST="gs://${{ secrets.GCS_BUCKET }}/dev/dashboard.html"
-          fi
-          gsutil -h "Cache-Control:no-cache" -h "Content-Type:text/html" \
-            cp -Z frontend/dashboard.html "$DEST"
-          echo "Published frontend/dashboard.html to $DEST"
-
-      # ---- frontend: the redesign, always to its own object ----
-      # /next/dashboard.html is a THIRD object, independent of the dev/prod
-      # switch above: this step can never overwrite the live dashboard, whatever
-      # `target` is set to. Promotion, when the redesign is ready, is a
-      # deliberate change to the step above -- not a flag on this one.
+      #
+      # This writes ONLY /next/dashboard.html. The step that published the v2
+      # build to the bucket root (and to /dev/) was removed on 2026-08-15; both
+      # of those objects are frozen. Promoting this page to the root is a
+      # deliberate edit here, and would want a redirect left at the old URL.
       - name: Publish redesign
         run: |
           gsutil -h "Cache-Control:no-cache" -h "Content-Type:text/html" \

@@ -321,10 +321,11 @@ dashboard shows a `NEW LISTING · Nd` chip and files them under Holding Steady.
 Symbols cross over automatically the day they reach 252 bars. Symbols with
 <60 bars are dropped from the payload entirely (existing guard).
 
-## Dashboard redesign — the `next` build (added 2026-08-07)
+## The dashboard — the `next` build (added 2026-08-07, sole dashboard since 2026-08-15)
 
-The redesign lives at **https://storage.googleapis.com/trendalert-data-rattle/next/dashboard.html**
-and is built the same way the live dashboard is:
+It lives at **https://storage.googleapis.com/trendalert-data-rattle/next/dashboard.html**,
+which is also what the alert posters link to (`DASHBOARD_URL` in
+`backend/daily_summary.py`). It is built like this:
 
     frontend/next/         source tree (index.html + next.css + next-app.js)
     frontend/build_next.py inliner  ->  frontend/dashboard-next.html
@@ -336,9 +337,10 @@ status, scoring, trend, sector mix, staleness) plus v2's Nocturne tokens and
 
 Three things worth knowing:
 
-* **It cannot touch production.** The workflow publishes it to its own object on
-  every run, independent of the `target` input. Promotion means editing the
-  "Publish dashboard" step, never flipping a flag on "Publish redesign".
+* **It is the only dashboard published now.** The workflow writes
+  `/next/dashboard.html` and nothing else. Moving it to the bucket root is a
+  deliberate edit to the "Publish redesign" step; see the freeze note below for
+  why that move should leave a redirect behind.
 * **It never publishes on load.** The live dashboard POSTs `universe` and `core`
   3s after every page load, which is why its URL cannot be handed out — a
   reviewer silently rewrites the universe by visiting it. Here a POST happens
@@ -355,3 +357,35 @@ Three things worth knowing:
   password, the detail drawer, the three linked charts with their layer and
   indicator controls, PB/RE marks, the awaiting-data group, search and the
   sector filter.
+
+### The frozen dashboards (2026-08-15)
+
+The alerts now link to `/next/dashboard.html`, and every other dashboard was
+frozen: still live, never updated again. Nothing builds, checks or publishes
+them.
+
+| Object | Frozen at | Was |
+|---|---|---|
+| `gs://BUCKET/dashboard.html` | 2026-08-13 build | the v2 dashboard, what alerts used to link to |
+| `gs://BUCKET/dev/dashboard.html` | 2026-08-12 build | staging copy of the above |
+| `gs://BUCKET/review/dashboard.html` | 2026-07-27 snapshot | `make_review_copy.py` output, data baked in |
+
+Three traps in this arrangement:
+
+1. **A frozen page does not look frozen.** The two v2 objects still fetch the
+   live `data.json`, so they render today's prices in the old UI indefinitely.
+   The bucket root is the URL that was in every alert for months and is in
+   browser history — expect to land on it by accident. Check the masthead, not
+   the numbers, to tell which page you are on. If this bites, replace the root
+   object with a redirect to `/next/dashboard.html`.
+2. **`frontend/v2/` is NOT dead code.** `frontend/next/index.html` reaches back
+   into `../v2/` for `trendalert-core.js` (all the rules), `theme.css`, the
+   Nocturne tokens, Inter and lightweight-charts. Keep editing it. What is
+   retired is only the v2 *artifact* — `frontend/dashboard.html` and its
+   generator `frontend/build_dashboard.py`, both kept in the repo as the record.
+3. **`frontend/dashboard.html` will drift and must not be redeployed.** CI no
+   longer runs `build_dashboard.py --check`; it was dropped because
+   `v2/trendalert-core.js` is still live code, so the check would fail on every
+   core change and demand a rebuild of an artifact nobody publishes. The
+   committed artifact is therefore a snapshot of 2026-08-13, not of the current
+   source. To revive that dashboard, rebuild it first and restore the check.
