@@ -6,5 +6,6 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
-# generated snapshot from frontend/make_review_copy.py -- contains portfolio data
+# generated snapshots from frontend/make_review_copy.py -- contain portfolio data
 frontend/review-copy.html
+frontend/demo.html

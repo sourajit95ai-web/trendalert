@@ -21,6 +21,14 @@ usually served from storage.googleapis.com, the same origin as the real
 data.json, so an origin-based guard would let same-origin requests straight
 through.
 
+The page it produces is titled "TrendAlert demo" -- it is what gets circulated
+for feedback, so it is named for the reader, not for the build step.
+
+SOURCE: it builds from frontend/dashboard-next.html, the canonical dashboard.
+It used to build from frontend/dashboard.html; that artifact was frozen on
+2026-08-15 and now drifts from its source, so a demo cut from it would show
+an old UI. If the dashboard ever moves again, this path moves with it.
+
 Usage
 -----
     python frontend/make_review_copy.py [out.html]
@@ -28,12 +36,13 @@ Usage
 Publishing it for others to open (public and unauthenticated, so the link is
 the only barrier -- the file has the portfolio baked in):
 
-    gcloud storage cp review-copy.html \\
-      gs://trendalert-data-rattle/review/dashboard.html \\
+    gcloud storage cp demo.html \\
+      gs://trendalert-data-rattle/demo/dashboard.html \\
       --gzip-local-all --cache-control="no-cache" --content-type="text/html"
 
-gzip matters here: ~2.5MB on disk becomes ~680KB on the wire. Note gsutil is
-broken in this environment (its python shim errors), hence `gcloud storage`.
+gzip matters here: megabytes on disk become a few hundred KB on the wire. Note
+gsutil is broken in this environment (its python shim errors), hence
+`gcloud storage`.
 """
 
 from __future__ import annotations
@@ -45,8 +54,8 @@ import urllib.request
 
 BUCKET = "https://storage.googleapis.com/trendalert-data-rattle"
 HERE = pathlib.Path(__file__).resolve().parent
-SRC = HERE / "dashboard.html"
-OUT = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else HERE / "review-copy.html")
+SRC = HERE / "dashboard-next.html"
+OUT = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else HERE / "demo.html")
 
 
 def grab(name: str) -> dict:
@@ -86,7 +95,7 @@ def embed(obj) -> str:
 
 def build() -> None:
     if not SRC.is_file():
-        sys.exit(f"make_review_copy: {SRC} not found -- run build_dashboard.py first")
+        sys.exit(f"make_review_copy: {SRC} not found -- run build_next.py first")
 
     data = grab("data.json")
     charts = grab_charts([r.get("symbol") for r in data.get("symbols", [])
@@ -135,7 +144,7 @@ def build() -> None:
       "box-shadow:0 6px 24px rgba(0,0,0,.28)", "max-width:min(92vw,460px)"
     ].join(";");
     var label = document.createElement("span");
-    label.textContent = "Review copy — frozen data, nothing is saved or sent. Snapshot: " +
+    label.textContent = "TrendAlert demo — frozen data, nothing is saved or sent. Snapshot: " +
       String(STAMP).slice(0, 16).replace("T", " ") + " UTC";
     var x = document.createElement("button");
     x.textContent = "Dismiss";
@@ -160,7 +169,13 @@ def build() -> None:
         sys.exit("make_review_copy: could not find <head> to inject before")
     # inject first, so fetch is patched before React or the runtime evaluate
     html = html.replace(marker, marker + shim, 1)
-    html = html.replace("<title>", "<title>TrendAlert — review copy · ", 1)
+    # the browser tab is the first thing a reviewer sees -- name the page for
+    # them, and assert rather than silently shipping the plain product title
+    if "<title>TrendAlert</title>" not in html:
+        sys.exit("make_review_copy: <title>TrendAlert</title> not found -- "
+                 "the source title changed, update this replacement")
+    html = html.replace("<title>TrendAlert</title>",
+                        "<title>TrendAlert demo</title>", 1)
 
     OUT.write_text(html, encoding="utf-8", newline="")
     print(f"make_review_copy: wrote {OUT.name} ({OUT.stat().st_size / 1024:,.0f} KB) — snapshot {stamp}")
