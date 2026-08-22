@@ -183,6 +183,24 @@
       body: JSON.stringify({ kind, data })
     }).catch(() => { });
   };
+  /* Fire-and-forget is not enough once the UI has to SAY whether a password
+     was accepted. This variant reports the outcome: notes_function returns its
+     401 with _JSON, which spreads in _CORS, so the browser can actually read
+     the status and tell a wrong password (401) from writes-disabled (503) from
+     being offline (the fetch itself rejects). Without those CORS headers on the
+     error path none of that would be distinguishable. */
+  TA.postAuth = (syncUrl, kind, data, token) => {
+    if (!syncUrl) return Promise.resolve({ ok: true, status: 0, skipped: true });
+    return fetch(syncUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-TA-Token": String(token || "").trim() },
+      body: JSON.stringify({ kind, data })
+    }).then(
+      (r) => ({ ok: r.ok, status: r.status }),
+      () => ({ ok: false, status: 0, offline: true })
+    );
+  };
+
   /* Bars live one object per symbol so a page load fetches none of them.
      Must match chart_backend.chart_object_name exactly -- BTC/USD would
      otherwise become a nested path the URL cannot address. */

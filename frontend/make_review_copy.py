@@ -116,11 +116,21 @@ def build() -> None:
       status: 200, headers: {{ "Content-Type": "application/json" }}
     }}));
   }};
+  /* A write must be REFUSED, not faked. The page verifies the write password by
+     reading the POST status, so answering 200 would tell a reviewer their edit
+     saved when nothing left the page -- the exact lie this copy exists to avoid.
+     401 is what the real endpoint returns for a bad password, so the dashboard
+     already knows how to report it. */
+  var deny = function () {{
+    return Promise.resolve(new Response(JSON.stringify({{ error: "unauthorized" }}), {{
+      status: 401, headers: {{ "Content-Type": "application/json" }}
+    }}));
+  }};
   var real = window.fetch;
   window.fetch = function (input, init) {{
     var url = String((input && input.url) || input || "");
     var method = ((init && init.method) || (input && input.method) || "GET").toUpperCase();
-    if (method !== "GET") return reply({{}});             // never write anywhere
+    if (method !== "GET") return deny();                  // never write anywhere
     if (url.indexOf("/notes") !== -1) return reply({{}});   // no sync pull either
     // per-symbol bars: match on the chart/<name>.json tail, ignoring the
     // cache-buster the page appends

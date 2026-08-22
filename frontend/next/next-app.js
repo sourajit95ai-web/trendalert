@@ -52,7 +52,7 @@
     selected: null, drawerTab: "detail", drawerOpen: false, chartCfgOpen: false,
     settingsOpen: false, form: null, confirmClose: null,
     listsOpen: false, newListName: "", newListType: "portfolio",
-    addDraft: "", addNote: "", addModal: null, confirm: null,
+    addDraft: "", addNote: "", addModal: null, confirm: null, pw: null,
     toast: "",
   };
   /* keep the two copies of `view` in step from the first paint: loadSettings
@@ -132,13 +132,106 @@
 
   /* Unlike the shipped dashboard this is NOT called on load — only after an
      edit, so that merely opening the page cannot republish the universe. */
-  function publish() {
-    T.post(s.syncUrl, "universe", [...new Set(s.lists.flatMap(l => l.symbols))]);
-    const core = T.corePortfolio(s.lists);
-    T.post(s.syncUrl, "core", core ? core.symbols : []);
+  function publishPosts(lists, url, token) {
+    const core = T.corePortfolio(lists);
+    return Promise.all([
+      T.postAuth(url, "universe", [...new Set(lists.flatMap(l => l.symbols))], token),
+      T.postAuth(url, "core", core ? core.symbols : [], token),
+    ]).then((rs) => rs.find((r) => !r.ok) || rs[0]);
   }
-  function saveLists(next) {
-    s.lists = next; T.saveLists(next); publish(); render();
+
+  /* --- write authorisation -------------------------------------------------
+     Asked ONCE per session, then held in memory until the tab closes.
+
+     There is no verify endpoint, so THE WRITE ITSELF is the check: the save is
+     attempted with the candidate password and a 401 rolls it back. That is what
+     keeps the screen honest — what you see always matches what the server
+     accepted, which is exactly what silently-skipped POSTs used to break.
+
+     The 3-attempt limit catches typos. It is NOT a security control: the
+     backend has no rate limiting and a reload resets the count. The real gate
+     is compare_digest in notes_function. */
+  const MAX_PW_TRIES = 3;
+  let sessionToken = null;
+
+  function pwError(res) {
+    if (!res) return "";
+    if (res.offline) return "Could not reach the server. Nothing was saved.";
+    if (res.status === 503) return "Writes are disabled: the server has no password configured.";
+    if (res.status === 401) return "Password incorrect.";
+    return `The server refused the save (HTTP ${res.status}). Nothing was saved.`;
+  }
+
+  /* apply() mutates state and localStorage and returns its own revert().
+     post(token) resolves {ok, status, offline}. done() runs only on success. */
+  function gatedSave(what, apply, post, done, candidate) {
+    const tryWith = (token, onFail) => {
+      const revert = apply();
+      render();
+      post(token).then((res) => {
+        if (!res.ok) { revert(); render(); return onFail(res); }
+        sessionToken = token;
+        T.saveToken(token);          // remembered so next session pre-fills
+        s.pw = null;
+        render();
+        if (done) done();
+      });
+    };
+
+    const ask = (res, prefill) => {
+      const st = { what, value: prefill || "", tries: 0, error: pwError(res), busy: false };
+      st.submit = () => {
+        const pw = String(st.value || "").trim();
+        if (!pw) { st.error = "Enter the write password."; return render(); }
+        st.busy = true; render();
+        tryWith(pw, (r) => {
+          st.busy = false;
+          st.tries += 1;
+          const left = MAX_PW_TRIES - st.tries;
+          if (r.status === 401 && left > 0) {
+            st.value = "";
+            st.error = `Password incorrect. ${left} ${left === 1 ? "try" : "tries"} left.`;
+            return render();
+          }
+          s.pw = null; render();
+          flash(r.status === 401
+            ? `${what} was discarded — the password was rejected ${MAX_PW_TRIES} times.`
+            : `${what} was discarded — ${pwError(r).toLowerCase()}`);
+        });
+      };
+      s.pw = st;
+      render();
+    };
+
+    const first = String(candidate || "").trim() || sessionToken;
+    /* a session token can go stale if the password is rotated mid-session, so
+       a rejection falls back to asking rather than silently losing the edit */
+    if (first) return tryWith(first, (res) => { sessionToken = null; ask(res, ""); });
+    ask(null, T.loadToken());
+  }
+  /* A write that cannot reach the bucket must FAIL LOUDLY, not pretend. Every
+     edit is also kept in localStorage, so an unguarded save repaints as though
+     it worked and the change is quietly lost everywhere else -- which is how
+     universe.json sat eleven days stale while the dashboard looked fine.
+     TA.post's silent skip is inherited from the OLD dashboard, which POSTed 3s
+     after every page load and would have spammed viewers with 401s. This one
+     only ever posts on a deliberate edit, so silence is the wrong default here. */
+  /* `note` rides along inside apply/revert on purpose. Setting it before the
+     save meant a rolled-back edit left "Added ORCL to Core" on screen — the UI
+     still claiming the add happened, which is the exact lie this whole gate
+     exists to stop. It has to appear and disappear WITH the change. */
+  function saveLists(next, note) {
+    const prev = s.lists, prevNote = s.addNote, url = s.syncUrl;
+    gatedSave("Your list change",
+      () => {
+        s.lists = next; T.saveLists(next);
+        if (note !== undefined) s.addNote = note;
+        return () => {
+          s.lists = prev; T.saveLists(prev);
+          if (note !== undefined) s.addNote = prevNote;
+        };
+      },
+      (token) => publishPosts(next, url, token));
   }
 
   /* ---------------- lists ---------------- */
@@ -165,10 +258,10 @@
     if (!m) return;
     const target = s.lists.find(l => l.id === m.target);
     s.addModal = null; s.addDraft = "";
-    s.addNote = bySym(m.sym) ? "" :
+    const note = bySym(m.sym) ? "" :
       `Added ${m.sym} to “${target ? target.name : ""}” — it shows as awaiting data until the next pipeline run.`;
     saveLists(s.lists.map(l => l.id === m.target && !l.symbols.includes(m.sym)
-      ? { ...l, symbols: l.symbols.concat(m.sym) } : l));
+      ? { ...l, symbols: l.symbols.concat(m.sym) } : l), note);
   }
   function addList() {
     const name = String(s.newListName || "").trim();
@@ -260,10 +353,12 @@
     render();
   }
   function savePbre(pbre, msg) {
-    s.pbre = pbre;
-    T.savePbre(pbre);
-    T.post(s.syncUrl, "pbre", pbre);
-    if (msg) flash(msg); else render();
+    const prev = s.pbre, url = s.syncUrl;
+    gatedSave("The PB / RE change",
+      () => { s.pbre = pbre; T.savePbre(pbre);
+              return () => { s.pbre = prev; T.savePbre(prev); }; },
+      (token) => T.postAuth(url, "pbre", pbre, token),
+      () => { if (msg) flash(msg); });
   }
 
   /* ---------------- settings form ---------------- */
@@ -334,23 +429,41 @@
         relStrength: +f.relStrength, risk: +f.risk,
       },
     };
-    if (s.settings.horizon !== f.horizon) {
-      s.chCfg = { ...s.chCfg, span: T.HORIZON_PRESETS[f.horizon].span };
-      T.saveCh(s.chCfg, s.vis);
-      chartDirty = true;
-    }
-    T.saveSettings(next);
-    /* the password is persisted BEFORE the POST, so the very save that first
-       enters it is itself authorised */
-    T.saveToken(f.adminToken);
-    T.post(s.syncUrl, "settings", next);
+    const prevSet = s.settings, prevCh = s.chCfg;
+    const prevData = s.dataUrl, prevSync = s.syncUrl;
     const urlChanged = f.dataUrl !== s.dataUrl || f.syncUrl !== s.syncUrl;
-    T.lsSet(T.keys.DATA_KEY, f.dataUrl); T.lsSet(T.keys.SYNC_KEY, f.syncUrl);
-    s.settings = next; s.dataUrl = f.dataUrl; s.syncUrl = f.syncUrl;
-    s.settingsOpen = false; s.confirmClose = null;
-    render();
-    if (urlChanged) load();
-    if (after) after();
+    const chChanged = s.settings.horizon !== f.horizon;
+    /* post to the endpoint in force AS THE SAVE STARTS: apply() may swap
+       s.syncUrl underneath us, and the new address is not authorised yet */
+    const postUrl = s.syncUrl;
+
+    /* the Access field lives in this very form, so what was typed is offered as
+       the candidate — the save that first enters the password authorises itself
+       and never sees the prompt */
+    gatedSave("Your settings change",
+      () => {
+        if (chChanged) {
+          s.chCfg = { ...s.chCfg, span: T.HORIZON_PRESETS[f.horizon].span };
+          T.saveCh(s.chCfg, s.vis);
+          chartDirty = true;
+        }
+        T.saveSettings(next);
+        T.lsSet(T.keys.DATA_KEY, f.dataUrl); T.lsSet(T.keys.SYNC_KEY, f.syncUrl);
+        s.settings = next; s.dataUrl = f.dataUrl; s.syncUrl = f.syncUrl;
+        s.settingsOpen = false; s.confirmClose = null;
+        return () => {
+          if (chChanged) { s.chCfg = prevCh; T.saveCh(prevCh, s.vis); chartDirty = true; }
+          T.saveSettings(prevSet);
+          T.lsSet(T.keys.DATA_KEY, prevData); T.lsSet(T.keys.SYNC_KEY, prevSync);
+          s.settings = prevSet; s.dataUrl = prevData; s.syncUrl = prevSync;
+          /* reopen on the same form so a rejected password does not cost the
+             user everything they had just typed */
+          s.settingsOpen = true; s.form = f;
+        };
+      },
+      (token) => T.postAuth(postUrl, "settings", next, token),
+      () => { if (urlChanged) load(); if (after) after(); },
+      f.adminToken);
   }
   function reconnect() {
     const f = s.form;
@@ -1411,7 +1524,35 @@
         <div class="modal-foot">
           <span class="spacer"></span>
           <button class="btn" data-act="cancelconfirm">Cancel</button>
-          <button class="btn primary" data-act="okconfirm">OK</button>
+          <button class="btn primary" data-act="okconfirm">${esc(s.confirm.okLabel || "OK")}</button>
+        </div>
+      </div>`;
+  }
+
+  function pwHTML() {
+    if (!s.pw) return "";
+    const p = s.pw;
+    return `
+      <div class="scrim" data-act="pwcancel"></div>
+      <div class="modal narrow" role="dialog" aria-label="Write password">
+        <div class="modal-head"><span class="modal-title">Write password</span>
+          <button class="x" data-act="pwcancel" title="Close">✕</button></div>
+        <div class="modal-body">
+          <div class="set-group">
+            <div class="set-label">${esc(p.what)} needs the write password</div>
+            <input class="field" type="password" data-act="pwinput" value="${esc(p.value || "")}"
+                   placeholder="Write password" autocomplete="current-password"
+                   aria-label="Write password" ${p.busy ? "disabled" : ""}>
+            ${p.error ? `<p class="set-note" role="alert" style="color:${T.ink.down}">${esc(p.error)}</p>` : ""}
+            <p class="set-note">Checked against the server. Asked once per session — later edits
+              in this tab save without asking again. Nothing is saved until it is accepted.</p>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <span class="spacer"></span>
+          <button class="btn" data-act="pwcancel">Cancel</button>
+          <button class="btn primary" data-act="pwsubmit" ${p.busy ? "disabled" : ""}>${
+            p.busy ? "Checking…" : "Unlock and save"}</button>
         </div>
       </div>`;
   }
@@ -1573,9 +1714,16 @@
         ${canWrite ? "" : "This browser has no write password, so edits stay local."}
       </footer>`;
 
-    layer.innerHTML = drawerHTML() + settingsHTML() + listsHTML() + addModalHTML() + confirmHTML();
+    /* next.css has always carried a .toast rule and the shipped dashboard
+       renders one, but this tree never emitted the markup -- so every flash()
+       was invisible, including the weights-must-sum-to-100 and bad-email
+       validation errors. role=status so it is announced, not just seen. */
+    layer.innerHTML = drawerHTML() + settingsHTML() + listsHTML() + addModalHTML()
+      + confirmHTML() + pwHTML()
+      + (s.toast ? `<div class="toast" role="status">${esc(s.toast)}</div>` : "");
     document.body.classList.toggle("locked",
-      !!(s.drawerOpen || s.settingsOpen || s.listsOpen || s.addModal || s.confirm || s.confirmClose));
+      !!(s.drawerOpen || s.settingsOpen || s.listsOpen || s.addModal || s.confirm
+         || s.confirmClose || s.pw));
 
     /* charts: move the persistent containers into the freshly painted slots */
     if (s.drawerOpen && s.drawerTab === "chart" && s.selected) {
@@ -1590,7 +1738,18 @@
   }
 
   /* ---------------- events ---------------- */
+  /* Cancelling is a discard: gatedSave applies nothing until the server has
+     accepted the password, so there is no half-saved state to unwind here. */
+  function cancelPw() {
+    if (!s.pw) return;
+    const what = s.pw.what;
+    s.pw = null;
+    render();
+    flash(`${what} was not saved — no write password entered.`);
+  }
+
   const closeTop = () => {
+    if (s.pw) return cancelPw();
     if (s.confirm) { s.confirm = null; return render(); }
     if (s.confirmClose) { s.confirmClose = null; return render(); }
     if (s.addModal) { s.addModal = null; return render(); }
@@ -1684,6 +1843,8 @@
 
     /* generic confirm */
     if (a === "cancelconfirm") { s.confirm = null; return render(); }
+    if (a === "pwsubmit") return s.pw && s.pw.submit();
+    if (a === "pwcancel") return cancelPw();
     if (a === "okconfirm") {
       const c = s.confirm;
       s.confirm = null;
@@ -1702,6 +1863,7 @@
     if (!t) return;
     const a = t.dataset.act, v = t.value;
 
+    if (a === "pwinput") { if (s.pw) s.pw.value = v; return; }
     if (a === "q") { s.q = v.trim().toLowerCase(); return render(); }
     if (a === "add") { s.addDraft = v; return; }
     if (a === "newname") { s.newListName = v; return; }
@@ -1747,6 +1909,7 @@
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") return closeTop();
     if (e.key === "Enter" && e.target.dataset) {
+      if (e.target.dataset.act === "pwinput") return s.pw && s.pw.submit();
       if (e.target.dataset.act === "add") return submitAdd();
       if (e.target.dataset.act === "newname") return addList();
     }
