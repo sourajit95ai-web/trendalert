@@ -207,7 +207,11 @@
     /* a session token can go stale if the password is rotated mid-session, so
        a rejection falls back to asking rather than silently losing the edit */
     if (first) return tryWith(first, (res) => { sessionToken = null; ask(res, ""); });
-    ask(null, T.loadToken());
+    /* deliberately NOT pre-filled from the stored password: the prompt is
+       there to be answered, and a box that arrives already satisfied is just a
+       button that says "yes". The stored value still drives Settings > Access
+       and the read-only dot. */
+    ask(null, "");
   }
   /* A write that cannot reach the bucket must FAIL LOUDLY, not pretend. Every
      edit is also kept in localStorage, so an unguarded save repaints as though
@@ -235,10 +239,45 @@
   }
 
   /* ---------------- lists ---------------- */
+  /* A symbol may legitimately sit in several lists — the footer says so — but
+     filing one somewhere new when it already lives elsewhere is usually a MOVE
+     and only sometimes a copy. Ask which, rather than silently picking. The add
+     happens either way; the only question is whether the old entries go. */
+  function addWithMoveCheck(sym, listId, note) {
+    const others = s.lists.filter(l => l.id !== listId && l.symbols.includes(sym));
+    const target = s.lists.find(l => l.id === listId);
+    const where = target ? `“${target.name}”` : "the list";
+    const names = others.map(l => `“${l.name}”`).join(", ");
+
+    const add = (dropOthers) => saveLists(s.lists.map(l => {
+      if (l.id === listId) return l.symbols.includes(sym) ? l : { ...l, symbols: l.symbols.concat(sym) };
+      if (dropOthers && others.some(o => o.id === l.id))
+        return { ...l, symbols: l.symbols.filter(x => x !== sym) };
+      return l;
+    }), dropOthers && others.length ? `Moved ${sym} to ${where} — removed from ${names}.` : note);
+
+    if (!others.length) return add(false);
+
+    const many = others.length > 1;
+    s.confirm = {
+      title: `${sym} is already in ${many ? "other lists" : "another list"}`,
+      msg: `${sym} is in ${names}. It is going into ${where} — remove it from `
+        + `${many ? "those lists" : "that list"}, or keep it in both places?`,
+      okLabel: `Remove from ${many ? "the others" : "the other list"}`,
+      cancelLabel: "Keep in both",
+      ok: () => add(true),
+      cancel: () => add(false),
+    };
+    render();
+  }
+
   function toggleMembership(sym, listId) {
-    saveLists(s.lists.map(l => l.id !== listId ? l : {
-      ...l, symbols: l.symbols.includes(sym) ? l.symbols.filter(x => x !== sym) : l.symbols.concat(sym),
-    }));
+    const l = s.lists.find(x => x.id === listId);
+    /* unticking is a plain removal — nothing to ask about */
+    if (l && l.symbols.includes(sym))
+      return saveLists(s.lists.map(x => x.id !== listId ? x
+        : { ...x, symbols: x.symbols.filter(y => y !== sym) }));
+    addWithMoveCheck(sym, listId);
   }
   function removeFrom(listId, sym) {
     saveLists(s.lists.map(l => l.id === listId ? { ...l, symbols: l.symbols.filter(x => x !== sym) } : l));
@@ -260,8 +299,7 @@
     s.addModal = null; s.addDraft = "";
     const note = bySym(m.sym) ? "" :
       `Added ${m.sym} to “${target ? target.name : ""}” — it shows as awaiting data until the next pipeline run.`;
-    saveLists(s.lists.map(l => l.id === m.target && !l.symbols.includes(m.sym)
-      ? { ...l, symbols: l.symbols.concat(m.sym) } : l), note);
+    addWithMoveCheck(m.sym, m.target, note);
   }
   function addList() {
     const name = String(s.newListName || "").trim();
@@ -1517,13 +1555,13 @@
     }
     if (!s.confirm) return "";
     return `
-      <div class="scrim" data-act="cancelconfirm"></div>
+      <div class="scrim" data-act="dismissconfirm"></div>
       <div class="modal narrow" role="dialog" aria-label="${esc(s.confirm.title)}">
         <div class="modal-head"><span class="modal-title">${esc(s.confirm.title)}</span></div>
         <div class="modal-body"><p class="why">${esc(s.confirm.msg)}</p></div>
         <div class="modal-foot">
           <span class="spacer"></span>
-          <button class="btn" data-act="cancelconfirm">Cancel</button>
+          <button class="btn" data-act="cancelconfirm">${esc(s.confirm.cancelLabel || "Cancel")}</button>
           <button class="btn primary" data-act="okconfirm">${esc(s.confirm.okLabel || "OK")}</button>
         </div>
       </div>`;
@@ -1842,7 +1880,13 @@
     }
 
     /* generic confirm */
-    if (a === "cancelconfirm") { s.confirm = null; return render(); }
+    if (a === "dismissconfirm") { s.confirm = null; return render(); }
+    if (a === "cancelconfirm") {
+      /* a confirm may give its cancel real work — "Keep in both" still adds */
+      const c = s.confirm; s.confirm = null;
+      if (c && c.cancel) return c.cancel();
+      return render();
+    }
     if (a === "pwsubmit") return s.pw && s.pw.submit();
     if (a === "pwcancel") return cancelPw();
     if (a === "okconfirm") {

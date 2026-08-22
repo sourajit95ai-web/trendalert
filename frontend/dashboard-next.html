@@ -659,7 +659,18 @@ h1.headline {
 .tbl th[data-sorted="true"] button { color: var(--color-accent-400); }
 .tbl td { padding: 12px 14px 12px 0; border-top: 1px solid var(--color-neutral-900); text-align: right; white-space: nowrap; }
 .tbl tbody tr:hover td { background: color-mix(in srgb, var(--color-neutral-900) 55%, transparent); }
-.tbl .sym { font-weight: 600; font-size: 14px; }
+/* Two separate UA button defaults pulled this column out of true.
+   text-align:center made each symbol centre over its own (wider) membership
+   line; and the button's own 6px side padding sat on top of the cell's 6px, so
+   button rows started 6px right of pending rows -- which are a plain
+   <td class="sym"> with no button. Both are zeroed here so every symbol, its
+   sub-label, and the SYMBOL header share one left edge. */
+.tbl .sym { font-weight: 600; font-size: 14px; text-align: left; }
+.tbl button.sym { padding: 0; }
+/* the sort control in each header carries the same 6px, which pushed every
+   column label off its own data — left-aligned ones right, right-aligned ones
+   left. Zeroing it lines the headers up with the cells beneath them. */
+.tbl th button { padding: 0; }
 .tbl .sub { display: block; font-size: 11.5px; color: var(--color-neutral-600); font-weight: 400; margin-top: 2px; }
 .tbl .sector { color: var(--color-neutral-500); }
 .tbl .trend { display: inline-flex; align-items: center; gap: 7px; }
@@ -1836,7 +1847,11 @@ h1.headline {
     /* a session token can go stale if the password is rotated mid-session, so
        a rejection falls back to asking rather than silently losing the edit */
     if (first) return tryWith(first, (res) => { sessionToken = null; ask(res, ""); });
-    ask(null, T.loadToken());
+    /* deliberately NOT pre-filled from the stored password: the prompt is
+       there to be answered, and a box that arrives already satisfied is just a
+       button that says "yes". The stored value still drives Settings > Access
+       and the read-only dot. */
+    ask(null, "");
   }
   /* A write that cannot reach the bucket must FAIL LOUDLY, not pretend. Every
      edit is also kept in localStorage, so an unguarded save repaints as though
@@ -1864,10 +1879,45 @@ h1.headline {
   }
 
   /* ---------------- lists ---------------- */
+  /* A symbol may legitimately sit in several lists — the footer says so — but
+     filing one somewhere new when it already lives elsewhere is usually a MOVE
+     and only sometimes a copy. Ask which, rather than silently picking. The add
+     happens either way; the only question is whether the old entries go. */
+  function addWithMoveCheck(sym, listId, note) {
+    const others = s.lists.filter(l => l.id !== listId && l.symbols.includes(sym));
+    const target = s.lists.find(l => l.id === listId);
+    const where = target ? `“${target.name}”` : "the list";
+    const names = others.map(l => `“${l.name}”`).join(", ");
+
+    const add = (dropOthers) => saveLists(s.lists.map(l => {
+      if (l.id === listId) return l.symbols.includes(sym) ? l : { ...l, symbols: l.symbols.concat(sym) };
+      if (dropOthers && others.some(o => o.id === l.id))
+        return { ...l, symbols: l.symbols.filter(x => x !== sym) };
+      return l;
+    }), dropOthers && others.length ? `Moved ${sym} to ${where} — removed from ${names}.` : note);
+
+    if (!others.length) return add(false);
+
+    const many = others.length > 1;
+    s.confirm = {
+      title: `${sym} is already in ${many ? "other lists" : "another list"}`,
+      msg: `${sym} is in ${names}. It is going into ${where} — remove it from `
+        + `${many ? "those lists" : "that list"}, or keep it in both places?`,
+      okLabel: `Remove from ${many ? "the others" : "the other list"}`,
+      cancelLabel: "Keep in both",
+      ok: () => add(true),
+      cancel: () => add(false),
+    };
+    render();
+  }
+
   function toggleMembership(sym, listId) {
-    saveLists(s.lists.map(l => l.id !== listId ? l : {
-      ...l, symbols: l.symbols.includes(sym) ? l.symbols.filter(x => x !== sym) : l.symbols.concat(sym),
-    }));
+    const l = s.lists.find(x => x.id === listId);
+    /* unticking is a plain removal — nothing to ask about */
+    if (l && l.symbols.includes(sym))
+      return saveLists(s.lists.map(x => x.id !== listId ? x
+        : { ...x, symbols: x.symbols.filter(y => y !== sym) }));
+    addWithMoveCheck(sym, listId);
   }
   function removeFrom(listId, sym) {
     saveLists(s.lists.map(l => l.id === listId ? { ...l, symbols: l.symbols.filter(x => x !== sym) } : l));
@@ -1889,8 +1939,7 @@ h1.headline {
     s.addModal = null; s.addDraft = "";
     const note = bySym(m.sym) ? "" :
       `Added ${m.sym} to “${target ? target.name : ""}” — it shows as awaiting data until the next pipeline run.`;
-    saveLists(s.lists.map(l => l.id === m.target && !l.symbols.includes(m.sym)
-      ? { ...l, symbols: l.symbols.concat(m.sym) } : l), note);
+    addWithMoveCheck(m.sym, m.target, note);
   }
   function addList() {
     const name = String(s.newListName || "").trim();
@@ -3146,13 +3195,13 @@ h1.headline {
     }
     if (!s.confirm) return "";
     return `
-      <div class="scrim" data-act="cancelconfirm"></div>
+      <div class="scrim" data-act="dismissconfirm"></div>
       <div class="modal narrow" role="dialog" aria-label="${esc(s.confirm.title)}">
         <div class="modal-head"><span class="modal-title">${esc(s.confirm.title)}</span></div>
         <div class="modal-body"><p class="why">${esc(s.confirm.msg)}</p></div>
         <div class="modal-foot">
           <span class="spacer"></span>
-          <button class="btn" data-act="cancelconfirm">Cancel</button>
+          <button class="btn" data-act="cancelconfirm">${esc(s.confirm.cancelLabel || "Cancel")}</button>
           <button class="btn primary" data-act="okconfirm">${esc(s.confirm.okLabel || "OK")}</button>
         </div>
       </div>`;
@@ -3471,7 +3520,13 @@ h1.headline {
     }
 
     /* generic confirm */
-    if (a === "cancelconfirm") { s.confirm = null; return render(); }
+    if (a === "dismissconfirm") { s.confirm = null; return render(); }
+    if (a === "cancelconfirm") {
+      /* a confirm may give its cancel real work — "Keep in both" still adds */
+      const c = s.confirm; s.confirm = null;
+      if (c && c.cancel) return c.cancel();
+      return render();
+    }
     if (a === "pwsubmit") return s.pw && s.pw.submit();
     if (a === "pwcancel") return cancelPw();
     if (a === "okconfirm") {

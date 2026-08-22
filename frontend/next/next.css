@@ -253,7 +253,18 @@ h1.headline {
 .tbl th[data-sorted="true"] button { color: var(--color-accent-400); }
 .tbl td { padding: 12px 14px 12px 0; border-top: 1px solid var(--color-neutral-900); text-align: right; white-space: nowrap; }
 .tbl tbody tr:hover td { background: color-mix(in srgb, var(--color-neutral-900) 55%, transparent); }
-.tbl .sym { font-weight: 600; font-size: 14px; }
+/* Two separate UA button defaults pulled this column out of true.
+   text-align:center made each symbol centre over its own (wider) membership
+   line; and the button's own 6px side padding sat on top of the cell's 6px, so
+   button rows started 6px right of pending rows -- which are a plain
+   <td class="sym"> with no button. Both are zeroed here so every symbol, its
+   sub-label, and the SYMBOL header share one left edge. */
+.tbl .sym { font-weight: 600; font-size: 14px; text-align: left; }
+.tbl button.sym { padding: 0; }
+/* the sort control in each header carries the same 6px, which pushed every
+   column label off its own data — left-aligned ones right, right-aligned ones
+   left. Zeroing it lines the headers up with the cells beneath them. */
+.tbl th button { padding: 0; }
 .tbl .sub { display: block; font-size: 11.5px; color: var(--color-neutral-600); font-weight: 400; margin-top: 2px; }
 .tbl .sector { color: var(--color-neutral-500); }
 .tbl .trend { display: inline-flex; align-items: center; gap: 7px; }
