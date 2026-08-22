@@ -8,9 +8,9 @@ channel off must not stop the other one from sending.
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from alerts_email import (ALERT_KEYS, ALERT_KINDS, MAX_EXTRA_EMAILS,
+from alerts_email import (ALERT_KEYS, ALERT_KINDS,
                           RETIRED_ALERTS, alert_channel, alert_on,
-                          caption_text_on, channel_on, clean_emails,
+                          caption_text_on, channel_on,
                           email_recipients, fan_out)
 
 
@@ -125,32 +125,24 @@ def test_caption_carries_the_signals_only_when_switched_on():
     assert summary_text(None, True) == DASHBOARD_URL        # nothing to say -> link
 
 
-def test_extra_email_addresses_are_cleaned_and_capped():
-    assert clean_emails(["A@B.com", "a@b.com", " c@d.co "]) == ["a@b.com", "c@d.co"]
-    # anything that could smuggle a second recipient or header is dropped
-    for bad in ("nope", "@b.com", "a@b", "a@.com", "a b@c.com", "a@b.com, e@f.com",
-                "a@b.com\nBcc: x@y.com", "a@b@c.com", "<a@b.com>", "", "  "):
-        assert clean_emails([bad]) == [], bad
-    assert clean_emails("a@b.com") == []            # a string is not a list
-    assert clean_emails([None, 5, {}]) == []
-    assert len(clean_emails([f"a{i}@b.com" for i in range(20)])) == MAX_EXTRA_EMAILS
+def test_recipients_come_from_env_and_ignore_settings():
+    """settings.json is public, so a recipient list stored there is a leak.
 
-
-def test_recipients_are_the_owner_plus_the_settings_list():
+    The argument is still accepted (every call site passes it) but must have
+    no effect -- including for an old settings.json that still carries the key.
+    """
     orig = dict(os.environ)
     os.environ["SMTP_USER"] = "me@example.com"
     os.environ["ALERT_TO"] = "me@example.com"
     try:
         assert email_recipients(None) == ["me@example.com"]
         assert email_recipients({}) == ["me@example.com"]
-        # additive: a junk or empty list can only fail to add, never cut the owner
-        assert email_recipients({"alertEmails": "junk"}) == ["me@example.com"]
-        assert email_recipients({"alertEmails": []}) == ["me@example.com"]
-        assert email_recipients({"alertEmails": ["you@example.com"]}) \
-            == ["me@example.com", "you@example.com"]
-        # and the owner is never mailed twice
-        assert email_recipients({"alertEmails": ["ME@example.com"]}) \
-            == ["me@example.com"]
+        assert email_recipients({"alertEmails": ["you@example.com"]}) == ["me@example.com"]
+        assert email_recipients("not-a-dict") == ["me@example.com"]
+        os.environ["ALERT_TO"] = "a@example.com, b@example.com"
+        assert email_recipients(None) == ["a@example.com", "b@example.com"]
+        del os.environ["ALERT_TO"]
+        assert email_recipients(None) == ["me@example.com"]   # falls back to SMTP_USER
     finally:
         os.environ.clear()
         os.environ.update(orig)

@@ -38,7 +38,6 @@ DEFAULT_GAIN_PCT = 20.0
 DEFAULT_HIGH_ZONE_PCT = 2.0
 CHANNELS = ("telegram", "email", "both")
 DEFAULT_CHANNEL = "both"
-MAX_EXTRA_EMAILS = 5     # Settings > Alerts extra recipients, also enforced server-side
 
 # Every alert this project sends, in the order the trading day fires them.
 # (key, dashboard label, when it runs) — the dashboard renders this list as the
@@ -70,41 +69,16 @@ def alert_channel(settings):
     return v if v in CHANNELS else DEFAULT_CHANNEL
 
 
-def clean_emails(values):
-    """-> at most MAX_EXTRA_EMAILS sane, lowercased, de-duplicated addresses.
-
-    Shared by the notes function (which stores them) and the senders (which
-    trust nothing they read back), so an address that survived an older or
-    laxer write still can't reach smtplib unchecked.
-    """
-    out = []
-    for v in (values if isinstance(values, (list, tuple)) else []):
-        a = str(v).strip().lower() if isinstance(v, str) else ""
-        # deliberately loose — one @, a dot in the domain, nothing that could
-        # be read as a second header line or a second recipient
-        if (a and len(a) <= 254 and a.count("@") == 1 and not a.startswith("@")
-                and "." in a.rsplit("@", 1)[1] and not a.rsplit("@", 1)[1].startswith(".")
-                and not any(c in a for c in " ,;\r\n\t<>\"")
-                and a not in out):
-            out.append(a)
-        if len(out) >= MAX_EXTRA_EMAILS:
-            break
-    return out
-
-
 def email_recipients(settings=None):
-    """Who this alert goes to: the configured inbox plus Settings > Alerts.
+    """Who this alert goes to: ALERT_TO (env), falling back to SMTP_USER.
 
-    ALERT_TO (env) is the owner's own address and is always included — the
-    extra list is additive, so a bad or emptied setting can only ever fail to
-    add someone, never cut the user out of their own alerts.
+    Recipients used to be extendable from Settings > Alerts, but settings.json
+    is published to a public bucket, so every address added there was a real
+    inbox readable by anyone with the URL. The list is server-side config now;
+    `settings` is accepted and ignored so the call sites do not have to change.
     """
     user = os.environ.get("SMTP_USER", "")
-    to = [a.strip() for a in os.environ.get("ALERT_TO", user).split(",") if a.strip()]
-    extra = clean_emails((settings or {}).get("alertEmails")
-                         if isinstance(settings, dict) else None)
-    seen = {a.lower() for a in to}
-    return to + [a for a in extra if a not in seen]
+    return [a.strip() for a in os.environ.get("ALERT_TO", user).split(",") if a.strip()]
 
 
 def caption_text_on(settings):

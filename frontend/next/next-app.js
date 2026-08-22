@@ -11,8 +11,15 @@
  *      core 3s after every load, which is why its URL cannot be handed out.
  *      Here a POST only happens when the viewer actually edits something, so
  *      opening the link changes nothing.
- *   2. Writes still need the admin password (TA.post skips without a token),
- *      so a reader without it edits only their own localStorage.
+ *   2. Writes need the admin password, asked for on the first edit of each
+ *      session and held in memory only — it is never written to disk, so a
+ *      reader who does not have it cannot save, and a reader who does still
+ *      leaves nothing behind in this browser.
+ *
+ * NOTHING SECRET AND NOTHING PERSONAL RENDERS IN SETTINGS. The password box is
+ * always blank, the bucket and notes-endpoint URLs are no longer fields, and
+ * alert recipients moved to ALERT_TO on the server because settings.json is a
+ * public object. See OPS.md, "Email recipients are ALERT_TO only".
  *
  * Rendering is two roots and one delegated listener. #app is the page, #layer
  * is the drawer and the modals; both are replaced wholesale on every paint,
@@ -152,6 +159,11 @@
      backend has no rate limiting and a reload resets the count. The real gate
      is compare_digest in notes_function. */
   const MAX_PW_TRIES = 3;
+  /* IN MEMORY ONLY, for the life of the tab. It used to be persisted to
+     localStorage under trendalert_admin_token_v1, where devtools printed it in
+     the clear and every later session started with the box pre-filled. Nothing
+     depended on that but the read-only dot, which now reads this variable, so
+     the stored copy was pure exposure. Legacy values are purged at boot. */
   let sessionToken = null;
 
   function pwError(res) {
@@ -171,7 +183,6 @@
       post(token).then((res) => {
         if (!res.ok) { revert(); render(); return onFail(res); }
         sessionToken = token;
-        T.saveToken(token);          // remembered so next session pre-fills
         s.pw = null;
         render();
         if (done) done();
@@ -405,17 +416,16 @@
      rebuild the pristine copy and compare against it. */
   function formOf(set) {
     return {
-      dataUrl: s.dataUrl, syncUrl: s.syncUrl,
-      /* browser-local, and deliberately NOT part of `settings` — settings get
-         POSTed to the bucket and the write password must never travel there */
-      adminToken: T.loadToken(),
+      /* ALWAYS BLANK. The password is not stored anywhere any more (see
+         sessionToken), so there is nothing to seed it from — and a box that
+         arrives pre-filled is a password on display, not a password field. */
+      adminToken: "",
       horizon: set.horizon || "long", reEntryMode: set.reEntryMode || "base",
       gainPct: set.gainPct, highZonePct: set.highZonePct, lowZonePct: set.lowZonePct,
       trendFast: set.trendFast || 50, trendSlow: set.trendSlow || 150,
       alertChannel: set.alertChannel || "both",
       alertTypes: { ...(set.alertTypes || {}) },
       captionText: set.captionText === true,
-      alertEmails: (set.alertEmails || []).join(", "),
       trend: set.weights.trend, momentum: set.weights.momentum,
       participation: set.weights.participation, relStrength: set.weights.relStrength, risk: set.weights.risk,
     };
@@ -425,9 +435,9 @@
   function settingsDirty() {
     if (!s.form) return false;
     const was = formOf(s.settings);
-    const fields = ["dataUrl", "syncUrl", "adminToken", "horizon", "reEntryMode", "gainPct",
-      "highZonePct", "lowZonePct", "trendFast", "trendSlow", "alertChannel", "captionText",
-      "alertEmails"].concat(WEIGHTS);
+    const fields = ["adminToken", "horizon", "reEntryMode", "gainPct",
+      "highZonePct", "lowZonePct", "trendFast", "trendSlow", "alertChannel",
+      "captionText"].concat(WEIGHTS);
     /* compared as strings: a number input hands back "20" where the setting holds 20 */
     if (fields.some(k => String(s.form[k]) !== String(was[k]))) return true;
     return T.ALERT_KINDS.some(a => on(s.form.alertTypes, a.key) !== on(was.alertTypes, a.key));
@@ -442,17 +452,14 @@
     if (total !== 100) return flash("Score weights must sum to 100 (currently " + total + ").");
     if (+f.trendFast >= +f.trendSlow)
       return flash(`Trend EMAs: the fast one must be shorter than the slow one (got ${f.trendFast} and ${f.trendSlow}).`);
-    /* a bad address must not be swallowed: cleanEmails would drop it silently
-       and the alert would never arrive where the user thought it would */
-    const typed = String(f.alertEmails || "").split(/[,\s]+/).filter(Boolean);
-    const good = T.cleanEmails(f.alertEmails);
-    if (typed.length > T.MAX_EXTRA_EMAILS)
-      return flash(`At most ${T.MAX_EXTRA_EMAILS} extra email addresses (got ${typed.length}).`);
-    const bad = typed.find(a => !good.includes(a.trim().toLowerCase()));
-    if (bad) return flash("That does not look like an email address: " + bad);
-
+    /* alertEmails is deliberately absent: settings.json is a PUBLICLY READABLE
+       object in the bucket, so an address typed here was a real email address
+       served to anyone who knew the URL. Recipients now live in ALERT_TO
+       (env/Secret Manager) and never travel through the browser. Any leftover
+       value in s.settings is dropped below rather than round-tripped. */
+    const { alertEmails: _dropEmails, ...carried } = s.settings;
     const next = {
-      ...s.settings,
+      ...carried,
       gainPct: Math.max(5, Math.min(200, +f.gainPct || 20)),
       highZonePct: Math.max(0.5, Math.min(10, +f.highZonePct || 2)),
       lowZonePct: Math.max(2, Math.min(30, +f.lowZonePct || 10)),
@@ -461,18 +468,13 @@
       alertChannel: ["telegram", "email", "both"].includes(f.alertChannel) ? f.alertChannel : "both",
       alertTypes: Object.fromEntries(T.ALERT_KINDS.map(a => [a.key, on(f.alertTypes, a.key)])),
       captionText: f.captionText === true,
-      alertEmails: good,
       weights: {
         trend: +f.trend, momentum: +f.momentum, participation: +f.participation,
         relStrength: +f.relStrength, risk: +f.risk,
       },
     };
     const prevSet = s.settings, prevCh = s.chCfg;
-    const prevData = s.dataUrl, prevSync = s.syncUrl;
-    const urlChanged = f.dataUrl !== s.dataUrl || f.syncUrl !== s.syncUrl;
     const chChanged = s.settings.horizon !== f.horizon;
-    /* post to the endpoint in force AS THE SAVE STARTS: apply() may swap
-       s.syncUrl underneath us, and the new address is not authorised yet */
     const postUrl = s.syncUrl;
 
     /* the Access field lives in this very form, so what was typed is offered as
@@ -486,28 +488,23 @@
           chartDirty = true;
         }
         T.saveSettings(next);
-        T.lsSet(T.keys.DATA_KEY, f.dataUrl); T.lsSet(T.keys.SYNC_KEY, f.syncUrl);
-        s.settings = next; s.dataUrl = f.dataUrl; s.syncUrl = f.syncUrl;
+        s.settings = next;
         s.settingsOpen = false; s.confirmClose = null;
         return () => {
           if (chChanged) { s.chCfg = prevCh; T.saveCh(prevCh, s.vis); chartDirty = true; }
           T.saveSettings(prevSet);
-          T.lsSet(T.keys.DATA_KEY, prevData); T.lsSet(T.keys.SYNC_KEY, prevSync);
-          s.settings = prevSet; s.dataUrl = prevData; s.syncUrl = prevSync;
+          s.settings = prevSet;
           /* reopen on the same form so a rejected password does not cost the
              user everything they had just typed */
           s.settingsOpen = true; s.form = f;
         };
       },
       (token) => T.postAuth(postUrl, "settings", next, token),
-      () => { if (urlChanged) load(); if (after) after(); },
+      () => { if (after) after(); },
       f.adminToken);
   }
   function reconnect() {
-    const f = s.form;
-    T.lsSet(T.keys.DATA_KEY, f.dataUrl); T.lsSet(T.keys.SYNC_KEY, f.syncUrl);
-    s.dataUrl = f.dataUrl; s.syncUrl = f.syncUrl;
-    T.pull(f.syncUrl, "pbre").then(pb => {
+    T.pull(s.syncUrl, "pbre").then(pb => {
       if (pb) { s.pbre = pb; T.savePbre(pb); }
       load();
     });
@@ -1336,7 +1333,7 @@
     const f = s.form;
     const seg = (act, opts, cur) => `<div class="seg sm">${opts.map(o =>
       `<button data-act="${act}" data-k="${o[0]}" aria-pressed="${cur === o[0]}">${esc(o[1])}</button>`).join("")}</div>`;
-    const canWrite = !!T.loadToken();
+    const canWrite = !!sessionToken;
     const total = weightTotal();
 
     return `
@@ -1352,11 +1349,14 @@
             <div class="set-label">Access</div>
             <div class="set-row">
               <input class="field grow" type="password" data-act="f-adminToken" value="${esc(f.adminToken)}"
-                placeholder="${canWrite ? "•••••••• saved" : "read-only without a password"}">
+                autocomplete="off" aria-label="Write password"
+                placeholder="${canWrite ? "•••••••• entered this session" : "write password"}">
               <span class="cap"><i>${canWrite
-                ? "Editing enabled — your changes save to the shared data."
-                : "Read-only — changes stay in this browser only."}</i></span>
+                ? "Editing enabled for this session — your changes save to the shared data."
+                : "Read-only until you enter the write password. Changes stay in this browser."}</i></span>
             </div>
+            <p class="set-note">Never stored on this device and never sent to the bucket — it is held in
+              memory until the tab closes, then asked for again.</p>
           </div>
 
           <div class="set-group">
@@ -1370,14 +1370,11 @@
           <div class="set-group">
             <div class="set-label">Data</div>
             <div class="set-row">
-              <span class="cap"><b>data.json</b></span>
-              <input class="field grow" data-act="f-dataUrl" value="${esc(f.dataUrl)}">
-            </div>
-            <div class="set-row">
-              <span class="cap"><b>notes endpoint</b></span>
-              <input class="field grow" data-act="f-syncUrl" value="${esc(f.syncUrl)}">
+              <span class="cap"><b>Source</b><i>the published pipeline output</i></span>
               <button class="btn sm" data-act="reconnect">Reconnect</button>
             </div>
+            <p class="set-note">Re-reads data.json and the notes endpoint now, rather than waiting for the
+              five-minute refresh.</p>
           </div>
 
           <div class="set-group">
@@ -1434,12 +1431,9 @@
               <span class="cap"><b>Text summary</b><i>written signals above the link</i></span>
               ${seg("caption", [["on", "On"], ["off", "Off"]], f.captionText ? "on" : "off")}
             </div>
-            <div class="set-row">
-              <span class="cap"><b>Extra recipients</b></span>
-              <input class="field grow" data-act="f-alertEmails" value="${esc(f.alertEmails)}" placeholder="name@example.com, …">
-            </div>
-            <p class="set-note">Comma-separated, up to ${T.MAX_EXTRA_EMAILS}. The configured inbox always gets the alert;
-              this list only adds to it. Telegram is unaffected.</p>
+            <p class="set-note">Alerts go to the addresses configured on the server (ALERT_TO). They are not
+              editable here: settings.json is published to a public bucket, so an address typed on this screen
+              was readable by anyone with the link.</p>
           </div>
 
           <div class="set-group">
@@ -1626,7 +1620,7 @@
     const h = hero(solid, action, reentry);
     const act = activeList();
     const of = listsOfType(s.activeType);
-    const canWrite = T.canWrite();
+    const canWrite = !!sessionToken;
     const symCount = (t) => [...new Set(s.lists.filter(l => l.type === t).flatMap(l => l.symbols))].length;
 
     app.innerHTML = `
@@ -1644,7 +1638,7 @@
           <span class="status"><i class="status-dot" style="background:${m.dot}"></i>${esc(m.status)}</span>
           <button class="icon-btn accent" data-act="opensettings">
             <i class="ro-dot" style="background:${canWrite ? T.ink.up : "var(--color-neutral-600)"}"
-               title="${canWrite ? "Editing enabled" : "Read-only — no write password"}"></i>
+               title="${canWrite ? "Editing enabled for this session" : "Read-only — no write password entered"}"></i>
             Settings
           </button>
         </div>
@@ -1749,7 +1743,7 @@
       <footer class="foot">
         Symbols can belong to several portfolios, watchlists and indexes.
         ${s.mode === "live" ? "Showing the live pipeline feed." : "Sample data shown — the live feed did not load."}
-        ${canWrite ? "" : "This browser has no write password, so edits stay local."}
+        ${canWrite ? "" : "Editing asks for the write password."}
       </footer>`;
 
     /* next.css has always carried a .toast rule and the shipped dashboard
@@ -1960,6 +1954,9 @@
   });
 
   /* ---------------- boot ---------------- */
+  /* one-time cleanup: browsers that ran an earlier build still hold the write
+     password in localStorage. Nothing reads it any more, so drop it. */
+  try { localStorage.removeItem(T.keys.TOKEN_KEY); } catch (e) { }
   render();
   T.pull(s.syncUrl, "pbre").then(pb => {
     if (pb) { s.pbre = pb; T.savePbre(pb); }

@@ -252,14 +252,14 @@ def notes(request):
             # only ever stores the switch when it is deliberately turned on
             if cfg.get("captionText") is True:
                 clean["captionText"] = True
-            # extra summary recipients. Validated and capped HERE as well as in
-            # the browser: this endpoint is unauthenticated, so the stored list
-            # has to be safe to hand straight to smtplib.
-            if "alertEmails" in cfg:
-                from alerts_email import clean_emails
-                addrs = clean_emails(cfg.get("alertEmails"))
-                if addrs:
-                    clean["alertEmails"] = addrs
+            # alertEmails is NOT accepted, and is dropped rather than merged.
+            # settings.json is published to a PUBLICLY READABLE bucket, so every
+            # address stored here was served in the clear to anyone with the
+            # URL -- including addresses belonging to other people. Recipients
+            # are ALERT_TO (env / Secret Manager) only. The whitelist is
+            # rebuilt from scratch on every write, so an old client that still
+            # posts the field simply loses it, and the stored copy goes away on
+            # the next save from any surface.
             w = cfg.get("weights")
             if isinstance(w, dict):
                 try:

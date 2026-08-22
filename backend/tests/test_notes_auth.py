@@ -139,3 +139,26 @@ def test_preflight_advertises_the_token_header(token_env):
     _, status, headers = notes(FakeRequest(method="OPTIONS"))
     assert status == 204
     assert TOKEN_HEADER in headers["Access-Control-Allow-Headers"]
+
+
+def test_settings_never_store_email_addresses(token_env, monkeypatch):
+    """settings.json is a PUBLIC object, so a recipient list here is a leak.
+
+    The whitelist is rebuilt from scratch on every write, so this covers both
+    halves at once: a client that still posts alertEmails loses it, and a
+    stored copy from before the field was removed is not carried forward.
+    """
+    seen = {}
+    monkeypatch.setattr(notes_function, "_read",
+                        lambda kind: {"alertEmails": ["old@example.com"]})
+    monkeypatch.setattr(notes_function, "_write",
+                        lambda kind, data: seen.update({kind: data}))
+    req = FakeRequest(method="POST", headers={TOKEN_HEADER: GOOD},
+                      json_body={"kind": "settings",
+                                 "data": {"gainPct": 25,
+                                          "alertEmails": ["someone@example.com"]}})
+    body, status, _ = notes(req)
+    assert status == 200
+    assert "alertEmails" not in seen["settings"]
+    assert "alertEmails" not in json.loads(body)["saved"]
+    assert seen["settings"]["gainPct"] == 25.0        # the rest still saves
