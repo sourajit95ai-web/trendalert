@@ -180,6 +180,12 @@ characters; long signal days are cut there, the image is unaffected.
 
 **Email recipients are `ALERT_TO` only (changed 2026-08-22).** Set it as a
 GitHub repo secret, comma-separated; it falls back to `SMTP_USER` when unset.
+A second address BROKE THE DEPLOY the first time one was added: the workflow
+passed the env block to `gcloud --set-env-vars`, which is itself
+comma-delimited, so the comma inside `ALERT_TO` split the dict and the step
+failed with `Bad syntax for dict arg`. The step now selects a pipe separator
+with the `^|^` prefix, so the list can grow. Adding a recipient is a secret
+edit plus a deploy — check the run went green before assuming mail flows.
 `email_recipients()` still takes a `settings` argument so the call sites did
 not have to change, but it ignores it.
 

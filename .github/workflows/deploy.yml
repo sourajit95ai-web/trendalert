@@ -79,6 +79,13 @@ jobs:
       # ---- backend: both Cloud Functions (main push, or dispatch with deploy_backend) ----
       - name: Deploy pipeline function
         if: github.event_name == 'push' || inputs.deploy_backend
+        # Secrets arrive through env rather than being pasted into the script,
+        # so a value containing a quote cannot break out of the shell string.
+        env:
+          GCS_BUCKET: ${{ secrets.GCS_BUCKET }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          ALERT_TO: ${{ secrets.ALERT_TO }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           SECRETS="ALPACA_KEY_ID=alpaca-key-id:latest,ALPACA_SECRET_KEY=alpaca-secret-key:latest"
           # smtp-pass / telegram-bot-token are optional (OPS.md); only mount what exists
@@ -94,7 +101,13 @@ jobs:
             --trigger-http --allow-unauthenticated \
             --memory 512Mi --timeout 300s \
             --set-secrets "$SECRETS" \
-            --set-env-vars "GCS_BUCKET=${{ secrets.GCS_BUCKET }},SMTP_USER=${{ secrets.SMTP_USER }},ALERT_TO=${{ secrets.ALERT_TO }},TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}"
+            --set-env-vars "^|^GCS_BUCKET=$GCS_BUCKET|SMTP_USER=$SMTP_USER|ALERT_TO=$ALERT_TO|TELEGRAM_CHAT_ID=$TELEGRAM_CHAT_ID"
+          # ^|^ selects | as the separator instead of the default comma.
+          # ALERT_TO is a COMMA-SEPARATED recipient list, so under the default
+          # delimiter a second address splits the dict and the deploy dies with
+          # "Bad syntax for dict arg" -- exactly what happened the first time a
+          # second recipient was added. A pipe cannot occur in an email address,
+          # a bucket name or a chat id, so it is safe as the separator here.
 
       - name: Deploy notes function
         if: github.event_name == 'push' || inputs.deploy_backend
