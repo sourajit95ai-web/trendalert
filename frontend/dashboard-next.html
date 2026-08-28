@@ -2708,19 +2708,17 @@ h1.headline {
         </div>
       </div>`;
 
-    /* BIG MOVERS -- this block replaced "Recent alerts" at the user's request.
-       What was lost with it: the EMA 50/150 crosses from payload.alerts, which
-       are no longer surfaced anywhere in the rail. They were the weaker tenant
-       of the slot -- data.json keeps no cross history, so every row was stamped
-       "today" whether it crossed this morning or a week ago, and most days the
-       block rendered its empty state.
+    /* BIG MOVERS -- took the slot "Recent alerts" used to hold, because a name
+       that moved hard TODAY is the thing worth seeing first. Crosses were not
+       deleted, only demoted: they now sit below sectors, which is the right
+       order of urgency for a rail read top to bottom.
 
-       Kept from it: the .alert-row markup and the data-act="open" wiring, so a
-       mover is still one click from its chart.
+       Both blocks share the .alert-row markup and the data-act="open" wiring,
+       so every row in either one is a click from its chart.
 
-       The empty state stays too. This block now owns a permanent slot, and a
-       heading that vanishes on a quiet day reads as a broken section rather
-       than a calm market. */
+       The empty state stays. This block owns a permanent slot, and a heading
+       that vanishes on a quiet day reads as a broken section rather than a
+       calm market. */
     const movers = T.bigMovers(all, s.settings.moveAlertPct);
     const lim = Math.abs(+s.settings.moveAlertPct) || T.DEFAULT_SETTINGS.moveAlertPct;
     const alerts = `
@@ -2752,13 +2750,29 @@ h1.headline {
           : `<p class="rail-note">No portfolio holdings with data yet.</p>`}
       </div>`;
 
+    /* data.json carries only crosses detected on the LATEST bar and keeps no
+       history, so there is nothing to age these by -- every row is today's, and
+       the label says so rather than stamping each row with a date it cannot
+       support. An alert history file is a backend change, noted in OPS.md. */
+    const al = (s.payload && s.payload.alerts) || [];
+    const crosses = `
+      <div>
+        <div class="rail-label">Trend crosses · latest bar</div>
+        ${al.length ? al.map(a => `
+          <button class="alert-row" data-act="open" data-sym="${esc(a.symbol)}">
+            <span class="arrow" style="color:${a.dir === "bull" ? T.ink.up : T.ink.down}">${a.dir === "bull" ? "↑" : "↓"}</span>
+            <span class="txt"><b>${esc(a.symbol)}</b> ${esc(a.type)}${a.detail ? " — " + esc(a.detail.toLowerCase()) : ""}</span>
+          </button>`).join("")
+          : `<p class="rail-note">No EMA ${esc(s.settings.trendFast)} / ${esc(s.settings.trendSlow)} crosses on the latest bar.</p>`}
+      </div>`;
+
     const w = s.settings.weights;
     const note = `<p class="rail-note">Signal score is a 0–100 cross-sectional rank
       (trend ${w.trend} · momentum ${w.momentum} · volume ${w.participation} ·
       relative strength ${w.relStrength} · risk ${w.risk}). A scanning aid, not investment
       advice. Lists are saved in this browser.</p>`;
 
-    return summary + alerts + sectors + note;
+    return summary + alerts + sectors + crosses + note;
   }
 
   /* ---------------- drawer ---------------- */

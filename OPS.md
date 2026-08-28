@@ -368,10 +368,12 @@ The rule is `TA.bigMovers` in trendalert-core.js; the shell only paints it.
 mover, which is a broken panel that still looks like a working one. It is
 DASHBOARD-ONLY: no alert reads it and nothing is sent when a name crosses it.
 
-WHAT WAS LOST: the EMA 50/150 crosses in `payload.alerts` are no longer shown
-anywhere in the UI. They still ride in data.json and still drive the Telegram
-and email alerts. The block was dropped because data.json keeps no cross
-history, so every row was stamped "today" regardless of when it crossed.
+The crosses were demoted, not dropped: **Trend crosses - latest bar** now sits
+BELOW Portfolio sectors, so the rail runs newest-and-loudest first. Its rows
+lost the per-row "today" stamp -- data.json keeps no cross history, so that
+label was a claim the data could not support. The heading carries the scope
+instead, and the empty state names whichever EMA pair Settings is set to
+rather than a hardcoded 50/150.
 
 Three things worth knowing:
 
