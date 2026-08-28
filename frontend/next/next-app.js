@@ -426,6 +426,7 @@
       alertChannel: set.alertChannel || "both",
       alertTypes: { ...(set.alertTypes || {}) },
       captionText: set.captionText === true,
+      moveAlertPct: set.moveAlertPct,
       trend: set.weights.trend, momentum: set.weights.momentum,
       participation: set.weights.participation, relStrength: set.weights.relStrength, risk: set.weights.risk,
     };
@@ -437,7 +438,7 @@
     const was = formOf(s.settings);
     const fields = ["adminToken", "horizon", "reEntryMode", "gainPct",
       "highZonePct", "lowZonePct", "trendFast", "trendSlow", "alertChannel",
-      "captionText"].concat(WEIGHTS);
+      "captionText", "moveAlertPct"].concat(WEIGHTS);
     /* compared as strings: a number input hands back "20" where the setting holds 20 */
     if (fields.some(k => String(s.form[k]) !== String(was[k]))) return true;
     return T.ALERT_KINDS.some(a => on(s.form.alertTypes, a.key) !== on(was.alertTypes, a.key));
@@ -464,6 +465,7 @@
       highZonePct: Math.max(0.5, Math.min(10, +f.highZonePct || 2)),
       lowZonePct: Math.max(2, Math.min(30, +f.lowZonePct || 10)),
       trendFast: +f.trendFast || 50, trendSlow: +f.trendSlow || 150,
+      moveAlertPct: Math.max(1, Math.min(50, +f.moveAlertPct || 8)),
       horizon: f.horizon, reEntryMode: f.reEntryMode,
       alertChannel: ["telegram", "email", "both"].includes(f.alertChannel) ? f.alertChannel : "both",
       alertTypes: Object.fromEntries(T.ALERT_KINDS.map(a => [a.key, on(f.alertTypes, a.key)])),
@@ -1041,20 +1043,32 @@
         </div>
       </div>`;
 
-    /* data.json carries only crosses detected on the LATEST bar and keeps no
-       history, so there is nothing to age these by — every row is today's. An
-       alert history file is a backend change, noted in OPS.md. */
-    const al = (s.payload && s.payload.alerts) || [];
+    /* BIG MOVERS -- this block replaced "Recent alerts" at the user's request.
+       What was lost with it: the EMA 50/150 crosses from payload.alerts, which
+       are no longer surfaced anywhere in the rail. They were the weaker tenant
+       of the slot -- data.json keeps no cross history, so every row was stamped
+       "today" whether it crossed this morning or a week ago, and most days the
+       block rendered its empty state.
+
+       Kept from it: the .alert-row markup and the data-act="open" wiring, so a
+       mover is still one click from its chart.
+
+       The empty state stays too. This block now owns a permanent slot, and a
+       heading that vanishes on a quiet day reads as a broken section rather
+       than a calm market. */
+    const movers = T.bigMovers(all, s.settings.moveAlertPct);
+    const lim = Math.abs(+s.settings.moveAlertPct) || T.DEFAULT_SETTINGS.moveAlertPct;
     const alerts = `
       <div>
-        <div class="rail-label">Recent alerts</div>
-        ${al.length ? al.map(a => `
-          <button class="alert-row" data-act="open" data-sym="${esc(a.symbol)}">
-            <span class="arrow" style="color:${a.dir === "bull" ? T.ink.up : T.ink.down}">${a.dir === "bull" ? "↑" : "↓"}</span>
-            <span class="txt"><b>${esc(a.symbol)}</b> ${esc(a.type)}${a.detail ? " — " + esc(a.detail.toLowerCase()) : ""}</span>
-            <span class="age">today</span>
+        <div class="rail-label">Big movers · ±${esc(lim)}%</div>
+        ${movers.length ? movers.map(d => `
+          <button class="alert-row" data-act="open" data-sym="${esc(d.symbol)}">
+            <span class="arrow" style="color:${d.change_pct >= 0 ? T.ink.up : T.ink.down}">${d.change_pct >= 0 ? "↑" : "↓"}</span>
+            <span class="txt"><b>${esc(d.symbol)}</b>${d.sector ? " " + esc(d.sector.toLowerCase()) : ""}</span>
+            <span class="age num" style="color:${d.change_pct >= 0 ? T.ink.up : T.ink.down}">${esc(pct(d.change_pct, 1))}</span>
           </button>`).join("")
-          : `<p class="rail-note">No EMA 50 / 150 crosses on the latest bar.</p>`}
+          : `<p class="rail-note">Nothing moved ${esc(lim)}% or more today. Indexes and crypto are
+             excluded — they clear that bar too often to be news.</p>`}
       </div>`;
 
     const mix = s.payload ? T.sectorMix(s.lists, s.payload) : [];
@@ -1412,6 +1426,18 @@
             </div>
             <p class="set-note">Uptrend when EMA ${esc(f.trendFast)} is above EMA ${esc(f.trendSlow)}, downtrend when it is below.
               The default pair is the one the pipeline calls a golden or death cross.</p>
+          </div>
+
+          <div class="set-group">
+            <div class="set-label">Big movers</div>
+            <div class="set-row">
+              <span class="cap"><b>Threshold</b><i>day move, either direction</i></span>
+              <input class="field" type="number" step="0.5" min="1" max="50"
+                data-act="f-moveAlertPct" value="${esc(f.moveAlertPct)}">
+            </div>
+            <p class="set-note">The rail lists any holding that moved ${esc(f.moveAlertPct)}% or more today,
+              up or down, biggest first. Indexes and crypto are left out — they clear that bar
+              too often to be news. This is a dashboard panel only; it sends nothing.</p>
           </div>
 
           <div class="set-group">

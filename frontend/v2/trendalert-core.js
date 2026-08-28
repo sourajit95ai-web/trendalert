@@ -126,10 +126,35 @@
     gainPct: 20, highZonePct: 2, lowZonePct: 10, horizon: "long", reEntryMode: "base", view: "cards",
     trendFast: 50, trendSlow: 150, alertChannel: "both", alertTypes: ALL_ALERTS(),
     captionText: false, alertEmails: [],
+    moveAlertPct: 8,
     sv: SETTINGS_VERSION,
     weights: { trend: 30, momentum: 20, participation: 20, relStrength: 20, risk: 10 }
   };
   TA.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
+
+  /* Names that moved hard enough today to be worth a look, biggest first.
+
+     EQUITIES ONLY. BTC clears 8% most weeks and the index proxies move as a
+     block, so leaving them in would hand the section to crypto and bury the
+     single-stock moves that are the point of it. This matches the backend's
+     mover pool in daily_summary.py, which excludes the same two sectors.
+
+     `pct` is a magnitude and the test is symmetric: -9% is as much a mover as
+     +9%, and usually the more urgent one. A missing or junk threshold falls
+     back to the default rather than letting every row through, because 0 here
+     would mean "everything is a mover", which is the failure that looks like
+     a working feature. */
+  const MOVER_EXCLUDED_SECTORS = ["Index", "Crypto"];
+  TA.MOVER_EXCLUDED_SECTORS = MOVER_EXCLUDED_SECTORS;
+  TA.bigMovers = (rows, pct) => {
+    const lim = Math.abs(+pct) || DEFAULT_SETTINGS.moveAlertPct;
+    return (rows || [])
+      .filter(d => d && d.change_pct != null && !isNaN(d.change_pct)
+        && !MOVER_EXCLUDED_SECTORS.includes(d.sector)
+        && Math.abs(d.change_pct) >= lim)
+      .sort((a, b) => Math.abs(b.change_pct) - Math.abs(a.change_pct));
+  };
+
   TA.HORIZON_PRESETS = { long: { gain: 20, high: 2, low: 10, span: "6M" }, swing: { gain: 10, high: 3, low: 8, span: "3M" } };
   TA.loadSettings = () => {
     try {

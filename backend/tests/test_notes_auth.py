@@ -162,3 +162,25 @@ def test_settings_never_store_email_addresses(token_env, monkeypatch):
     assert "alertEmails" not in seen["settings"]
     assert "alertEmails" not in json.loads(body)["saved"]
     assert seen["settings"]["gainPct"] == 25.0        # the rest still saves
+
+
+def test_move_alert_threshold_is_stored_and_clamped(token_env, monkeypatch):
+    """0 would make every holding a "big mover" -- broken, but looks like it works."""
+    seen = {}
+    monkeypatch.setattr(notes_function, "_read", lambda kind: {})
+    monkeypatch.setattr(notes_function, "_write",
+                        lambda kind, data: seen.update({kind: data}))
+
+    def save(v):
+        seen.clear()
+        req = FakeRequest(method="POST", headers={TOKEN_HEADER: GOOD},
+                          json_body={"kind": "settings", "data": {"moveAlertPct": v}})
+        assert notes(req)[1] == 200
+        return seen["settings"].get("moveAlertPct")
+
+    assert save(8) == 8.0
+    assert save("12.5") == 12.5
+    assert save(0) == 1.0                 # clamped up off zero
+    assert save(-4) == 1.0
+    assert save(999) == 50.0
+    assert save("junk") is None           # dropped, not stored as a default

@@ -356,6 +356,23 @@ It reuses `frontend/v2/trendalert-core.js` verbatim for every rule (zones, base
 status, scoring, trend, sector mix, staleness) plus v2's Nocturne tokens and
 `theme.css`. Only the presentation is new.
 
+**Big movers replaced Recent alerts in the right rail (2026-08-28).** The rail
+is Session summary -> Big movers -> Portfolio sectors. It lists any name in
+your lists that moved past the threshold today in EITHER direction, biggest
+magnitude first, excluding sectors `Index` and `Crypto` (the same pool rule
+`daily_summary.py` uses -- BTC clears 8% most weeks and would own the panel).
+The rule is `TA.bigMovers` in trendalert-core.js; the shell only paints it.
+
+`moveAlertPct` in `settings.json` holds the threshold, default 8, clamped to
+1-50 in the browser AND in `notes_function` -- 0 would make every holding a
+mover, which is a broken panel that still looks like a working one. It is
+DASHBOARD-ONLY: no alert reads it and nothing is sent when a name crosses it.
+
+WHAT WAS LOST: the EMA 50/150 crosses in `payload.alerts` are no longer shown
+anywhere in the UI. They still ride in data.json and still drive the Telegram
+and email alerts. The block was dropped because data.json keeps no cross
+history, so every row was stamped "today" regardless of when it crossed.
+
 Three things worth knowing:
 
 * **It is the only dashboard published now.** The workflow writes

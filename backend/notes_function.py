@@ -235,6 +235,14 @@ def notes(request):
                         clean[k] = float(cfg[k])
                     except (TypeError, ValueError):
                         pass
+            # Dashboard-only: the rail's big-mover threshold. Clamped rather
+            # than merely parsed, because 0 would make every holding a mover --
+            # a broken panel that still looks like a working one.
+            if "moveAlertPct" in cfg:
+                try:
+                    clean["moveAlertPct"] = max(1.0, min(50.0, float(cfg["moveAlertPct"])))
+                except (TypeError, ValueError):
+                    pass
             if cfg.get("horizon") in ("long", "swing"):
                 clean["horizon"] = cfg["horizon"]
             if cfg.get("reEntryMode") in ("base", "near_low"):
