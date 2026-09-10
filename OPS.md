@@ -74,6 +74,38 @@ Serving from a custom domain later? Change both origins to that domain.
 Testing locally from file://? Temporarily omit ALLOWED_ORIGIN (falls back
 to *) — never leave it that way in production.
 
+## 4a. Which settings are real (added 2026-09-10)
+
+**The server is the truth. The browser is a cache.** `settings.json` in the
+bucket is what the pipeline and the alerts obey; localStorage is only what the
+last browser happened to write. Until 2026-09-10 the dashboard PUSHED settings
+on save and never PULLED them, so the two could disagree forever with nothing
+on screen admitting it -- a user switched alerts off, the save never reached
+the server, and the alerts kept firing for weeks while the screen said "Off".
+
+The client now pulls `kind=settings` on load, on Reconnect, and on the 5-minute
+refresh when the Settings modal is shut, then merges with `TA.mergePublished`.
+
+    TA.PUBLISHED_KEYS   the keys notes_function actually stores -- MIRRORS its
+                        whitelist, change one and change the other
+    server wins         for every key in that list that the file carries
+    browser wins        for everything else: view, trendFast, trendSlow, sv,
+                        and any key a stale settings.json has never heard of
+                        (moveAlertPct on a file written before it existed)
+
+`alertTypes` and `weights` merge per key, never wholesale, so a partial file
+cannot blank a switch it does not mention -- for `alertTypes` that reproduces
+`alert_on`'s fail-open answer exactly. The Settings modal opens with a line
+saying whether it is showing the published file or this browser's memory, and
+a pull that lands mid-edit keeps what is typed and says the server moved.
+
+**NOTE trendFast / trendSlow are NOT published** -- the trend pair is per
+browser, and two machines can disagree about it with no way to tell.
+
+**A settings.json edited by hand is undone by the next successful save from a
+browser that has not pulled it**, because `saveSettings` republishes the whole
+object. That window closes once a browser has loaded a build with this pull.
+
 ## 4. settings.json bridge (dashboard → backend score)
 
 Already wired end to end:

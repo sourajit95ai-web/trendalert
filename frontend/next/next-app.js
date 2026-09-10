@@ -410,6 +410,45 @@
       () => { if (msg) flash(msg); });
   }
 
+  /* ---------------- published settings ----------------
+     THE SERVER IS THE TRUTH. The alerts read settings.json out of the bucket;
+     this screen used to read only localStorage and never once compared them,
+     so a browser could show "off" for weeks while the pipeline went on
+     sending. That is not a hypothetical -- it is what happened, and there was
+     nothing on screen that could have told anyone.
+
+     So: pull on load and on reconnect, let the server win for every key it
+     owns, and keep localStorage as a CACHE for the first paint and for
+     offline, not as the source of truth. `pubState` records which of those
+     two the screen is currently showing so it can say so out loud. */
+  let pubState = { status: "pending", at: null, stale: false };
+  function adoptPublished(after) {
+    /* measured BEFORE s.settings moves: settingsDirty() compares the form
+       against formOf(s.settings), so asking afterwards would call every open
+       form dirty and never refresh any of them */
+    const wasDirty = s.settingsOpen && s.form ? settingsDirty() : false;
+    return T.pull(s.syncUrl, "settings").then(pub => {
+      if (pub) {
+        s.settings = T.mergePublished(s.settings, pub);
+        T.saveSettings(s.settings);          // cache it for the next first paint
+        pubState = { status: "live", at: new Date(), stale: false };
+      } else {
+        /* No file yet, or the endpoint is unreachable. Either way the screen
+           is now showing this browser's memory and must not claim otherwise. */
+        pubState = { status: "local", at: null, stale: false };
+      }
+      if (s.settingsOpen && s.form) {
+        /* nothing typed -> just show the truth. Something typed -> keep it,
+           because silently replacing what someone is halfway through editing
+           is worse than being briefly out of date, and say so instead. */
+        if (!wasDirty) s.form = formOf(s.settings);
+        else pubState.stale = true;
+      }
+      render();
+      if (after) after();
+    });
+  }
+
   /* ---------------- settings form ---------------- */
   /* A working copy: nothing here reaches the live settings until Save, and
      formOf is the one place that maps settings -> form, so the dirty check can
@@ -475,7 +514,7 @@
         relStrength: +f.relStrength, risk: +f.risk,
       },
     };
-    const prevSet = s.settings, prevCh = s.chCfg;
+    const prevSet = s.settings, prevCh = s.chCfg, prevPub = pubState;
     const chChanged = s.settings.horizon !== f.horizon;
     const postUrl = s.syncUrl;
 
@@ -491,11 +530,12 @@
         }
         T.saveSettings(next);
         s.settings = next;
+        pubState = { status: "live", at: new Date() };
         s.settingsOpen = false; s.confirmClose = null;
         return () => {
           if (chChanged) { s.chCfg = prevCh; T.saveCh(prevCh, s.vis); chartDirty = true; }
           T.saveSettings(prevSet);
-          s.settings = prevSet;
+          s.settings = prevSet; pubState = prevPub;
           /* reopen on the same form so a rejected password does not cost the
              user everything they had just typed */
           s.settingsOpen = true; s.form = f;
@@ -506,6 +546,7 @@
       f.adminToken);
   }
   function reconnect() {
+    adoptPublished();
     T.pull(s.syncUrl, "pbre").then(pb => {
       if (pb) { s.pbre = pb; T.savePbre(pb); }
       load();
@@ -1373,6 +1414,20 @@
         </div>
         <div class="modal-body">
 
+          ${(() => {
+            /* Whose values are these? Before this line existed the screen
+               could show settings the pipeline had never seen, with nothing
+               to give it away. */
+            if (pubState.status === "live") return `<p class="set-note" style="margin-bottom:18px">
+              Showing the <b>published</b> settings — the same file the alerts read.${pubState.stale
+                ? " They changed on the server while this was open; your edits here are unsaved and will win if you save."
+                : ""}</p>`;
+            if (pubState.status === "local") return `<p class="set-note" style="margin-bottom:18px;color:${T.ink.warn}">
+              Could not read the published settings, so this is what <b>this browser</b> remembers.
+              The alerts obey the server, which may differ.</p>`;
+            return `<p class="set-note" style="margin-bottom:18px">Reading the published settings…</p>`;
+          })()}
+
           <div class="set-group">
             <div class="set-label">Access</div>
             <div class="set-row">
@@ -1457,11 +1512,14 @@
           <div class="set-group">
             <div class="set-label">Alerts</div>
             <div class="set-row">
+              <span class="cap"><b>Send to</b><i>pick one — there is no “none” here</i></span>
               ${seg("channel", [["telegram", "Telegram"], ["email", "Email"], ["both", "Both"]], f.alertChannel || "both")}
-              <span class="cap"><i>${(f.alertChannel || "both") === "both"
-                ? "Alerts go to both Telegram and email."
-                : `Alerts go to ${f.alertChannel === "telegram" ? "Telegram" : "email"} only — the other channel stays silent.`}</i></span>
             </div>
+            <p class="set-note">${(f.alertChannel || "both") === "both"
+              ? "Alerts go to both Telegram and email."
+              : `Alerts go to ${f.alertChannel === "telegram" ? "Telegram" : "email"} only — the other channel stays silent.`}
+              This chooses a destination; it cannot switch alerts off. To stop one, use its own On / Off
+              row below. To stop all of them, switch every row off.</p>
             ${T.ALERT_KINDS.map(a => `
               <div class="set-row">
                 <span class="cap"><b>${esc(a.label)}</b><i>${esc(a.when)}</i></span>
@@ -1998,11 +2056,19 @@
      password in localStorage. Nothing reads it any more, so drop it. */
   try { localStorage.removeItem(T.keys.TOKEN_KEY); } catch (e) { }
   render();
+  adoptPublished();
   T.pull(s.syncUrl, "pbre").then(pb => {
     if (pb) { s.pbre = pb; T.savePbre(pb); }
     load();
   });
-  setInterval(load, 300000);
+  setInterval(() => {
+    load();
+    /* keep the claim "the same file the alerts read" TRUE on a tab left open
+       all day. Guarded on the modal being shut: with no form open there is
+       nothing to yank out from under anyone, which is the only reason this is
+       safe to do on a timer. */
+    if (!s.settingsOpen) adoptPublished();
+  }, 300000);
   /* the staleness pill is time-based, so the page has to repaint without new
      data for it to ever appear */
   setInterval(() => { if (!s.settingsOpen && !s.drawerOpen) render(); }, 60000);

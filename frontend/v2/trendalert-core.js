@@ -177,6 +177,44 @@
   };
   TA.saveSettings = (s) => lsSet(SET_KEY, JSON.stringify(s));
 
+  /* The settings keys notes_function actually STORES for kind=settings. This
+     list mirrors its whitelist -- change one, change both. Everything outside
+     it is browser-local and must survive a pull untouched:
+
+       view                 which layout this browser is showing
+       trendFast/trendSlow  the trend pair, never published (see OPS.md)
+       sv                   the settings-version marker for migrations
+
+     Getting this wrong in the generous direction is the dangerous one: a pull
+     that overwrote the whole object would silently reset those to defaults on
+     every page load. */
+  const PUBLISHED_KEYS = ["gainPct", "highZonePct", "lowZonePct", "moveAlertPct",
+    "horizon", "reEntryMode", "alertChannel", "alertTypes", "captionText", "weights"];
+  TA.PUBLISHED_KEYS = PUBLISHED_KEYS;
+
+  /* THE SERVER WINS for anything it carries, because the server is what the
+     pipeline actually obeys. The browser only wins where the server has no
+     opinion -- keys outside PUBLISHED_KEYS, and keys a stale settings.json has
+     simply never heard of (moveAlertPct on a file written before it existed).
+
+     alertTypes and weights merge per-key rather than replacing wholesale, so a
+     partial published object cannot blank a switch the file does not mention.
+     For alertTypes that matches the backend exactly: alert_on treats a missing
+     key as ON, so filling the gaps from ALL_ALERTS() reproduces its answer. */
+  TA.mergePublished = (local, pub) => {
+    const base = local || JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+    if (!pub || typeof pub !== "object" || Array.isArray(pub)) return base;
+    const out = { ...base };
+    PUBLISHED_KEYS.forEach(k => {
+      if (!(k in pub) || pub[k] == null) return;
+      if (k === "alertTypes") out.alertTypes = { ...ALL_ALERTS(), ...base.alertTypes, ...pub.alertTypes };
+      else if (k === "weights") out.weights = { ...DEFAULT_SETTINGS.weights, ...pub.weights };
+      else out[k] = pub[k];
+    });
+    return out;
+  };
+
+
   TA.loadPbre = () => { try { return JSON.parse(lsGet(PBRE_KEY)) || {}; } catch (e) { return {}; } };
   TA.savePbre = (p) => lsSet(PBRE_KEY, JSON.stringify(p));
   TA.loadGroups = () => {
