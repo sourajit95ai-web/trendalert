@@ -248,7 +248,10 @@ def notes(request):
             if cfg.get("reEntryMode") in ("base", "near_low"):
                 clean["reEntryMode"] = cfg["reEntryMode"]
             # Settings > Alerts: which channels, and which alerts at all
-            if cfg.get("alertChannel") in ("telegram", "email", "both"):
+            # "none" = both switches off in the dashboard. Whitelisted so it
+            # survives the write; anything NOT in this tuple is dropped and
+            # alert_channel falls back to "both", so junk cannot silence.
+            if cfg.get("alertChannel") in ("telegram", "email", "both", "none"):
                 clean["alertChannel"] = cfg["alertChannel"]
             types = cfg.get("alertTypes")
             if isinstance(types, dict):

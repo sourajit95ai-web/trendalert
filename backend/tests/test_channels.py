@@ -154,3 +154,31 @@ def test_one_channel_failing_does_not_stop_the_other():
     out = fan_out({}, (("telegram", lambda: "tg-photo:sent(1/1)"),
                        ("email", boom)))
     assert out == "tg-photo:sent(1/1)+email:error(RuntimeError)"
+
+
+def test_none_silences_delivery_but_junk_still_does_not():
+    """'none' is the ONLY quiet value, and it has to be an explicit choice.
+
+    The safety property that mattered before still holds: a corrupt or missing
+    alertChannel falls back to both, so nothing can be silenced by accident --
+    only by a settings.json that deliberately says "none".
+    """
+    quiet = {"alertChannel": "none"}
+    assert alert_channel(quiet) == "none"
+    assert channel_on(quiet, "telegram") is False
+    assert channel_on(quiet, "email") is False
+
+    for junk in ({}, None, "not-a-dict", {"alertChannel": ""},
+                 {"alertChannel": "NONE"}, {"alertChannel": "off"},
+                 {"alertChannel": None}, {"alertChannel": 0}):
+        assert alert_channel(junk) == "both", junk
+        assert channel_on(junk, "telegram") and channel_on(junk, "email"), junk
+
+
+def test_fan_out_reports_both_channels_off():
+    sent = []
+    out = fan_out({"alertChannel": "none"},
+                  [("telegram", lambda: sent.append("t") or "tg:sent"),
+                   ("email", lambda: sent.append("e") or "email:sent")])
+    assert out == "telegram:off+email:off"
+    assert sent == []          # neither sender was ever called

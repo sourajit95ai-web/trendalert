@@ -192,6 +192,37 @@
     "horizon", "reEntryMode", "alertChannel", "alertTypes", "captionText", "weights"];
   TA.PUBLISHED_KEYS = PUBLISHED_KEYS;
 
+  /* alertChannel is stored as ONE string but presented as TWO switches.
+
+     "Both" as a third button was read as a third toggle -- someone trying to
+     silence alerts clicked all three in turn and silenced nothing, because a
+     radio has no off. Delivery was always independent per channel in the
+     backend (fan_out runs each sender separately); only the stored value
+     forced them into one control, so this is a presentation fix with a
+     storage mapping, not a change to how anything is sent.
+
+     "none" is a real value the backend recognises, NOT a fall-through: junk
+     still means both there, so corruption cannot silence anything -- only a
+     deliberate pair of off switches can. Mirrors CHANNELS in alerts_email.py. */
+  const CHANNEL_VALUES = ["telegram", "email", "both", "none"];
+  TA.CHANNEL_VALUES = CHANNEL_VALUES;
+  TA.channelPair = (v) => {
+    const picked = CHANNEL_VALUES.includes(v) ? v : "both";   // junk -> both, as the backend does
+    return { telegram: picked === "both" || picked === "telegram",
+             email: picked === "both" || picked === "email" };
+  };
+  TA.channelValue = (pair) => {
+    /* a MISSING pair is not the same as a pair of off switches: null,
+       undefined, an array or a string is a caller bug, and silence must never
+       be something a bug can cause. An empty OBJECT is deliberately NOT
+       caught -- {} is indistinguishable from {telegram:false,email:false},
+       and channelPair always returns both keys, so the UI never produces it. */
+    if (!pair || typeof pair !== "object" || Array.isArray(pair)) return "both";
+    const t = !!pair.telegram, e = !!pair.email;
+    return t && e ? "both" : t ? "telegram" : e ? "email" : "none";
+  };
+
+
   /* THE SERVER WINS for anything it carries, because the server is what the
      pipeline actually obeys. The browser only wins where the server has no
      opinion -- keys outside PUBLISHED_KEYS, and keys a stale settings.json has

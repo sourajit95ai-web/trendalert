@@ -99,6 +99,28 @@ cannot blank a switch it does not mention -- for `alertTypes` that reproduces
 saying whether it is showing the published file or this browser's memory, and
 a pull that lands mid-edit keeps what is typed and says the server moved.
 
+**Channels are two switches, not a radio (2026-09-10).** Settings > Alerts has
+a Telegram row and an Email row, each On / Off. The "Both" button is GONE: it
+was a third button in a radio, which reads as a third toggle, and a radio has
+no off -- someone trying to silence alerts clicked all three in turn and
+silenced nothing. Delivery was always independent per channel (`fan_out` runs
+each sender separately); only the stored value forced them into one control.
+
+Storage is unchanged in shape -- still the single `alertChannel` string --
+with a fourth value:
+
+    both      telegram on,  email on
+    telegram  telegram on,  email off
+    email     telegram off, email on
+    none      telegram off, email off   <- new
+
+`TA.channelPair` / `TA.channelValue` map between the string and the two
+switches and are exact inverses. **`none` is a RECOGNISED value, not a
+fall-through**: `alert_channel` still returns `both` for anything junk or
+missing, so corruption cannot silence anything -- only a deliberate pair of
+off switches can. It silences DELIVERY only; `alertTypes` still decides which
+alerts are computed, and the modal warns when both are off.
+
 **NOTE trendFast / trendSlow are NOT published** -- the trend pair is per
 browser, and two machines can disagree about it with no way to tell.
 

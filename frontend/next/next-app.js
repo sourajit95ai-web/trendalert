@@ -506,7 +506,7 @@
       trendFast: +f.trendFast || 50, trendSlow: +f.trendSlow || 150,
       moveAlertPct: Math.max(1, Math.min(50, +f.moveAlertPct || 8)),
       horizon: f.horizon, reEntryMode: f.reEntryMode,
-      alertChannel: ["telegram", "email", "both"].includes(f.alertChannel) ? f.alertChannel : "both",
+      alertChannel: T.CHANNEL_VALUES.includes(f.alertChannel) ? f.alertChannel : "both",
       alertTypes: Object.fromEntries(T.ALERT_KINDS.map(a => [a.key, on(f.alertTypes, a.key)])),
       captionText: f.captionText === true,
       weights: {
@@ -1511,15 +1511,20 @@
 
           <div class="set-group">
             <div class="set-label">Alerts</div>
-            <div class="set-row">
-              <span class="cap"><b>Send to</b><i>pick one — there is no “none” here</i></span>
-              ${seg("channel", [["telegram", "Telegram"], ["email", "Email"], ["both", "Both"]], f.alertChannel || "both")}
-            </div>
-            <p class="set-note">${(f.alertChannel || "both") === "both"
-              ? "Alerts go to both Telegram and email."
-              : `Alerts go to ${f.alertChannel === "telegram" ? "Telegram" : "email"} only — the other channel stays silent.`}
-              This chooses a destination; it cannot switch alerts off. To stop one, use its own On / Off
-              row below. To stop all of them, switch every row off.</p>
+            ${(() => {
+              /* two independent switches, not a radio. "Both" used to be a
+                 third button, which reads as a third toggle -- and a radio has
+                 no off, so clicking all three in turn silenced nothing. */
+              const ch = T.channelPair(f.alertChannel);
+              const row = (k, label) => `
+                <div class="set-row">
+                  <span class="cap"><b>${label}</b><i>where the alerts are delivered</i></span>
+                  ${seg("ch-" + k, [["on", "On"], ["off", "Off"]], ch[k] ? "on" : "off")}
+                </div>`;
+              return row("telegram", "Telegram") + row("email", "Email") +
+                (ch.telegram || ch.email ? "" : `<p class="set-note" style="color:${T.ink.warn}">
+                  Both channels are off — nothing will be delivered, whatever the switches below say.</p>`);
+            })()}
             ${T.ALERT_KINDS.map(a => `
               <div class="set-row">
                 <span class="cap"><b>${esc(a.label)}</b><i>${esc(a.when)}</i></span>
@@ -1949,7 +1954,12 @@
       return render();
     }
     if (a === "reentry") { s.form = { ...s.form, reEntryMode: k }; return render(); }
-    if (a === "channel") { s.form = { ...s.form, alertChannel: k }; return render(); }
+    if (a === "ch-telegram" || a === "ch-email") {
+      const which = a.slice(3);
+      const pair = { ...T.channelPair(s.form.alertChannel), [which]: k === "on" };
+      s.form = { ...s.form, alertChannel: T.channelValue(pair) };
+      return render();
+    }
     if (a === "caption") { s.form = { ...s.form, captionText: k === "on" }; return render(); }
     if (a.startsWith("alert-")) {
       const key = a.slice(6);

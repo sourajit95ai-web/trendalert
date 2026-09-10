@@ -184,3 +184,27 @@ def test_move_alert_threshold_is_stored_and_clamped(token_env, monkeypatch):
     assert save(-4) == 1.0
     assert save(999) == 50.0
     assert save("junk") is None           # dropped, not stored as a default
+
+
+def test_channel_none_is_stored_and_junk_is_dropped(token_env, monkeypatch):
+    """The dashboard writes "none" when both switches are off -- it must survive.
+
+    Anything outside the whitelist is DROPPED rather than coerced, so a bad
+    value leaves the key absent and alert_channel falls back to both.
+    """
+    seen = {}
+    monkeypatch.setattr(notes_function, "_read", lambda kind: {})
+    monkeypatch.setattr(notes_function, "_write",
+                        lambda kind, data: seen.update({kind: data}))
+
+    def save(v):
+        seen.clear()
+        req = FakeRequest(method="POST", headers={TOKEN_HEADER: GOOD},
+                          json_body={"kind": "settings", "data": {"alertChannel": v}})
+        assert notes(req)[1] == 200
+        return seen["settings"].get("alertChannel")
+
+    for good in ("none", "telegram", "email", "both"):
+        assert save(good) == good
+    for bad in ("NONE", "off", "", None, 0, ["none"]):
+        assert save(bad) is None, bad

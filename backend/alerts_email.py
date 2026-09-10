@@ -36,7 +36,7 @@ from email.mime.text import MIMEText
 STATE_OBJECT = "alerts_state.json"
 DEFAULT_GAIN_PCT = 20.0
 DEFAULT_HIGH_ZONE_PCT = 2.0
-CHANNELS = ("telegram", "email", "both")
+CHANNELS = ("telegram", "email", "both", "none")
 DEFAULT_CHANNEL = "both"
 
 # Every alert this project sends, in the order the trading day fires them.
@@ -60,10 +60,17 @@ RETIRED_ALERTS = ("bloodbath", "eod")
 # delivery channel (Settings > Alerts -> settings.json "alertChannel")
 # ----------------------------------------------------------------------
 def alert_channel(settings):
-    """-> 'telegram' | 'email' | 'both'. Anything unrecognised means both.
+    """-> 'telegram' | 'email' | 'both' | 'none'. Unrecognised means both.
 
     A missing or junk value must never silence the alerts, so the default is
     the most-delivered option rather than the least.
+
+    'none' is the one way to get silence here, and it is deliberately a
+    RECOGNISED value rather than a fall-through: the dashboard writes it when
+    both channel switches are off. That keeps the safety property intact --
+    corruption still fails open to both, and only an explicit choice is quiet.
+    Note this silences DELIVERY only; alertTypes still decides which alerts
+    are computed at all.
     """
     v = (settings or {}).get("alertChannel") if isinstance(settings, dict) else None
     return v if v in CHANNELS else DEFAULT_CHANNEL
