@@ -446,6 +446,14 @@ h1.headline {
   .foot { padding: 20px 18px 34px; }
   .grid-2, .grid-3 { grid-template-columns: minmax(0, 1fr); }
   .sec-tools { margin-left: 0; width: 100%; }
+  /* The add/filter bar is four controls in one row on desktop; at phone width
+     that left each search box ~62px ("Ad", "Filt"). Here it becomes a 2x2
+     grid -- Add ticker | Add, then Filter symbols | Sector -- so both search
+     boxes take whatever the right-hand column does not. Grid ignores the
+     select's inline flex basis, and the button and select share a column so
+     their edges line up. */
+  .addbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; }
+  .addbar .search .field { width: 100%; }
   .subnav { gap: 16px; overflow-x: auto; }
   .subnav .right { display: none; }
   .tbl th.hide-s, .tbl td.hide-s { display: none; }
