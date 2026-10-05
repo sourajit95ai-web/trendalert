@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Full-bleed square: iOS and Android apply their own corner mask, and the
+       glyph sits inside the central 60% so a maskable crop never clips it.
+       Ground is Nocturne's --color-bg, stroke its --color-accent-400; the path
+       is the masthead's brand-mark, scaled. -->
+  <rect width="512" height="512" fill="#161826"/>
+  <g transform="translate(112 112) scale(12)" fill="none" stroke="#b5abfc"
+     stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 13h4l3 7 4-16 3 9h4"/>
+  </g>
+</svg>

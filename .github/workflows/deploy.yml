@@ -137,3 +137,17 @@ jobs:
           gsutil -h "Cache-Control:no-cache" -h "Content-Type:text/html" \
             cp -Z frontend/dashboard-next.html "gs://${{ secrets.GCS_BUCKET }}/next/dashboard.html"
           echo "Published frontend/dashboard-next.html to gs://${{ secrets.GCS_BUCKET }}/next/dashboard.html"
+
+      # ---- installable app (PWA): the files dashboard.html links to by relative path ----
+      # build_next.py inlines only scripts and stylesheets; these must sit beside
+      # the page in /next/. sw.js and the manifest are no-cache so a change
+      # reaches installed phones on the next launch; the icons can cache a day.
+      - name: Publish PWA files
+        run: |
+          B="gs://${{ secrets.GCS_BUCKET }}/next"
+          gsutil -h "Cache-Control:no-cache" -h "Content-Type:application/manifest+json" \
+            cp frontend/next/manifest.webmanifest "$B/manifest.webmanifest"
+          gsutil -h "Cache-Control:no-cache" -h "Content-Type:text/javascript" \
+            cp frontend/next/sw.js "$B/sw.js"
+          gsutil -h "Cache-Control:public, max-age=86400" -h "Content-Type:image/png" \
+            cp frontend/next/icons/*.png "$B/icons/"

@@ -12,3 +12,5 @@ frontend/build_dashboard.py   text eol=lf
 frontend/dashboard-next.html  text eol=lf
 frontend/next/**              text eol=lf
 frontend/build_next.py        text eol=lf
+# ...except the PWA icons, which the line above would otherwise mangle as text.
+frontend/next/**/*.png        binary

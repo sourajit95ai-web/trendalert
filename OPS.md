@@ -483,3 +483,46 @@ Three traps in this arrangement:
    core change and demand a rebuild of an artifact nobody publishes. The
    committed artifact is therefore a snapshot of 2026-08-13, not of the current
    source. To revive that dashboard, rebuild it first and restore the check.
+
+## iPhone app — install the dashboard to the home screen (added 2026-10-05)
+
+The dashboard is an installable web app (PWA). There is no App Store build and
+no Apple account involved: Safari installs it straight from the live URL.
+
+**Install (once per phone):** open
+https://storage.googleapis.com/trendalert-data-rattle/next/dashboard.html in
+**Safari** → Share → **Add to Home Screen** → Add. It opens full screen
+with its own icon, no browser bars. Alerts still arrive by Telegram/email; the
+app sends no notifications of its own.
+
+**What makes it installable** -- files published BESIDE the page by the
+"Publish PWA files" step in `deploy.yml`, because `build_next.py` inlines only
+scripts and stylesheets:
+
+    frontend/next/manifest.webmanifest   name, icons, standalone display
+    frontend/next/sw.js                  offline app shell (see below)
+    frontend/next/icons/*.png            180 (iOS), 192, 512 -- rendered from
+                                         icons/icon.svg by frontend/make_icons.js
+and `frontend/next/index.html`, which carries the apple-* meta tags and
+registers sw.js (https only).
+
+**The service worker caches the page, never the data.** It answers only
+navigations to the dashboard, network-first: online you always get the live
+deploy; offline the installed app opens to its last-seen shell instead of
+Safari's error page, and the dashboard's own fetch-failed / staleness badges
+say the data is not live. data.json, chart.json and the notes API are not
+intercepted. Changing `sw.js` in a way that must evict old copies: bump
+`CACHE` (`trendalert-shell-v1`).
+
+**Safe areas.** The installed app draws under the status bar and home
+indicator (`viewport-fit=cover`, black-translucent status bar). The last block
+of `next.css` pads the masthead, footer, drawer and toast by
+`env(safe-area-inset-*)`, which is 0 in a desktop browser, so desktop layout is
+unchanged. The same block sets form fields to 16px under 760px, because iOS
+zooms into any field smaller than that on focus.
+
+**Known limit: the shared origin.** `storage.googleapis.com` is shared by every
+GCS bucket, so the installed app's localStorage is shared with any other bucket
+page opened on that phone, and the install is tied to that URL. Moving the
+dashboard to its own domain (e.g. Firebase Hosting) fixes both; it would also
+mean changing `ALLOWED_ORIGIN` (§3) and `DASHBOARD_URL`, and reinstalling.

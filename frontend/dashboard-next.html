@@ -2,8 +2,20 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>TrendAlert</title>
+<!-- Installable app (PWA). The manifest, icons and sw.js are NOT inlined by build_next.py:
+     they are published beside dashboard.html in gs://BUCKET/next/ by deploy.yml
+     and resolve relative to it. iOS reads the apple-* tags, not the manifest. -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TrendAlert">
+<!-- black-translucent draws the page under the status bar; next.css pads the
+     masthead by env(safe-area-inset-top) so the clock never covers it. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#161826">
 <style>
 /* Inter — vendored from Google Fonts (SIL Open Font License 1.1).
    latin + latin-ext; one face per subset covering weights 400-700. */
@@ -866,6 +878,34 @@ h1.headline {
   }
   .tbl th button { min-height: 36px; display: inline-flex; align-items: flex-end; }
   .tbl td { padding-top: 14px; padding-bottom: 14px; }
+}
+
+/* ---------------- installed app (iPhone home screen) ----------------
+   index.html sets viewport-fit=cover and a black-translucent status bar, so
+   in the installed app the page runs edge to edge: under the clock, past the
+   notch in landscape, over the home indicator. env(safe-area-inset-*) is 0 in
+   a desktop browser, so every rule below is a no-op there and the layout stays
+   pixel-identical. Each one ADDS the inset to the padding the sections above
+   already chose, which is why the masthead and footer need their phone values
+   restated inside the 760px block. */
+body {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+.mast { padding-top: calc(16px + env(safe-area-inset-top)); }
+.drawer {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.toast { bottom: calc(28px + env(safe-area-inset-bottom)); }
+.foot { padding-bottom: calc(40px + env(safe-area-inset-bottom)); }
+@media (max-width: 760px) {
+  .mast { padding-top: calc(12px + env(safe-area-inset-top)); }
+  .foot { padding-bottom: calc(34px + env(safe-area-inset-bottom)); }
+  /* iOS zooms the whole page into any field under 16px when it takes focus,
+     and does not zoom back out. Every field carries .field (13.5px), and this
+     block comes after it at the same specificity, so this wins. */
+  .field, input, select, textarea { font-size: 16px; }
 }
 
 </style>
@@ -3819,6 +3859,13 @@ h1.headline {
   window.addEventListener("resize", () => { if (charts) syncCharts(); });
 })();
 
+</script>
+<script>
+/* Offline app shell (see sw.js). https only: a file:// or http preview has no
+   sw.js beside it, and the registration would just log an error. */
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
 </script>
 </body>
 </html>

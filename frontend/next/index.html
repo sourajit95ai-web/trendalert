@@ -2,8 +2,20 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>TrendAlert</title>
+<!-- Installable app (PWA). The manifest, icons and sw.js are NOT inlined by build_next.py:
+     they are published beside dashboard.html in gs://BUCKET/next/ by deploy.yml
+     and resolve relative to it. iOS reads the apple-* tags, not the manifest. -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TrendAlert">
+<!-- black-translucent draws the page under the status bar; next.css pads the
+     masthead by env(safe-area-inset-top) so the clock never covers it. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#161826">
 <link rel="stylesheet" href="../v2/vendor/inter.css">
 <link rel="stylesheet" href="../v2/_ds/nocturne-0d765830-c2c1-4081-b960-bfbdc8312cb5/styles.css">
 <link rel="stylesheet" href="../v2/theme.css">
@@ -15,5 +27,12 @@
 <div id="app" class="ta"></div>
 <div id="layer"></div>
 <script src="./next-app.js"></script>
+<script>
+/* Offline app shell (see sw.js). https only: a file:// or http preview has no
+   sw.js beside it, and the registration would just log an error. */
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+</script>
 </body>
 </html>
